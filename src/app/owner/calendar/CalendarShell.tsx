@@ -76,7 +76,9 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
     setCheckin(dateStr);
     setCheckout(co);
     setCustomer(''); setPhone(''); setEmail(''); setNote('');
-    setBookStatus('confirmed'); setFormError(null);
+    // Sale chỉ được tạo hold, owner mặc định confirmed
+    setBookStatus(userRole === 'sale' ? 'hold' : 'confirmed');
+    setFormError(null);
     setModal({ mode: 'create', checkin: dateStr, checkout: co });
   }
 
@@ -87,8 +89,12 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   function closeModal() { setModal(null); }
 
   // ── Day click handler ──────────────────────────────────────────
-  function handleDayClick(ds: string, info: { bkId?: string } | null) {
-    if (info?.bkId) {
+  function handleDayClick(ds: string, info: { bkId?: string; type?: string } | null) {
+    // Nếu click vào checkout ngày (nửa trái tô màu, nửa phải trống)
+    // → cho phép tạo booking mới checkin ngay ngày đó
+    const isCheckoutOnly = info?.type === 'checkout' || info?.type === 'locked-checkout';
+
+    if (info?.bkId && !isCheckoutOnly) {
       const found = bookings.find(b => b.id === info.bkId);
       if (found) { openViewModal(found); return; }
     }
@@ -234,18 +240,26 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
 
                   <div className="field-group">
                     <label>Loại đặt</label>
-                    <div className="status-toggle">
-                      <button type="button"
-                        className={`status-btn${bookStatus === 'confirmed' ? ' active confirmed' : ''}`}
-                        onClick={() => setBookStatus('confirmed')}>
-                        ✅ Confirmed
-                      </button>
-                      <button type="button"
-                        className={`status-btn${bookStatus === 'hold' ? ' active hold' : ''}`}
-                        onClick={() => setBookStatus('hold')}>
-                        ⏳ Hold (30 phút)
-                      </button>
-                    </div>
+                    {userRole === 'owner' ? (
+                      <div className="status-toggle">
+                        <button type="button"
+                          className={`status-btn${bookStatus === 'confirmed' ? ' active confirmed' : ''}`}
+                          onClick={() => setBookStatus('confirmed')}>
+                          ✅ Confirmed
+                        </button>
+                        <button type="button"
+                          className={`status-btn${bookStatus === 'hold' ? ' active hold' : ''}`}
+                          onClick={() => setBookStatus('hold')}>
+                          ⏳ Hold
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="status-toggle">
+                        <button type="button" className="status-btn active hold" disabled>
+                          ⏳ Hold — chờ chủ nhà xác nhận
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="field-group">
@@ -326,12 +340,13 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                     )}
                   </div>
                   <div className="modal-footer">
-                    {b.status === 'hold' && (
+                    {/* Owner: confirm hold + hủy mọi booking */}
+                    {userRole === 'owner' && b.status === 'hold' && (
                       <button className="btn-primary" onClick={() => handleConfirm(b.id)} disabled={isPending}>
                         ✅ Xác nhận booking
                       </button>
                     )}
-                    {b.status !== 'cancelled' && (
+                    {userRole === 'owner' && b.status !== 'cancelled' && (
                       <button
                         className="btn-secondary"
                         style={{ color: 'var(--red)', borderColor: 'rgba(192,57,43,.3)' }}
@@ -339,6 +354,17 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                         disabled={isPending}
                       >
                         ❌ Hủy booking
+                      </button>
+                    )}
+                    {/* Sale: chỉ hủy hold do chính mình tạo */}
+                    {userRole === 'sale' && b.status === 'hold' && b.createdByRole === 'sale' && b.status !== 'cancelled' && (
+                      <button
+                        className="btn-secondary"
+                        style={{ color: 'var(--red)', borderColor: 'rgba(192,57,43,.3)' }}
+                        onClick={() => handleCancel(b.id)}
+                        disabled={isPending}
+                      >
+                        ❌ Hủy hold
                       </button>
                     )}
                     <button className="btn-secondary" onClick={closeModal}>Đóng</button>

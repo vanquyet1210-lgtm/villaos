@@ -7,7 +7,7 @@
 
 import { useMemo, useCallback } from 'react';
 import {
-  addDays, dateRange, groupConsecutiveDates,
+  addDays, dateRange,
   prevMonth, nextMonth, formatMonthYear,
   daysInMonth, firstDayOfMonth, todayISO,
 } from '@/lib/utils';
@@ -135,24 +135,17 @@ function buildDayMap(
   }
 
   // 2. Locked-date segments
+  // Mỗi lockedDate là 1 ĐÊM bị khóa (như 1 booking 1 đêm):
+  //   - ngày đó = checkin (nửa phải tô màu)
+  //   - ngày kế = checkout (nửa trái tô màu)
+  // Xử lý từng ngày riêng lẻ để tránh ghi đè nhau sai.
   if (lockedDates.length) {
-    const sorted   = [...lockedDates].sort();
-    const segments = groupConsecutiveDates(sorted);
     const lockInfo = { customer: '🔒', status: 'locked', isLock: true };
 
-    for (const { start, last } of segments) {
-      const checkoutDs = addDays(last, 1);
-
-      if (start === last) {
-        applyLock(map, start,      'locked-checkin',  lockInfo);
-        applyLock(map, checkoutDs, 'locked-checkout', lockInfo);
-      } else {
-        applyLock(map, start, 'locked-checkin', lockInfo);
-        for (const ds of dateRange(addDays(start, 1), addDays(last, 1))) {
-          applyLock(map, ds, 'locked-middle', lockInfo);
-        }
-        applyLock(map, checkoutDs, 'locked-checkout', lockInfo);
-      }
+    for (const lockedDay of lockedDates) {
+      const nextDay = addDays(lockedDay, 1);
+      applyLock(map, lockedDay, 'locked-checkin',  lockInfo);
+      applyLock(map, nextDay,   'locked-checkout', lockInfo);
     }
   }
 
@@ -170,31 +163,30 @@ function applyLock(
   const existing = map[ds];
   const isBooking = ['checkin','checkout','middle','checkout+checkin'].includes(existing.type);
 
-  if (isBooking) {
-    if ((lockType === 'locked-checkout' || lockType === 'locked-middle') && existing.type === 'checkin') {
-      map[ds] = {
-        ...existing, type: 'locked-split-left',
-        rightCustomer: existing.customer,
-        rightStatus:   existing.status,
-        leftStatus:    'locked',
-      };
-    } else if (lockType === 'locked-checkin' && existing.type === 'checkout') {
-      map[ds] = {
-        ...existing, type: 'locked-split-right',
-        leftStatus:   existing.status,
-        leftCustomer: existing.customer,
-      };
-    } else if (lockType === 'locked-checkout' && existing.type === 'middle') {
-      map[ds] = {
-        ...existing, type: 'locked-split-left',
-        rightCustomer: existing.customer,
-        rightStatus:   existing.status,
-        leftStatus:    'locked',
-      };
-    }
-  } else if (existing.isLock && lockType === 'locked-middle') {
-    map[ds] = { ...lockInfo, type: 'locked-middle' };
+  if (!isBooking) {
+    // Ghi đè lock cũ bằng lock mới (không có gì quan trọng hơn)
+    map[ds] = { ...lockInfo, type: lockType };
+    return;
   }
+
+  // Booking tồn tại: chỉ split khi hợp lý, KHÔNG ghi đè middle
+  if (lockType === 'locked-checkin' && existing.type === 'checkout') {
+    // Lock checkin vào ngày checkout của booking → split: trái=booking, phải=lock
+    map[ds] = {
+      ...existing, type: 'locked-split-right',
+      leftStatus:   existing.status,
+      leftCustomer: existing.customer,
+    };
+  } else if (lockType === 'locked-checkout' && existing.type === 'checkin') {
+    // Lock checkout vào ngày checkin của booking → split: trái=lock, phải=booking
+    map[ds] = {
+      ...existing, type: 'locked-split-left',
+      rightCustomer: existing.customer,
+      rightStatus:   existing.status,
+      leftStatus:    'locked',
+    };
+  }
+  // Tất cả các trường hợp khác (middle, checkout+checkin, ...) → giữ nguyên booking
 }
 
 // ── Day Cell ──────────────────────────────────────────────────────
