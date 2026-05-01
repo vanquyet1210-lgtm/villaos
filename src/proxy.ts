@@ -22,7 +22,6 @@ const ROLE_ROUTES: Record<string, UserRole[]> = {
   '/customer': ['customer', 'admin'],
 };
 
-// ── Routes cần rate limit (method + path prefix) ─────────────────
 const RATE_LIMITED_ROUTES = [
   { path: '/auth/login',            key: 'LOGIN'           as const },
   { path: '/auth/register',         key: 'REGISTER'        as const },
@@ -41,19 +40,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // ── Lấy IP ────────────────────────────────────────────────────
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
     request.headers.get('x-real-ip') ??
     '127.0.0.1';
 
-  // ── Rate limit check (chỉ POST requests) ─────────────────────
   if (method === 'POST') {
     const matched = RATE_LIMITED_ROUTES.find(r => pathname.startsWith(r.path));
-
     if (matched) {
       const result = await rateLimit(matched.key, ip);
-
       if (!result.success) {
         const res = NextResponse.json(
           { error: result.message, code: 'RATE_LIMITED' },
@@ -65,7 +60,6 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // ── Session + cookie management ───────────────────────────────
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const sb = createServerClient(
@@ -85,35 +79,43 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // ⚠️ Dùng getUser() (verify với Supabase) — không phải getSession()
   const { data: { user } } = await sb.auth.getUser();
-
   const isPublicRoute = PUBLIC_ROUTES.some(r => pathname.startsWith(r));
 
+  // Chưa đăng nhập → redirect về login (trừ public routes và trang chủ)
   if (!user && !isPublicRoute && pathname !== '/') {
     const loginUrl = new URL('/auth/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (user && isPublicRoute) {
+  // Đã đăng nhập + đang ở public route → redirect về dashboard
+  // ✅ FIX: chỉ redirect nếu có profile và role hợp lệ, tránh loop
+  if (user && isPublicRoute && pathname !== '/auth/callback') {
     const { data: profile } = await sb.from('profiles').select('role').eq('id', user.id).single();
-    return NextResponse.redirect(new URL(getDashboardUrl(profile?.role), request.url));
+    const dashUrl = getDashboardUrl(profile?.role);
+    // Chỉ redirect nếu dashboard KHÁC với trang hiện tại
+    if (dashUrl !== '/auth/login' && dashUrl !== pathname) {
+      return NextResponse.redirect(new URL(dashUrl, request.url));
+    }
   }
 
-  // ── Role-based protection ─────────────────────────────────────
+  // Role-based protection
   if (user) {
     const matchedRoute = Object.keys(ROLE_ROUTES).find(r => pathname.startsWith(r));
-
     if (matchedRoute) {
       const { data: profile } = await sb.from('profiles').select('role').eq('id', user.id).single();
       const allowedRoles = ROLE_ROUTES[matchedRoute];
       const userRole = profile?.role as UserRole | undefined;
 
       if (!userRole || !allowedRoles.includes(userRole)) {
-        const forbidden = new URL(getDashboardUrl(userRole), request.url);
-        forbidden.searchParams.set('error', 'unauthorized');
-        return NextResponse.redirect(forbidden);
+        const dashUrl = getDashboardUrl(userRole);
+        // ✅ FIX: chỉ redirect nếu dashboard hợp lệ và khác trang hiện tại
+        if (dashUrl !== pathname) {
+          const forbidden = new URL(dashUrl, request.url);
+          forbidden.searchParams.set('error', 'unauthorized');
+          return NextResponse.redirect(forbidden);
+        }
       }
     }
   }
