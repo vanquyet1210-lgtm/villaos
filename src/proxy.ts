@@ -108,7 +108,7 @@ export async function proxy(request: NextRequest) {
       const allowedRoles = ROLE_ROUTES[matchedRoute];
       const userRole = profile?.role as UserRole | undefined;
 
-      if (!userRole || !allowedRoles.includes(userRole)) {
+      if (userRole && !allowedRoles.includes(userRole)) {
         const dashUrl = getDashboardUrl(userRole);
         // ✅ FIX: chỉ redirect nếu dashboard hợp lệ và khác trang hiện tại
         if (dashUrl !== pathname) {
