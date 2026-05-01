@@ -44,16 +44,18 @@ export async function loginAction(input: LoginInput): Promise<AuthResult> {
 
   // ── Audit: ghi log đăng nhập thành công ──
   if (profile) {
-    await logAudit({
-      actorId:    profile.id,
-      actorRole:  profile.role,
-      actorName:  profile.name,
-      action:     'user.login',
-      entityType: 'user',
-      entityId:   profile.id,
-      entityName: profile.name,
-      ownerId:    profile.role === 'owner' ? profile.id : undefined,
-    });
+    try {
+      await logAudit({
+        actorId:    profile.id,
+        actorRole:  profile.role,
+        actorName:  profile.name,
+        action:     'user.login',
+        entityType: 'user',
+        entityId:   profile.id,
+        entityName: profile.name,
+        ownerId:    profile.role === 'owner' ? profile.id : undefined,
+      });
+    } catch { /* audit không chặn login */ }
   }
 
   revalidatePath('/', 'layout');
@@ -91,16 +93,18 @@ export async function registerAction(input: RegisterInput): Promise<AuthResult> 
   if (!data.user) return { success: false, error: 'Không tạo được tài khoản.' };
 
   // Audit log đăng ký (actor = chính user mới tạo)
-  await logAudit({
-    actorId:    data.user.id,
-    actorRole:  input.role,
-    actorName:  input.name,
-    action:     'user.registered',
-    entityType: 'user',
-    entityId:   data.user.id,
-    entityName: input.name,
-    newData:    { email: input.email, role: input.role },
-  });
+  try {
+    await logAudit({
+      actorId:    data.user.id,
+      actorRole:  input.role,
+      actorName:  input.name,
+      action:     'user.registered',
+      entityType: 'user',
+      entityId:   data.user.id,
+      entityName: input.name,
+      newData:    { email: input.email, role: input.role },
+    });
+  } catch { /* audit không chặn register */ }
 
   return { success: true, code: input.role };
 }
@@ -117,15 +121,17 @@ export async function logoutAction(): Promise<void> {
     const { data: _profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
   const profile = _profile as any;
     if (profile) {
-      await logAudit({
-        actorId:    profile.id,
-        actorRole:  profile.role,
-        actorName:  profile.name,
-        action:     'user.logout',
-        entityType: 'user',
-        entityId:   profile.id,
-        ownerId:    profile.role === 'owner' ? profile.id : undefined,
-      });
+      try {
+        await logAudit({
+          actorId:    profile.id,
+          actorRole:  profile.role,
+          actorName:  profile.name,
+          action:     'user.logout',
+          entityType: 'user',
+          entityId:   profile.id,
+          ownerId:    profile.role === 'owner' ? profile.id : undefined,
+        });
+      } catch { /* audit không chặn logout */ }
     }
   }
 
