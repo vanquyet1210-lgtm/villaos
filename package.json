@@ -3,35 +3,35 @@
   "version": "7.1.0",
   "private": true,
   "scripts": {
-    "dev":            "next dev --turbopack",
-    "build":          "next build",
-    "start":          "next start",
-    "lint":           "next lint",
-    "seed":           "npx tsx supabase/seed.ts",
-    "type-check":     "tsc --noEmit",
-    "build:mobile":   "BUILD_TARGET=mobile next build",
-    "mobile:ios":     "npm run build:mobile && npx cap sync && npx cap open ios",
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "seed": "npx tsx supabase/seed.ts",
+    "type-check": "tsc --noEmit",
+    "build:mobile": "BUILD_TARGET=mobile next build",
+    "mobile:ios": "npm run build:mobile && npx cap sync && npx cap open ios",
     "mobile:android": "npm run build:mobile && npx cap sync && npx cap open android",
-    "mobile:sync":    "npm run build:mobile && npx cap sync",
+    "mobile:sync": "npm run build:mobile && npx cap sync",
     "mobile:run:ios": "npm run build:mobile && npx cap sync && npx cap run ios",
     "mobile:run:android": "npm run build:mobile && npx cap sync && npx cap run android"
   },
   "dependencies": {
-    "next":                  "15.3.6",
-    "react":                 "^19.0.0",
-    "react-dom":             "^19.0.0",
+    "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
-    "@supabase/ssr":         "^0.6.1"
+    "next": "^16.2.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "typescript":            "^5",
-    "@types/node":           "^20",
-    "@types/react":          "^19",
-    "@types/react-dom":      "^19",
-    "tailwindcss":           "^4",
-    "@tailwindcss/postcss":  "^4",
-    "tsx":                   "^4.19.2",
-    "eslint":                "^9",
-    "eslint-config-next":    "15.3.6"
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.3.6",
+    "tailwindcss": "^4",
+    "tsx": "^4.19.2",
+    "typescript": "^5"
   }
 }

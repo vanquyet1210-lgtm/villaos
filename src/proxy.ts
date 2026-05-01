@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  VillaOS v7.1 — middleware.ts (updated)                     ║
+// ║  VillaOS v7.1 — proxy.ts (Next.js 16)                       ║
 // ║  Thêm: Rate limiting cho auth + booking routes              ║
 // ╚══════════════════════════════════════════════════════════════╝
 
@@ -23,14 +23,13 @@ const ROLE_ROUTES: Record<string, UserRole[]> = {
 };
 
 // ── Routes cần rate limit (method + path prefix) ─────────────────
-// Server Actions POST đến các path này sẽ bị rate limited
 const RATE_LIMITED_ROUTES = [
   { path: '/auth/login',            key: 'LOGIN'           as const },
   { path: '/auth/register',         key: 'REGISTER'        as const },
   { path: '/auth/forgot-password',  key: 'FORGOT_PASSWORD' as const },
 ];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const method   = request.method;
 

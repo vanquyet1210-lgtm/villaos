@@ -1,0 +1,61 @@
+﻿
+> villaos@7.1.0 build
+> next build
+
+node.exe : Warning: Custom Cache-Control headers detected for the following routes:
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Warning: Custom...llowing routes::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  - /_next/static/(.*)
+
+Setting a custom Cache-Control header can break Next.js development behavior.
+
+Γû▓ Next.js 16.2.4 (Turbopack)
+- Experiments (use with caution):
+  ┬╖ serverActions
+
+ΓÜá The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: 
+https://nextjs.org/docs/messages/middleware-to-proxy
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 4.1s
+  Running TypeScript ...
+  Finished TypeScript in 7.7s ...
+  Collecting page data using 21 workers ...
+  Generating static pages using 21 workers (0/10) ...
+  Generating static pages using 21 workers (2/10) 
+  Generating static pages using 21 workers (4/10) 
+  Generating static pages using 21 workers (7/10) 
+Γ£ô Generating static pages using 21 workers (10/10) in 1069ms
+  Finalizing page optimization ...
+
+Route (app)
+Γöî ╞Æ /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /admin/dashboard
+Γö£ ╞Æ /admin/users
+Γö£ ╞Æ /auth/callback
+Γö£ Γùï /auth/forgot-password
+Γö£ Γùï /auth/login
+Γö£ Γùï /auth/register
+Γö£ ╞Æ /customer/bookings
+Γö£ ╞Æ /customer/villas
+Γö£ Γùï /manifest.webmanifest
+Γö£ Γùï /offline
+Γö£ ╞Æ /owner/calendar
+Γö£ ╞Æ /owner/dashboard
+Γö£ ╞Æ /owner/villas
+Γö£ ╞Æ /owner/villas/[id]/edit
+Γö£ ╞Æ /owner/villas/new
+Γö£ ╞Æ /sale/bookings
+Γöö ╞Æ /sale/calendar
+
+
+╞Æ Proxy (Middleware)
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+
