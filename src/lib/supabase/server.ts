@@ -78,7 +78,9 @@ export async function getServerSession(): Promise<{ user: User; profile: Profile
   const { data: { user }, error } = await sb.auth.getUser();
   if (error || !user) return null;
 
-  const { data: _profile } = await sb
+  // Dùng admin client để bypass RLS khi đọc profile
+  const adminSb = createSupabaseAdminClient();
+  const { data: _profile } = await adminSb
     .from('profiles')
     .select('*')
     .eq('id', user.id)
