@@ -4,7 +4,7 @@
 
 'use server';
 
-import { createSupabaseServerClient }                    from '@/lib/supabase/server';
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase/server';
 import { mapVilla }                                      from '@/types/database';
 import { logAudit, getCurrentActor }                     from './audit.service';
 import { invalidateVillaCache }                           from '@/lib/cache/cache-invalidation';
@@ -52,7 +52,9 @@ export async function getVillas(): Promise<ServiceResult<Villa[]>> {
       const data = await getCachedVillas(actor.actorId);
       return { data };
     }
-    const { data, error } = await q(sb).from('villas').select('*').order('created_at', { ascending: false });
+    // Dùng admin client để bypass RLS cho sale/admin
+    const adminSb = createSupabaseAdminClient();
+    const { data, error } = await adminSb.from('villas').select('*').eq('status', 'active').order('created_at', { ascending: false });
     if (error) return { error: error.message };
     return { data: (data as VillaRow[]).map(mapVilla) };
   } catch (err: unknown) {
