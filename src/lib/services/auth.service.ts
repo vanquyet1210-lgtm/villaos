@@ -39,7 +39,9 @@ export async function loginAction(input: LoginInput): Promise<AuthResult> {
   }
 
   const user = data.user;
-  const { data: _profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  // Dùng admin client để bypass RLS khi đọc profile
+  const adminSb = createSupabaseAdminClient();
+  const { data: _profile } = await adminSb.from('profiles').select('*').eq('id', user.id).single();
   const profile = _profile as any;
 
   // ── Audit: ghi log đăng nhập thành công ──
@@ -118,7 +120,9 @@ export async function logoutAction(): Promise<void> {
   // Lấy user trước khi sign out để audit
   const { data: { user } } = await sb.auth.getUser();
   if (user) {
-    const { data: _profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+    // Dùng admin client để bypass RLS khi đọc profile
+  const adminSb = createSupabaseAdminClient();
+  const { data: _profile } = await adminSb.from('profiles').select('*').eq('id', user.id).single();
   const profile = _profile as any;
     if (profile) {
       try {
