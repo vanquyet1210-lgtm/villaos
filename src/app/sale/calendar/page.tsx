@@ -14,18 +14,16 @@ export default async function SaleCalendarPage({
   if (!session) redirect('/auth/login');
   const { profile } = session;
 
-  // Lấy villas được assign cho sale này
-  const sb = await (await import('@/lib/supabase/server')).createSupabaseServerClient();
-  const { data: _accessRows } = await sb
-    .from('sale_villa_access')
-    .select('villa_id, villas(*)')
-    .eq('sale_id', profile.id);
+  // ✅ Sale thấy tất cả villas active — không cần phân công
+  const { createSupabaseAdminClient } = await import('@/lib/supabase/server');
+  const adminSb = createSupabaseAdminClient();
+  const { data: _villas } = await adminSb
+    .from('villas')
+    .select('*')
+    .eq('status', 'active')
+    .order('created_at', { ascending: false });
 
-  const accessRows: any[] = _accessRows ?? [];
-
-  const villas = accessRows
-    .map((r: any) => r.villas)
-    .filter(Boolean);
+  const villas: any[] = _villas ?? [];
 
   const { villa: selectedVillaId } = await searchParams;
 
@@ -38,9 +36,9 @@ export default async function SaleCalendarPage({
         </div>
         <div className="card" style={{ textAlign:'center', padding:'48px 24px' }}>
           <span style={{ fontSize:56, display:'block', marginBottom:16 }}>📭</span>
-          <h3>Chưa được phân công villa nào</h3>
+          <h3>Chưa có villa nào</h3>
           <p style={{ marginTop:8, color:'var(--ink-muted)' }}>
-            Liên hệ chủ villa để được cấp quyền truy cập.
+            Chưa có villa nào được thêm vào hệ thống.
           </p>
         </div>
       </>
@@ -51,7 +49,7 @@ export default async function SaleCalendarPage({
     <>
       <div className="page-header">
         <h1>📅 Lịch villa</h1>
-        <p>Chào {profile.name} · {villas.length} villa được phân công</p>
+        <p>Chào {profile.name} · {villas.length} villa</p>
       </div>
       <CalendarShell
         villas={villas}
