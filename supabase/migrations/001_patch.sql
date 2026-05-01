@@ -108,7 +108,7 @@ CREATE TYPE audit_action AS ENUM (
 );
 
 CREATE TABLE audit_logs (
-  id          UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
   -- Ai thực hiện
   actor_id    UUID         REFERENCES profiles(id) ON DELETE SET NULL,
   actor_role  user_role,

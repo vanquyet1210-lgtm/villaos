@@ -16,11 +16,21 @@ export interface VillaInput {
   name: string; province: string; district: string;
   ward?: string; street?: string; bedrooms: number;
   adults: number; children?: number; price: number;
-  amenities?: string[]; description?: string;
-  images?: string[]; emoji?: string;
+  // ✅ Next.js 16: arrays truyền dưới dạng JSON string để tránh "Maximum array nesting exceeded"
+  amenities?: string | string[];
+  description?: string;
+  images?: string | string[];
+  emoji?: string;
 }
 
 export interface ServiceResult<T = void> { data?: T; error?: string; }
+
+// ── Helper: parse array hoặc JSON string ──────────────────────────
+function parseArray(val?: string | string[]): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  try { return JSON.parse(val); } catch { return []; }
+}
 
 // ── Bypass Next.js 'use server' TypeScript inference bug ──────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,6 +77,9 @@ export async function createVilla(input: VillaInput): Promise<ServiceResult<Vill
   const actor = await getCurrentActor();
   if (!actor) return { error: 'Chưa đăng nhập.' };
 
+  const amenities = parseArray(input.amenities);
+  const images    = parseArray(input.images);
+
   const { data, error } = await q(sb)
     .from('villas')
     .insert({
@@ -80,9 +93,9 @@ export async function createVilla(input: VillaInput): Promise<ServiceResult<Vill
       adults:      input.adults,
       children:    input.children    ?? 0,
       price:       input.price,
-      amenities:   input.amenities   ?? [],
+      amenities,
       description: input.description ?? null,
-      images:      input.images      ?? [],
+      images,
       emoji:       input.emoji       ?? '🏡',
       locked_dates: [],
       status:      'active',
@@ -126,9 +139,9 @@ export async function updateVilla(id: string, patch: Partial<VillaInput>): Promi
   if (patch.adults      !== undefined) dbPatch.adults      = patch.adults;
   if (patch.children    !== undefined) dbPatch.children    = patch.children;
   if (patch.price       !== undefined) dbPatch.price       = patch.price;
-  if (patch.amenities   !== undefined) dbPatch.amenities   = patch.amenities;
+  if (patch.amenities   !== undefined) dbPatch.amenities   = parseArray(patch.amenities);
   if (patch.description !== undefined) dbPatch.description = patch.description;
-  if (patch.images      !== undefined) dbPatch.images      = patch.images;
+  if (patch.images      !== undefined) dbPatch.images      = parseArray(patch.images);
   if (patch.emoji       !== undefined) dbPatch.emoji       = patch.emoji;
 
   const { data, error } = await q(sb)

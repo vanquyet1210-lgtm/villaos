@@ -73,8 +73,8 @@ export default function VillaForm({ villa }: VillaFormProps) {
       ward: ward || undefined, street: street.trim() || undefined,
       bedrooms: Number(bedrooms), adults: Number(adults),
       children: Number(children), price: Number(price),
-      amenities, description: description.trim() || undefined,
-      images, emoji,
+      amenities: JSON.stringify(amenities), description: description.trim() || undefined,
+      images: JSON.stringify(images), emoji,
     };
 
     startTransition(async () => {
