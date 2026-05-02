@@ -44,10 +44,10 @@ export async function createBooking(
 
   // Pre-check conflict
   const conflictErr = await _checkConflict(sb, input.villaId, input.checkin, input.checkout);
-  if (conflictErr) return conflictErr;
+  if (conflictErr) return conflictErr as ServiceResult<Booking>;
 
   const lockedErr = await _checkLockedDates(sb, input.villaId, input.checkin, input.checkout);
-  if (lockedErr) return lockedErr;
+  if (lockedErr) return lockedErr as ServiceResult<Booking>;
 
   const holdExpiresAt = input.status === 'hold'
     ? new Date(Date.now() + HOLD_MINUTES * 60 * 1000).toISOString()
@@ -199,7 +199,7 @@ export async function updateBooking(
     const newCheckout = patch.checkout ?? before?.checkout;
     if (before && newCheckin && newCheckout) {
       const conflictErr = await _checkConflict(sb, before.villa_id, newCheckin, newCheckout, id);
-      if (conflictErr) return conflictErr;
+      if (conflictErr) return conflictErr as ServiceResult<Booking>;
     }
   }
 
