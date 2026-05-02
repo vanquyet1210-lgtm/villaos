@@ -65,18 +65,28 @@ export async function createVilla(input: VillaInput): Promise<ServiceResult<Vill
   const actor = await getCurrentActor();
   if (!actor) return { error: 'Chưa đăng nhập.' };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const insertPayload: any = {
+    owner_id:    actor.actorId,
+    name:        input.name.trim(),
+    province:    input.province,
+    district:    input.district,
+    ward:        input.ward ?? null,
+    street:      input.street ?? null,
+    bedrooms:    input.bedrooms,
+    adults:      input.adults,
+    children:    input.children ?? 0,
+    price:       input.price,
+    amenities:   input.amenities ?? [],
+    description: input.description ?? null,
+    images:      input.images ?? [],
+    emoji:       input.emoji ?? '🏡',
+    locked_dates: [],
+    status:      'active',
+  };
   const { data, error } = await sb
     .from('villas')
-    .insert({
-      owner_id: actor.actorId,
-      name: input.name.trim(), province: input.province,
-      district: input.district, ward: input.ward ?? null,
-      street: input.street ?? null, bedrooms: input.bedrooms,
-      adults: input.adults, children: input.children ?? 0,
-      price: input.price, amenities: input.amenities ?? [],
-      description: input.description ?? null, images: input.images ?? [],
-      emoji: input.emoji ?? '🏡', locked_dates: [], status: 'active',
-    })
+    .insert(insertPayload)
     .select().single();
 
   if (error) return { error: error.code === '23514' ? 'Thông tin villa không hợp lệ.' : error.message };
