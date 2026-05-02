@@ -133,7 +133,7 @@ export async function updateVilla(id: string, patch: Partial<VillaInput>): Promi
   if (patch.images      !== undefined) dbPatch.images      = patch.images;
   if (patch.emoji       !== undefined) dbPatch.emoji       = patch.emoji;
 
-  const { data, error } = await sb.from('villas').update(dbPatch).eq('id', id).select().single();
+  const { data, error } = await sb.from('villas').update(dbPatch as any).eq('id', id).select().single();
   if (error) return { error: error.message };
 
   const villa = mapVilla(data as VillaRow);
