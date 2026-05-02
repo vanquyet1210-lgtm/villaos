@@ -3,12 +3,13 @@
 // ║  VillaOS v7 — app/auth/login/page.tsx                       ║
 // ╚══════════════════════════════════════════════════════════════╝
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { loginAction } from '@/lib/services/auth.service';
 
-export default function LoginPage() {
+// ── Inner component — dùng useSearchParams (phải wrap trong Suspense) ──
+function LoginContent() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -127,5 +128,21 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+// ── Page export — bắt buộc wrap Suspense khi dùng useSearchParams ──
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="auth-container">
+        <div className="auth-card" style={{ textAlign: 'center', padding: '2rem' }}>
+          <span className="auth-logo">🏡</span>
+          <p>Đang tải...</p>
+        </div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }
