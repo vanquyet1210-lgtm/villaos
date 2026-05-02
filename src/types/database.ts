@@ -159,33 +159,35 @@ export function mapVilla(row: any): Villa {
   };
 }
 
-// Sanitize date string từ Supabase về định dạng YYYY-MM-DD chuẩn.
+// Sanitize date string từ Supabase về YYYY-MM-DD.
 //
-// Vấn đề: nếu DB lưu TIMESTAMPTZ, Postgres lưu '2026-05-03 00:00:00+00'
-// nhưng intent là ngày 3/5 Vietnam (UTC+7). Khi đọc về, raw = '2026-05-02T17:00:00+00:00'
-// → slice(0,10) = '2026-05-02' SAI.
+// Từ v7.2: new dates được lưu 'YYYY-MM-DDT12:00:00.000Z' (noon UTC)
+// → getUTCDate() luôn cho đúng ngày.
 //
-// Fix: nếu timestamp là 17:00:00Z hoặc các giờ từ 17h-23h59 UTC
-// thì đây là midnight Vietnam → cộng thêm 7h trước khi lấy ngày.
-// Nếu là DATE type (không có 'T') → lấy thẳng.
+// Legacy data bị timezone bug: stored as 'YYYY-MM-DDT00:00:00Z' (midnight UTC)
+// Với Vietnam UTC+7: '2026-05-03' stored → '2026-05-02T17:00:00+00:00'
+// UTC parse → day=2 SAI. Fix: nếu UTC hour ≥ 17, là midnight Vietnam → +1 ngày.
 function sanitizeDate(raw: string): string {
   if (!raw) return raw;
-  if (!raw.includes('T')) return raw.slice(0, 10); // pure DATE string
+  if (raw.length === 10) return raw; // pure DATE 'YYYY-MM-DD'
   
-  // Parse the UTC time component
-  const tPart = raw.slice(11, 19); // 'HH:MM:SS'
-  const hour = parseInt(tPart.slice(0, 2), 10);
+  const d = new Date(raw);
+  let utcDay = d.getUTCDate();
+  const utcHour = d.getUTCHours();
+  const utcMonth = d.getUTCMonth();
+  const utcYear = d.getUTCFullYear();
   
-  // Nếu giờ UTC từ 17h trở đi (tức là ≥ midnight Vietnam), cộng thêm 7h
-  // Vietnam = UTC+7, nên midnight Vietnam = 17:00 UTC ngày hôm trước
-  if (hour >= 17) {
-    // Add 7 hours to get Vietnam date
-    const ms = new Date(raw).getTime() + 7 * 60 * 60 * 1000;
-    return new Date(ms).toISOString().slice(0, 10);
+  // Legacy: T17:00:00-T23:59:59 UTC = midnight→early morning Vietnam (UTC+7)
+  // Thực chất là ngày hôm SAU theo Vietnam time → +1 ngày UTC
+  if (utcHour >= 17) {
+    const next = new Date(Date.UTC(utcYear, utcMonth, utcDay + 1));
+    return next.toISOString().slice(0, 10);
   }
   
-  // Giờ UTC < 17h → lấy thẳng phần date
-  return raw.slice(0, 10);
+  const y = String(utcYear);
+  const m = String(utcMonth + 1).padStart(2, '0');
+  const day = String(utcDay).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export function mapBooking(row: any): Booking {

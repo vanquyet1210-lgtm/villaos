@@ -40,13 +40,16 @@ const HOLD_MINUTES = 30;
 const q = (sb: Awaited<ReturnType<typeof createSupabaseServerClient>>) => sb as any;
 
 // ── Date normalization ────────────────────────────────────────────
-// Postgres TIMESTAMPTZ cột lưu có timezone. Khi insert '2026-05-03' (không có time),
-// Postgres interpret là midnight UTC. Nếu server ở timezone khác, đọc lại có thể
-// bị lệch ngày. Fix: luôn normalize thành 'YYYY-MM-DD' thuần (DATE string)
-// để Postgres lưu đúng ngày bất kể timezone.
+// Postgres TIMESTAMPTZ: nếu insert '2026-05-03' (không có time),
+// Postgres lưu là '2026-05-03T00:00:00Z'. Khi đọc về từ Vietnam (UTC+7),
+// đây là 07:00 sáng → vẫn đúng ngày 3/5. NHƯNG nếu Supabase trả về
+// '2026-05-02T17:00:00+00:00' thì slice(0,10) = '2026-05-02' SAI.
+//
+// Fix triệt để: lưu với T12:00:00Z (noon UTC).
+// Noon UTC = 19:00 Vietnam → an toàn, không bao giờ bị shift ngày
+// dù ở bất kỳ timezone nào từ UTC-11 đến UTC+14.
 function toDateOnly(ds: string): string {
-  // ds đã là 'YYYY-MM-DD' từ input[type=date] — chỉ cần ensure format
-  return ds.slice(0, 10);
+  return ds.slice(0, 10) + 'T12:00:00.000Z';
 }
 
 // ── CREATE ────────────────────────────────────────────────────────
