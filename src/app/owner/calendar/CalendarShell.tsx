@@ -89,9 +89,10 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   function closeModal() { setModal(null); }
 
   // ── Day click handler ──────────────────────────────────────────
-  function handleDayClick(ds: string, info: { bkId?: string } | null) {
-    // info === null nghĩa là ngày trống hoặc là ngày checkout (nửa phải trống)
-    if (!info) {
+  function handleDayClick(ds: string, info: { bkId?: string; type?: string } | null) {
+    // Checkout day: nửa phải trống → cho tạo booking mới checkin ngày đó
+    const isCheckoutOnly = info?.type === 'checkout' || info?.type === 'locked-checkout';
+    if (!info || isCheckoutOnly) {
       if (ds >= todayISO()) openCreateModal(ds);
       return;
     }
@@ -100,7 +101,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
       const found = bookings.find(b => b.id === info.bkId);
       if (found) { openViewModal(found); return; }
     }
-    // Fallback: ngày trống
     if (ds >= todayISO()) openCreateModal(ds);
   }
 

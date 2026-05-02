@@ -7,7 +7,7 @@
 
 import { useMemo, useCallback } from 'react';
 import {
-  addDays, dateRange, groupConsecutiveDates,
+  addDays, dateRange,
   prevMonth, nextMonth, formatMonthYear,
   daysInMonth, firstDayOfMonth, todayISO,
 } from '@/lib/utils';
@@ -151,31 +151,15 @@ function buildDayMap(
   }
 
   // 2. Locked-date segments
-  // lockedDates là mảng các ngày (đêm) bị khóa — mỗi phần tử là 1 đêm bị block.
-  // Hiển thị giống booking: segment đầu = checkin-half, giữa = middle, cuối = checkout-half của ngày TIẾP THEO.
+  // Mỗi lockedDate = 1 ĐÊM bị khóa (night-based như OTA).
+  // Mỗi ngày xử lý độc lập: locked-checkin ngày đó + locked-checkout ngày kế.
+  // Không gom thành đoạn để tránh ghi đè booking-middle ở giữa.
   if (lockedDates.length) {
-    const sorted   = [...lockedDates].sort();
-    const segments = groupConsecutiveDates(sorted);
     const lockInfo = { customer: '🔒', status: 'locked', isLock: true };
-
-    for (const { start, last } of segments) {
-      // Các ngày bị lock là đêm: start → last (inclusive nights)
-      // → hiển thị: nửa phải ngày start (checkin), các ngày giữa (middle), nửa trái ngày (last+1) (checkout)
-      const checkoutDs = addDays(last, 1); // ngày "trả phòng" = hôm sau ngày lock cuối
-
-      if (start === last) {
-        // Chỉ 1 đêm bị lock: nửa phải ngày start + nửa trái ngày start+1
-        applyLock(map, start,      'locked-checkin',  lockInfo);
-        applyLock(map, checkoutDs, 'locked-checkout', lockInfo);
-      } else {
-        // Nhiều đêm liên tiếp:
-        applyLock(map, start, 'locked-checkin', lockInfo);
-        // Các ngày giữa: start+1 → last (toàn bộ ngày, vì đêm đó bị lock)
-        for (const ds of dateRange(addDays(start, 1), addDays(last, 1))) {
-          applyLock(map, ds, 'locked-middle', lockInfo);
-        }
-        applyLock(map, checkoutDs, 'locked-checkout', lockInfo);
-      }
+    for (const lockedDay of lockedDates) {
+      const nextDay = addDays(lockedDay, 1);
+      applyLock(map, lockedDay, 'locked-checkin',  lockInfo);
+      applyLock(map, nextDay,   'locked-checkout', lockInfo);
     }
   }
 
@@ -193,31 +177,30 @@ function applyLock(
   const existing = map[ds];
   const isBooking = ['checkin','checkout','middle','checkout+checkin'].includes(existing.type);
 
-  if (isBooking) {
-    if ((lockType === 'locked-checkout' || lockType === 'locked-middle') && existing.type === 'checkin') {
-      map[ds] = {
-        ...existing, type: 'locked-split-left',
-        rightCustomer: existing.customer,
-        rightStatus:   existing.status,
-        leftStatus:    'locked',
-      };
-    } else if (lockType === 'locked-checkin' && existing.type === 'checkout') {
-      map[ds] = {
-        ...existing, type: 'locked-split-right',
-        leftStatus:   existing.status,
-        leftCustomer: existing.customer,
-      };
-    } else if (lockType === 'locked-checkout' && existing.type === 'middle') {
-      map[ds] = {
-        ...existing, type: 'locked-split-left',
-        rightCustomer: existing.customer,
-        rightStatus:   existing.status,
-        leftStatus:    'locked',
-      };
-    }
-  } else if (existing.isLock && lockType === 'locked-middle') {
-    map[ds] = { ...lockInfo, type: 'locked-middle' };
+  if (!isBooking) {
+    // Không có booking — ghi đè lock cũ
+    map[ds] = { ...lockInfo, type: lockType };
+    return;
   }
+
+  // Booking tồn tại — chỉ split tại điểm giao, KHÔNG ghi đè middle
+  if (lockType === 'locked-checkin' && existing.type === 'checkout') {
+    // Lock checkin vào ngày checkout của booking → split: trái=booking, phải=lock
+    map[ds] = {
+      ...existing, type: 'locked-split-right',
+      leftStatus:   existing.status,
+      leftCustomer: existing.customer,
+    };
+  } else if (lockType === 'locked-checkout' && existing.type === 'checkin') {
+    // Lock checkout vào ngày checkin của booking → split: trái=lock, phải=booking
+    map[ds] = {
+      ...existing, type: 'locked-split-left',
+      rightCustomer: existing.customer,
+      rightStatus:   existing.status,
+      leftStatus:    'locked',
+    };
+  }
+  // Mọi trường hợp khác (middle, checkout+checkin...) → giữ nguyên booking
 }
 
 // ── Day Cell ──────────────────────────────────────────────────────
