@@ -58,18 +58,27 @@ export interface CalendarProps {
   readonly?: boolean;
 }
 
-// ── Color helpers ─────────────────────────────────────────────────
+// ── Color helpers — theo spec màu sắc chuẩn ───────────────────────
+// Confirmed: nền #fde8e8 · bar #e57373
+// Hold:      nền #fef6e4 · bar #f0b429
+// Locked:    nền #dde8e3 · bar #7aaba3
 
 function bgOf(status?: string): string {
-  if (status === 'hold')   return 'var(--amber-light)';
+  if (status === 'hold')   return '#fef6e4';
   if (status === 'locked') return '#dde8e3';
-  return 'var(--red-light)';
+  return '#fde8e8'; // confirmed
+}
+
+function barOf(status?: string): string {
+  if (status === 'hold')   return '#f0b429';
+  if (status === 'locked') return '#7aaba3';
+  return '#e57373'; // confirmed
 }
 
 function textOf(status?: string): string {
-  if (status === 'hold')   return 'var(--amber)';
-  if (status === 'locked') return 'var(--ink-light)';
-  return 'var(--red)';
+  if (status === 'hold')   return '#b8860b';
+  if (status === 'locked') return '#4a7a72';
+  return '#c0392b'; // confirmed
 }
 
 // ── Build DayMap ──────────────────────────────────────────────────
@@ -250,58 +259,183 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
     info.type === 'locked-checkout'
   );
 
-  // Segment-specific rendering
+  // Segment-specific rendering — Agoda bar style
+  // Bar: dải màu nằm ở giữa ô (inset 4px 0), kéo liền mạch qua các ngày
+  // Tên khách: hiển thị trên bar tại ô checkin (z-index cao hơn bar)
+  // Màu nền ô theo trạng thái, màu bar đậm hơn để tạo độ tương phản
   const renderSegment = () => {
     if (!info) return null;
 
     const { type, customer, status, rightCustomer, rightStatus,
-            leftStatus, leftCustomer } = info;
-    const bg  = bgOf(status);
-    const txt = textOf(status);
+            leftStatus } = info;
+    const bg     = bgOf(status);
+    const bar    = barOf(status);
+    const txt    = textOf(status);
 
-    const segBr = (_t: string) => '0'; // bar liền mạch, không cần radius riêng
+    // Bar height: dải nằm giữa ô, cao 20px
+    const BAR_TOP    = '28px';
+    const BAR_HEIGHT = '20px';
+
+    // Helper: render bar strip + optional name label
+    const Strip = ({
+      left = '0', right = '0', color = bar,
+      roundLeft = false, roundRight = false,
+      label, labelColor = '#fff',
+    }: {
+      left?: string; right?: string; color?: string;
+      roundLeft?: boolean; roundRight?: boolean;
+      label?: string; labelColor?: string;
+    }) => (
+      <>
+        {/* Nền ô */}
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 1,
+          background: color === bar ? bg : bgOf(leftStatus ?? status),
+          pointerEvents: 'none',
+        }} />
+        {/* Bar strip */}
+        <div style={{
+          position: 'absolute',
+          top: BAR_TOP, height: BAR_HEIGHT,
+          left, right,
+          background: color,
+          borderRadius: `${roundLeft ? '10px' : '0'} ${roundRight ? '10px' : '0'} ${roundRight ? '10px' : '0'} ${roundLeft ? '10px' : '0'}`,
+          zIndex: 2,
+          pointerEvents: 'none',
+        }} />
+        {/* Tên khách trên bar */}
+        {label && (
+          <span style={{
+            position: 'absolute',
+            top: BAR_TOP, height: BAR_HEIGHT,
+            left: '4px', right: '2px',
+            zIndex: 3,
+            fontSize: '0.62rem', fontWeight: 700,
+            color: labelColor,
+            display: 'flex', alignItems: 'center',
+            overflow: 'hidden', whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+          }}>
+            {label}
+          </span>
+        )}
+      </>
+    );
 
     switch (type) {
 
+      // Checkin: nền phủ nửa phải, bar từ giữa → phải (không bo trái)
       case 'checkin':
         return (
           <>
-            <div className="cal-bg" style={{
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1,
               background: `linear-gradient(to right, transparent 50%, ${bg} 50%)`,
-              borderRadius: segBr('checkin'),
+              pointerEvents: 'none',
             }} />
-            {customer && <span className="cal-name" style={{ color: txt }}>{customer}</span>}
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '50%', right: '0',
+              background: bar,
+              borderRadius: '10px 0 0 10px',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
+            {customer && (
+              <span style={{
+                position: 'absolute',
+                top: BAR_TOP, height: BAR_HEIGHT,
+                left: 'calc(50% + 4px)', right: '2px',
+                zIndex: 3, fontSize: '0.62rem', fontWeight: 700,
+                color: '#fff', display: 'flex', alignItems: 'center',
+                overflow: 'hidden', whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+              }}>
+                {customer}
+              </span>
+            )}
           </>
         );
 
+      // Middle: nền full, bar full width (liền mạch với ô kề)
       case 'middle':
         return (
           <>
-            <div className="cal-bg" style={{ background: bg, borderRadius: '0' }} />
-            {customer && <span className="cal-name" style={{ color: txt }}>{customer}</span>}
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1,
+              background: bg, pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '0', right: '0',
+              background: bar,
+              zIndex: 2, pointerEvents: 'none',
+            }} />
           </>
         );
 
+      // Checkout: nền nửa trái, bar từ trái → giữa (bo tròn phải)
       case 'checkout':
         return (
-          <div className="cal-bg" style={{
-            background: `linear-gradient(to left, transparent 50%, ${bg} 50%)`,
-            borderRadius: segBr('checkout'),
-          }} />
+          <>
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1,
+              background: `linear-gradient(to left, transparent 50%, ${bg} 50%)`,
+              pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '0', right: '50%',
+              background: bar,
+              borderRadius: '0 10px 10px 0',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
+          </>
         );
 
+      // checkout+checkin: split — trái = checkout cũ, phải = checkin mới
       case 'checkout+checkin': {
-        const lBg  = bgOf(leftStatus);
+        const lBar = barOf(leftStatus);
         const rBg  = bgOf(rightStatus);
-        const rTxt = textOf(rightStatus);
+        const rBar = barOf(rightStatus);
         return (
           <>
-            <div className="cal-split">
-              <div style={{ background: lBg, borderRadius: '6px 0 0 6px' }} />
-              <div style={{ background: rBg, borderRadius: '0 6px 6px 0' }} />
-            </div>
+            {/* Nền split */}
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1,
+              background: `linear-gradient(to right, ${bgOf(leftStatus)} 50%, ${rBg} 50%)`,
+              pointerEvents: 'none',
+            }} />
+            {/* Bar trái (checkout) */}
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '0', right: '50%',
+              background: lBar,
+              borderRadius: '0 10px 10px 0',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
+            {/* Bar phải (checkin mới) */}
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '50%', right: '0',
+              background: rBar,
+              borderRadius: '10px 0 0 10px',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
             {rightCustomer && (
-              <span className="cal-name cal-name-right" style={{ color: rTxt }}>
+              <span style={{
+                position: 'absolute',
+                top: BAR_TOP, height: BAR_HEIGHT,
+                left: 'calc(50% + 4px)', right: '2px',
+                zIndex: 3, fontSize: '0.62rem', fontWeight: 700,
+                color: '#fff', display: 'flex', alignItems: 'center',
+                overflow: 'hidden', whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+              }}>
                 {rightCustomer}
               </span>
             )}
@@ -309,55 +443,143 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
         );
       }
 
+      // Locked checkin: nền xanh mint nửa phải, bar xanh từ giữa
       case 'locked-checkin':
         return (
           <>
-            <div className="cal-bg" style={{
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1,
               background: 'linear-gradient(to right, transparent 50%, #dde8e3 50%)',
-              borderRadius: segBr('checkin'),
+              pointerEvents: 'none',
             }} />
-            <span className="cal-name" style={{ color: 'var(--ink-light)', fontSize: '0.65rem' }}>🔒</span>
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '50%', right: '0',
+              background: '#7aaba3',
+              borderRadius: '10px 0 0 10px',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
+            <span style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: 'calc(50% + 4px)', right: '2px',
+              zIndex: 3, fontSize: '0.6rem',
+              color: '#fff', display: 'flex', alignItems: 'center',
+              pointerEvents: 'none',
+            }}>🔒</span>
           </>
         );
 
       case 'locked-middle':
         return (
           <>
-            <div className="cal-bg" style={{ background: '#dde8e3', borderRadius: '0' }} />
-            <span className="cal-name" style={{ color: 'var(--ink-light)', fontSize: '0.65rem' }}>🔒</span>
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1,
+              background: '#dde8e3', pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '0', right: '0',
+              background: '#7aaba3',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
           </>
         );
 
       case 'locked-checkout':
         return (
-          <div className="cal-bg" style={{
-            background: 'linear-gradient(to left, transparent 50%, #dde8e3 50%)',
-            borderRadius: segBr('checkout'),
-          }} />
+          <>
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1,
+              background: 'linear-gradient(to left, transparent 50%, #dde8e3 50%)',
+              pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '0', right: '50%',
+              background: '#7aaba3',
+              borderRadius: '0 10px 10px 0',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
+          </>
         );
 
+      // locked-split-left: trái=lock, phải=booking checkin
       case 'locked-split-left': {
+        const rBar = barOf(rightStatus);
         const rBg  = bgOf(rightStatus);
-        const rTxt = textOf(rightStatus);
         const rc   = info.rightCustomer ?? customer;
         return (
           <>
-            <div className="cal-split">
-              <div style={{ background: '#dde8e3', borderRadius: '6px 0 0 6px' }} />
-              <div style={{ background: rBg, borderRadius: '0 6px 6px 0' }} />
-            </div>
-            {rc && <span className="cal-name cal-name-right" style={{ color: rTxt }}>{rc}</span>}
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1,
+              background: `linear-gradient(to right, #dde8e3 50%, ${rBg} 50%)`,
+              pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '0', right: '50%',
+              background: '#7aaba3',
+              borderRadius: '0 10px 10px 0',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '50%', right: '0',
+              background: rBar,
+              borderRadius: '10px 0 0 10px',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
+            {rc && (
+              <span style={{
+                position: 'absolute',
+                top: BAR_TOP, height: BAR_HEIGHT,
+                left: 'calc(50% + 4px)', right: '2px',
+                zIndex: 3, fontSize: '0.62rem', fontWeight: 700,
+                color: '#fff', display: 'flex', alignItems: 'center',
+                overflow: 'hidden', whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+              }}>
+                {rc}
+              </span>
+            )}
           </>
         );
       }
 
+      // locked-split-right: trái=booking checkout, phải=lock
       case 'locked-split-right': {
-        const lBg = bgOf(leftStatus);
+        const lBar = barOf(leftStatus);
+        const lBg  = bgOf(leftStatus);
         return (
-          <div className="cal-split">
-            <div style={{ background: lBg, borderRadius: '6px 0 0 6px' }} />
-            <div style={{ background: '#dde8e3', borderRadius: '0 6px 6px 0' }} />
-          </div>
+          <>
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1,
+              background: `linear-gradient(to right, ${lBg} 50%, #dde8e3 50%)`,
+              pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '0', right: '50%',
+              background: lBar,
+              borderRadius: '0 10px 10px 0',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              left: '50%', right: '0',
+              background: '#7aaba3',
+              borderRadius: '10px 0 0 10px',
+              zIndex: 2, pointerEvents: 'none',
+            }} />
+          </>
         );
       }
 
@@ -457,15 +679,15 @@ export default function Calendar({
       {/* Legend */}
       <div className="cal-legend">
         <span className="cal-legend-item">
-          <span className="cal-legend-dot" style={{ background: 'var(--red-light)', border: '1.5px solid var(--red)' }} />
-          Đã đặt
+          <span className="cal-legend-dot" style={{ background: '#fde8e8', border: '1.5px solid #e57373' }} />
+          Confirmed
         </span>
         <span className="cal-legend-item">
-          <span className="cal-legend-dot" style={{ background: 'var(--amber-light)', border: '1.5px solid var(--amber)' }} />
+          <span className="cal-legend-dot" style={{ background: '#fef6e4', border: '1.5px solid #f0b429' }} />
           Hold
         </span>
         <span className="cal-legend-item">
-          <span className="cal-legend-dot" style={{ background: '#dde8e3', border: '1.5px solid #a8c4b8' }} />
+          <span className="cal-legend-dot" style={{ background: '#dde8e3', border: '1.5px solid #7aaba3' }} />
           Khóa
         </span>
       </div>
@@ -536,7 +758,7 @@ export default function Calendar({
 
         .cal-day {
           position:       relative;
-          min-height:     52px;
+          min-height:     62px;
           border-radius:  0;
           overflow:       visible;
           display:        flex;

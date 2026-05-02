@@ -349,6 +349,25 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                         📝 {b.note}
                       </div>
                     )}
+                    {b.status === 'hold' && b.holdExpiresAt && (() => {
+                      const exp  = new Date(b.holdExpiresAt);
+                      const now  = new Date();
+                      const diff = Math.round((exp.getTime() - now.getTime()) / 60000);
+                      const isExpired = diff <= 0;
+                      return (
+                        <div style={{
+                          marginTop: 12, padding: '8px 14px',
+                          background: isExpired ? '#fff0f0' : '#fef6e4',
+                          borderRadius: 'var(--radius-md)',
+                          fontSize: '0.82rem', fontWeight: 600,
+                          color: isExpired ? '#c0392b' : '#b8860b',
+                        }}>
+                          {isExpired
+                            ? '⚠️ Hold đã hết hạn — cần xác nhận hoặc hủy'
+                            : `⏳ Tự động hủy sau ${diff} phút`}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="modal-footer">
                     {/* Confirm: chỉ owner/admin mới được confirm hold */}
