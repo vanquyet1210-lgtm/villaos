@@ -159,6 +159,16 @@ export function mapVilla(row: any): Villa {
   };
 }
 
+// Sanitize date string from Supabase: nếu là timestamp (có 'T'), lấy phần date
+// Nếu Supabase lưu là DATE type (YYYY-MM-DD) thì split an toàn vẫn cho đúng
+// Không dùng new Date() để tránh UTC→local timezone shift
+function sanitizeDate(raw: string): string {
+  if (!raw) return raw;
+  // Đảm bảo luôn lấy phần YYYY-MM-DD, không bị ảnh hưởng timezone
+  const s = raw.slice(0, 10); // lấy 10 ký tự đầu = YYYY-MM-DD
+  return s;
+}
+
 export function mapBooking(row: any): Booking {
   return {
     id:            row.id,
@@ -169,8 +179,8 @@ export function mapBooking(row: any): Booking {
     customer:      row.customer,
     email:         row.email ?? '',
     phone:         row.phone ?? '',
-    checkin:       row.checkin.split('T')[0],   // sanitize timezone
-    checkout:      row.checkout.split('T')[0],  // sanitize timezone
+    checkin:       sanitizeDate(row.checkin),
+    checkout:      sanitizeDate(row.checkout),
     status:        row.status,
     total:         row.total,
     note:          row.note ?? '',

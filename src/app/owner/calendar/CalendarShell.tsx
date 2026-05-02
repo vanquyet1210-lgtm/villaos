@@ -50,7 +50,49 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   const [modal, setModal] = useState<BookingModal | null>(null);
   const [serverBookings, setServerBookings] = useState<Booking[]>([]);
 
-  const villa = villas.find(v => v.id === selectedVillaId) ?? villas[0];
+  // ── Villa filter state ─────────────────────────────────────────
+  const [showFilter,    setShowFilter]    = useState(false);
+  const [filterSearch,  setFilterSearch]  = useState('');
+  const [filterProvince,setFilterProvince] = useState('');
+  const [filterBedrooms,setFilterBedrooms] = useState('');
+  const [filterPrice,   setFilterPrice]   = useState('');
+  const [filterAdults,  setFilterAdults]  = useState('');
+  const [filterAmenity, setFilterAmenity] = useState<string[]>([]);
+
+  // Derived: danh sách province từ villas
+  const provinces = Array.from(new Set(villas.map(v => v.province).filter(Boolean))).sort();
+  const allAmenities = Array.from(new Set(villas.flatMap(v => v.amenities ?? []))).sort();
+
+  // Filtered villas
+  const filteredVillas = villas.filter(v => {
+    if (filterSearch) {
+      const s = filterSearch.toLowerCase();
+      if (!v.name.toLowerCase().includes(s) &&
+          !v.district?.toLowerCase().includes(s) &&
+          !v.province?.toLowerCase().includes(s)) return false;
+    }
+    if (filterProvince && v.province !== filterProvince) return false;
+    if (filterBedrooms && v.bedrooms !== Number(filterBedrooms)) return false;
+    if (filterAdults && v.adults < Number(filterAdults)) return false;
+    if (filterPrice) {
+      const [min, max] = filterPrice.split('-').map(Number);
+      if (v.price < min) return false;
+      if (max && v.price > max) return false;
+    }
+    if (filterAmenity.length > 0) {
+      if (!filterAmenity.every(a => (v.amenities ?? []).includes(a))) return false;
+    }
+    return true;
+  });
+
+  const hasFilter = !!(filterSearch || filterProvince || filterBedrooms || filterPrice || filterAdults || filterAmenity.length);
+
+  function clearFilter() {
+    setFilterSearch(''); setFilterProvince(''); setFilterBedrooms('');
+    setFilterPrice(''); setFilterAdults(''); setFilterAmenity([]);
+  }
+
+  const villa = villas.find(v => v.id === selectedVillaId) ?? filteredVillas[0] ?? villas[0];
 
   // Realtime bookings (merge server + realtime)
   const bookings = useBookingsRealtime(selectedVillaId, serverBookings);
@@ -89,14 +131,33 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   function closeModal() { setModal(null); }
 
   // ── Day click handler ──────────────────────────────────────────
-  function handleDayClick(ds: string, info: { bkId?: string; type?: string } | null) {
-    // Checkout day: nửa phải trống → cho tạo booking mới checkin ngày đó
+  function handleDayClick(ds: string, info: { bkId?: string; type?: string; status?: string; isLock?: boolean } | null) {
+    // Checkout day hoặc locked-checkout: nửa phải trống → cho tạo booking mới
     const isCheckoutOnly = info?.type === 'checkout' || info?.type === 'locked-checkout';
+
+    // ⚠️ Cảnh báo sớm nếu ngày đã bị khóa (owner locked)
+    if (info?.isLock && !isCheckoutOnly) {
+      show('warning', '🔒 Ngày bị khóa', 'Chủ nhà đã khóa ngày này. Không thể đặt phòng.');
+      return;
+    }
+
+    // ⚠️ Cảnh báo sớm nếu ngày đã có booking confirmed/hold (trừ checkout)
+    if (info?.type === 'middle' || info?.type === 'checkin') {
+      if (info.bkId) {
+        const found = bookings.find(b => b.id === info.bkId);
+        if (found) { openViewModal(found); return; }
+      }
+      // Không tìm thấy booking → cảnh báo chung
+      const statusLabel = info.status === 'hold' ? 'Hold' : 'Confirmed';
+      show('warning', `📅 Ngày đã có ${statusLabel}`, 'Ngày này đã được đặt. Vui lòng chọn ngày khác.');
+      return;
+    }
+
     if (!info || isCheckoutOnly) {
       if (ds >= todayISO()) openCreateModal(ds);
       return;
     }
-    // Có booking/hold → mở modal xem
+    // checkout+checkin split: click opens the existing booking on left side
     if (info.bkId) {
       const found = bookings.find(b => b.id === info.bkId);
       if (found) { openViewModal(found); return; }
@@ -158,18 +219,104 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
 
   return (
     <div className="cal-shell">
-      {/* Villa selector */}
+      {/* Villa filter + selector */}
       {villas.length > 1 && (
-        <div className="villa-selector">
-          {villas.map(v => (
+        <div>
+          {/* Filter bar */}
+          <div className="villa-filter-bar">
+            <input
+              className="villa-filter-search"
+              placeholder="🔍 Tìm nhanh theo tên, đường, địa chỉ..."
+              value={filterSearch}
+              onChange={e => setFilterSearch(e.target.value)}
+            />
             <button
-              key={v.id}
-              className={`villa-tab${v.id === selectedVillaId ? ' active' : ''}`}
-              onClick={() => setSelectedVillaId(v.id)}
+              className={`villa-filter-toggle${showFilter ? ' active' : ''}`}
+              onClick={() => setShowFilter(v => !v)}
             >
-              {v.emoji} {v.name}
+              {showFilter ? '▲ Ẩn bộ lọc' : '▼ Bộ lọc'}
+              {hasFilter && <span className="filter-badge"> ●</span>}
             </button>
-          ))}
+            {hasFilter && (
+              <button className="villa-filter-clear" onClick={clearFilter}>✕ Xóa bộ lọc</button>
+            )}
+          </div>
+
+          {/* Expanded filter panel */}
+          {showFilter && (
+            <div className="villa-filter-panel">
+              <div className="filter-row">
+                <div className="filter-field">
+                  <label>Tỉnh / TP</label>
+                  <select value={filterProvince} onChange={e => setFilterProvince(e.target.value)}>
+                    <option value="">Tất cả tỉnh</option>
+                    {provinces.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div className="filter-field">
+                  <label>Số phòng ngủ</label>
+                  <select value={filterBedrooms} onChange={e => setFilterBedrooms(e.target.value)}>
+                    <option value="">Tất cả</option>
+                    {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} phòng</option>)}
+                  </select>
+                </div>
+                <div className="filter-field">
+                  <label>Khoảng giá / đêm</label>
+                  <select value={filterPrice} onChange={e => setFilterPrice(e.target.value)}>
+                    <option value="">Tất cả giá</option>
+                    <option value="0-1000000">Dưới 1 triệu</option>
+                    <option value="1000000-3000000">1 - 3 triệu</option>
+                    <option value="3000000-5000000">3 - 5 triệu</option>
+                    <option value="5000000-10000000">5 - 10 triệu</option>
+                    <option value="10000000-99999999">Trên 10 triệu</option>
+                  </select>
+                </div>
+                <div className="filter-field">
+                  <label>Số người lớn tối đa</label>
+                  <select value={filterAdults} onChange={e => setFilterAdults(e.target.value)}>
+                    <option value="">Tất cả</option>
+                    {[2,4,6,8,10,12].map(n => <option key={n} value={n}>≥ {n} người</option>)}
+                  </select>
+                </div>
+              </div>
+              {allAmenities.length > 0 && (
+                <div className="filter-amenities">
+                  <label>Tiện ích</label>
+                  <div className="amenity-chips">
+                    {allAmenities.map(a => (
+                      <button
+                        key={a}
+                        className={`amenity-chip${filterAmenity.includes(a) ? ' active' : ''}`}
+                        onClick={() => setFilterAmenity(prev =>
+                          prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]
+                        )}
+                      >
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {filteredVillas.length === 0 && (
+                <div style={{ padding:'12px', color:'var(--ink-muted)', fontSize:'0.875rem', textAlign:'center' }}>
+                  Không tìm thấy villa phù hợp
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Villa tab selector */}
+          <div className="villa-selector">
+            {filteredVillas.map(v => (
+              <button
+                key={v.id}
+                className={`villa-tab${v.id === selectedVillaId ? ' active' : ''}`}
+                onClick={() => setSelectedVillaId(v.id)}
+              >
+                {v.emoji} {v.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -501,6 +648,59 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
           outline: none; transition: border-color .15s;
         }
         .field-group input:focus, .field-group select:focus { border-color: var(--sage); }
+
+        /* ── Villa Filter ── */
+        .villa-filter-bar {
+          display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+        }
+        .villa-filter-search {
+          flex: 1; min-width: 200px; padding: 8px 14px;
+          border: 1.5px solid var(--stone); border-radius: 99px;
+          font-family: var(--font-body); font-size: 0.875rem; color: var(--ink);
+          outline: none; transition: border-color .15s; background: var(--white);
+        }
+        .villa-filter-search:focus { border-color: var(--sage); }
+        .villa-filter-toggle {
+          padding: 8px 14px; border: 1.5px solid var(--stone); border-radius: 99px;
+          background: var(--white); font-family: var(--font-body); font-size: 0.82rem;
+          cursor: pointer; color: var(--ink); transition: all .15s; white-space: nowrap;
+        }
+        .villa-filter-toggle:hover, .villa-filter-toggle.active {
+          border-color: var(--sage); background: var(--sage-pale); color: var(--forest);
+        }
+        .filter-badge { color: var(--forest); font-size: 0.7rem; }
+        .villa-filter-clear {
+          padding: 8px 12px; border: 1.5px solid rgba(192,57,43,.3); border-radius: 99px;
+          background: var(--white); font-family: var(--font-body); font-size: 0.82rem;
+          cursor: pointer; color: var(--red); transition: all .15s;
+        }
+        .villa-filter-clear:hover { background: #fff0f0; }
+        .villa-filter-panel {
+          background: var(--white); border: 1px solid rgba(180,212,195,.3);
+          border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 10px;
+        }
+        .filter-row {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: 12px; margin-bottom: 12px;
+        }
+        .filter-field { display: flex; flex-direction: column; gap: 4px; }
+        .filter-field label { font-size: 0.75rem; font-weight: 700; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .filter-field select {
+          padding: 7px 10px; border: 1.5px solid var(--stone); border-radius: var(--radius-md);
+          font-family: var(--font-body); font-size: 0.875rem; color: var(--ink);
+          outline: none; background: var(--white); transition: border-color .15s;
+        }
+        .filter-field select:focus { border-color: var(--sage); }
+        .filter-amenities { display: flex; flex-direction: column; gap: 8px; }
+        .filter-amenities label { font-size: 0.75rem; font-weight: 700; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .amenity-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+        .amenity-chip {
+          padding: 5px 12px; border: 1.5px solid var(--stone); border-radius: 99px;
+          background: var(--white); font-family: var(--font-body); font-size: 0.8rem;
+          cursor: pointer; color: var(--ink); transition: all .15s;
+        }
+        .amenity-chip:hover { border-color: var(--sage); background: var(--sage-pale); }
+        .amenity-chip.active { background: var(--forest); border-color: var(--forest); color: white; font-weight: 600; }
       `}</style>
     </div>
   );
