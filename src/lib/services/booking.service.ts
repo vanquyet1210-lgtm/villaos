@@ -74,7 +74,7 @@ export async function createBooking(
       total:           input.total,
       note:            input.note?.trim()   ?? null,
       hold_expires_at: holdExpiresAt,
-    } as any)
+    } as unknown as never)
     .select()
     .single();
 
@@ -218,7 +218,7 @@ export async function updateBooking(
 
   const { data, error } = await q(sb)
     .from('bookings')
-    .update(dbPatch as any)
+    .update(dbPatch as unknown as never)
     .eq('id', id)
     .select()
     .single();

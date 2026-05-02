@@ -23,6 +23,10 @@ export interface VillaInput {
 
 export interface ServiceResult<T = void> { data?: T; error?: string; }
 
+// ── Bypass 'use server' TypeScript never inference ───────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const q = (sb: Awaited<ReturnType<typeof createSupabaseServerClient>>) => sb as any;
+
 // ── READ (cached) ─────────────────────────────────────────────────
 
 export async function getVillas(): Promise<ServiceResult<Villa[]>> {
@@ -66,7 +70,7 @@ export async function createVilla(input: VillaInput): Promise<ServiceResult<Vill
   if (!actor) return { error: 'Chưa đăng nhập.' };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const insertPayload: any = {
+  const insertPayload = {
     owner_id:    actor.actorId,
     name:        input.name.trim(),
     province:    input.province,
@@ -84,7 +88,7 @@ export async function createVilla(input: VillaInput): Promise<ServiceResult<Vill
     locked_dates: [],
     status:      'active',
   };
-  const { data, error } = await sb
+  const { data, error } = await q(sb)
     .from('villas')
     .insert(insertPayload)
     .select().single();
@@ -133,7 +137,7 @@ export async function updateVilla(id: string, patch: Partial<VillaInput>): Promi
   if (patch.images      !== undefined) dbPatch.images      = patch.images;
   if (patch.emoji       !== undefined) dbPatch.emoji       = patch.emoji;
 
-  const { data, error } = await sb.from('villas').update(dbPatch as any).eq('id', id).select().single();
+  const { data, error } = await q(sb).from('villas').update(dbPatch).eq('id', id).select().single();
   if (error) return { error: error.message };
 
   const villa = mapVilla(data as VillaRow);
@@ -160,7 +164,7 @@ export async function deleteVilla(id: string): Promise<ServiceResult> {
 
   const { data: _before } = await sb.from('villas').select('*').eq('id', id).single();
   const before = _before as any;
-  const { error } = await sb.from('villas').delete().eq('id', id);
+  const { error } = await q(sb).from('villas').delete().eq('id', id);
   if (error) return { error: error.message };
 
   if (before) {
@@ -192,7 +196,7 @@ export async function toggleLockDate(villaId: string, dateStr: string): Promise<
   const isLocked = currentLocked.includes(dateStr);
   const newLocked = isLocked ? currentLocked.filter(d => d !== dateStr) : [...currentLocked, dateStr].sort();
 
-  const { data, error } = await sb.from('villas').update({ locked_dates: newLocked }).eq('id', villaId).select('locked_dates').single();
+  const { data, error } = await q(sb).from('villas').update({ locked_dates: newLocked }).eq('id', villaId).select('locked_dates').single();
   if (error) return { error: error.message };
 
   invalidateVillaCache(villaId, current.owner_id);
