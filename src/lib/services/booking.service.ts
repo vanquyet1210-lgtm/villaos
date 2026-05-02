@@ -39,6 +39,16 @@ const HOLD_MINUTES = 30;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const q = (sb: Awaited<ReturnType<typeof createSupabaseServerClient>>) => sb as any;
 
+// ── Date normalization ────────────────────────────────────────────
+// Postgres TIMESTAMPTZ cột lưu có timezone. Khi insert '2026-05-03' (không có time),
+// Postgres interpret là midnight UTC. Nếu server ở timezone khác, đọc lại có thể
+// bị lệch ngày. Fix: luôn normalize thành 'YYYY-MM-DD' thuần (DATE string)
+// để Postgres lưu đúng ngày bất kể timezone.
+function toDateOnly(ds: string): string {
+  // ds đã là 'YYYY-MM-DD' từ input[type=date] — chỉ cần ensure format
+  return ds.slice(0, 10);
+}
+
 // ── CREATE ────────────────────────────────────────────────────────
 
 export async function createBooking(
@@ -68,8 +78,8 @@ export async function createBooking(
       customer:        input.customer.trim(),
       email:           input.email?.trim()  ?? null,
       phone:           input.phone?.trim()  ?? null,
-      checkin:         input.checkin,
-      checkout:        input.checkout,
+      checkin:         toDateOnly(input.checkin),
+      checkout:        toDateOnly(input.checkout),
       status:          input.status,
       total:           input.total,
       note:            input.note?.trim()   ?? null,
@@ -297,14 +307,17 @@ async function _checkLockedDates(
   const villa = _villa as Pick<VillaRow, 'locked_dates'> | null;
   if (!villa?.locked_dates?.length) return null;
 
-  let d = new Date(checkin);
-  const end = new Date(checkout);
-  while (d < end) {
-    const ds = d.toISOString().split('T')[0];
-    if (villa.locked_dates.includes(ds)) {
-      return { error: `Ngày ${ds} đã bị chủ nhà khóa.`, code: 'DATE_LOCKED' };
+  // Iterate dates safely using string arithmetic to avoid timezone issues
+  let ci = toDateOnly(checkin);
+  const co = toDateOnly(checkout);
+  while (ci < co) {
+    if (villa.locked_dates.includes(ci)) {
+      return { error: `Ngày ${ci} đã bị chủ nhà khóa.`, code: 'DATE_LOCKED' };
     }
-    d.setDate(d.getDate() + 1);
+    // Advance by 1 day using date arithmetic
+    const d = new Date(ci + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + 1);
+    ci = d.toISOString().slice(0, 10);
   }
   return null;
 }

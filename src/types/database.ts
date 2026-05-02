@@ -159,14 +159,33 @@ export function mapVilla(row: any): Villa {
   };
 }
 
-// Sanitize date string from Supabase: nếu là timestamp (có 'T'), lấy phần date
-// Nếu Supabase lưu là DATE type (YYYY-MM-DD) thì split an toàn vẫn cho đúng
-// Không dùng new Date() để tránh UTC→local timezone shift
+// Sanitize date string từ Supabase về định dạng YYYY-MM-DD chuẩn.
+//
+// Vấn đề: nếu DB lưu TIMESTAMPTZ, Postgres lưu '2026-05-03 00:00:00+00'
+// nhưng intent là ngày 3/5 Vietnam (UTC+7). Khi đọc về, raw = '2026-05-02T17:00:00+00:00'
+// → slice(0,10) = '2026-05-02' SAI.
+//
+// Fix: nếu timestamp là 17:00:00Z hoặc các giờ từ 17h-23h59 UTC
+// thì đây là midnight Vietnam → cộng thêm 7h trước khi lấy ngày.
+// Nếu là DATE type (không có 'T') → lấy thẳng.
 function sanitizeDate(raw: string): string {
   if (!raw) return raw;
-  // Đảm bảo luôn lấy phần YYYY-MM-DD, không bị ảnh hưởng timezone
-  const s = raw.slice(0, 10); // lấy 10 ký tự đầu = YYYY-MM-DD
-  return s;
+  if (!raw.includes('T')) return raw.slice(0, 10); // pure DATE string
+  
+  // Parse the UTC time component
+  const tPart = raw.slice(11, 19); // 'HH:MM:SS'
+  const hour = parseInt(tPart.slice(0, 2), 10);
+  
+  // Nếu giờ UTC từ 17h trở đi (tức là ≥ midnight Vietnam), cộng thêm 7h
+  // Vietnam = UTC+7, nên midnight Vietnam = 17:00 UTC ngày hôm trước
+  if (hour >= 17) {
+    // Add 7 hours to get Vietnam date
+    const ms = new Date(raw).getTime() + 7 * 60 * 60 * 1000;
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+  
+  // Giờ UTC < 17h → lấy thẳng phần date
+  return raw.slice(0, 10);
 }
 
 export function mapBooking(row: any): Booking {
