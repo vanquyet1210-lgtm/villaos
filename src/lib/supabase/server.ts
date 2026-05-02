@@ -5,6 +5,7 @@
 // ╚══════════════════════════════════════════════════════════════╝
 
 import { createServerClient } from '@supabase/ssr';
+import { createClient }        from '@supabase/supabase-js';
 import { cookies }             from 'next/headers';
 import type { Database, ProfileRow } from '@/types/database';
 import type { User }           from '@supabase/supabase-js';
@@ -45,7 +46,6 @@ export async function createSupabaseServerClient() {
  * Dùng khi cần bypass RLS (vd: admin tạo tài khoản, migrate data).
  */
 export function createSupabaseAdminClient() {
-  const { createClient } = require('@supabase/supabase-js');
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('[Supabase] SUPABASE_SERVICE_ROLE_KEY chưa được set trong .env.local');
