@@ -7,7 +7,7 @@
 'use server';
 
 import { headers }                    from 'next/headers';
-import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { UserRole }              from '@/types/database';
 
 // ── Audit action types (mirror SQL enum) ─────────────────────────
@@ -84,9 +84,7 @@ export async function getCurrentActor(): Promise<{
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return null;
 
-  // Dùng admin client để bypass RLS
-  const adminSb = createSupabaseAdminClient();
-  const { data: _profile } = await adminSb
+  const { data: _profile } = await sb
     .from('profiles')
     .select('id, name, role')
     .eq('id', user.id)
@@ -146,11 +144,12 @@ export async function getAuditLogs(
   if (filter.fromDate)   query = query.gte('created_at', filter.fromDate);
   if (filter.toDate)     query = query.lte('created_at', filter.toDate);
 
-  const { data, error } = await query;
+  const { data: _auditData, error } = await query;
   if (error) return { error: error.message };
 
+  const auditRows = (_auditData ?? []) as any[];
   return {
-    data: (data as import('@/types/database').AuditLogRow[]).map(r => ({
+    data: auditRows.map((r: any) => ({
       id:         r.id,
       actorName:  r.actor_name,
       actorRole:  r.actor_role,

@@ -1,10 +1,11 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  VillaOS v7.1 — lib/services/villa.service.ts               ║
+// ║  VillaOS v7.1 — lib/services/villa.service.ts (updated)    ║
+// ║  Thêm: Cache invalidation + Audit log                      ║
 // ╚══════════════════════════════════════════════════════════════╝
 
 'use server';
 
-import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient }                    from '@/lib/supabase/server';
 import { mapVilla }                                      from '@/types/database';
 import { logAudit, getCurrentActor }                     from './audit.service';
 import { invalidateVillaCache }                           from '@/lib/cache/cache-invalidation';
@@ -16,25 +17,11 @@ export interface VillaInput {
   name: string; province: string; district: string;
   ward?: string; street?: string; bedrooms: number;
   adults: number; children?: number; price: number;
-  // ✅ Next.js 16: arrays truyền dưới dạng JSON string để tránh "Maximum array nesting exceeded"
-  amenities?: string | string[];
-  description?: string;
-  images?: string | string[];
-  emoji?: string;
+  amenities?: string[]; description?: string;
+  images?: string[]; emoji?: string;
 }
 
 export interface ServiceResult<T = void> { data?: T; error?: string; }
-
-// ── Helper: parse array hoặc JSON string ──────────────────────────
-function parseArray(val?: string | string[]): string[] {
-  if (!val) return [];
-  if (Array.isArray(val)) return val;
-  try { return JSON.parse(val); } catch { return []; }
-}
-
-// ── Bypass Next.js 'use server' TypeScript inference bug ──────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const q = (sb: Awaited<ReturnType<typeof createSupabaseServerClient>>) => sb as any;
 
 // ── READ (cached) ─────────────────────────────────────────────────
 
@@ -52,9 +39,8 @@ export async function getVillas(): Promise<ServiceResult<Villa[]>> {
       const data = await getCachedVillas(actor.actorId);
       return { data };
     }
-    // Dùng admin client để bypass RLS cho sale/admin
-    const adminSb = createSupabaseAdminClient();
-    const { data, error } = await adminSb.from('villas').select('*').eq('status', 'active').order('created_at', { ascending: false });
+    // Sale, Admin: query trực tiếp (không cache vì access pattern phức tạp hơn)
+    const { data, error } = await sb.from('villas').select('*').order('created_at', { ascending: false });
     if (error) return { error: error.message };
     return { data: (data as VillaRow[]).map(mapVilla) };
   } catch (err: unknown) {
@@ -79,37 +65,28 @@ export async function createVilla(input: VillaInput): Promise<ServiceResult<Vill
   const actor = await getCurrentActor();
   if (!actor) return { error: 'Chưa đăng nhập.' };
 
-  const amenities = parseArray(input.amenities);
-  const images    = parseArray(input.images);
-
-  const { data, error } = await q(sb)
+  const { data, error } = await sb
     .from('villas')
     .insert({
-      owner_id:    actor.actorId,
-      name:        input.name.trim(),
-      province:    input.province,
-      district:    input.district,
-      ward:        input.ward        ?? null,
-      street:      input.street      ?? null,
-      bedrooms:    input.bedrooms,
-      adults:      input.adults,
-      children:    input.children    ?? 0,
-      price:       input.price,
-      amenities,
-      description: input.description ?? null,
-      images,
-      emoji:       input.emoji       ?? '🏡',
-      locked_dates: [],
-      status:      'active',
+      owner_id: actor.actorId,
+      name: input.name.trim(), province: input.province,
+      district: input.district, ward: input.ward ?? null,
+      street: input.street ?? null, bedrooms: input.bedrooms,
+      adults: input.adults, children: input.children ?? 0,
+      price: input.price, amenities: input.amenities ?? [],
+      description: input.description ?? null, images: input.images ?? [],
+      emoji: input.emoji ?? '🏡', locked_dates: [], status: 'active',
     })
-    .select()
-    .single();
+    .select().single();
 
   if (error) return { error: error.code === '23514' ? 'Thông tin villa không hợp lệ.' : error.message };
 
   const villa = mapVilla(data as VillaRow);
+
+  // Invalidate cache
   invalidateVillaCache(villa.id, actor.actorId);
 
+  // Audit log
   await logAudit({
     actorId: actor.actorId, actorRole: actor.actorRole, actorName: actor.actorName,
     action: 'villa.created', entityType: 'villa',
@@ -128,8 +105,8 @@ export async function updateVilla(id: string, patch: Partial<VillaInput>): Promi
   const actor = await getCurrentActor();
   if (!actor) return { error: 'Chưa đăng nhập.' };
 
-  const { data: _before } = await q(sb).from('villas').select('*').eq('id', id).single();
-  const before = _before as VillaRow | null;
+  const { data: _before } = await sb.from('villas').select('*').eq('id', id).single();
+  const before = _before as any;
 
   const dbPatch: Record<string, unknown> = {};
   if (patch.name        !== undefined) dbPatch.name        = patch.name.trim();
@@ -141,18 +118,12 @@ export async function updateVilla(id: string, patch: Partial<VillaInput>): Promi
   if (patch.adults      !== undefined) dbPatch.adults      = patch.adults;
   if (patch.children    !== undefined) dbPatch.children    = patch.children;
   if (patch.price       !== undefined) dbPatch.price       = patch.price;
-  if (patch.amenities   !== undefined) dbPatch.amenities   = parseArray(patch.amenities);
+  if (patch.amenities   !== undefined) dbPatch.amenities   = patch.amenities;
   if (patch.description !== undefined) dbPatch.description = patch.description;
-  if (patch.images      !== undefined) dbPatch.images      = parseArray(patch.images);
+  if (patch.images      !== undefined) dbPatch.images      = patch.images;
   if (patch.emoji       !== undefined) dbPatch.emoji       = patch.emoji;
 
-  const { data, error } = await q(sb)
-    .from('villas')
-    .update(dbPatch)
-    .eq('id', id)
-    .select()
-    .single();
-
+  const { data, error } = await sb.from('villas').update(dbPatch).eq('id', id).select().single();
   if (error) return { error: error.message };
 
   const villa = mapVilla(data as VillaRow);
@@ -177,10 +148,9 @@ export async function deleteVilla(id: string): Promise<ServiceResult> {
   const actor = await getCurrentActor();
   if (!actor) return { error: 'Chưa đăng nhập.' };
 
-  const { data: _before } = await q(sb).from('villas').select('*').eq('id', id).single();
-  const before = _before as VillaRow | null;
-
-  const { error } = await q(sb).from('villas').delete().eq('id', id);
+  const { data: _before } = await sb.from('villas').select('*').eq('id', id).single();
+  const before = _before as any;
+  const { error } = await sb.from('villas').delete().eq('id', id);
   if (error) return { error: error.message };
 
   if (before) {
@@ -204,27 +174,15 @@ export async function toggleLockDate(villaId: string, dateStr: string): Promise<
   const actor = await getCurrentActor();
   if (!actor) return { error: 'Chưa đăng nhập.' };
 
-  const { data: _current } = await q(sb)
-    .from('villas')
-    .select('locked_dates, owner_id, name')
-    .eq('id', villaId)
-    .single();
-  const current = _current as Pick<VillaRow, 'locked_dates' | 'owner_id' | 'name'> | null;
+  const { data: _current } = await sb.from('villas').select('locked_dates, owner_id, name').eq('id', villaId).single();
+  const current = _current as any;
   if (!current) return { error: 'Không tìm thấy villa.' };
 
   const currentLocked: string[] = current.locked_dates ?? [];
-  const isLocked  = currentLocked.includes(dateStr);
-  const newLocked = isLocked
-    ? currentLocked.filter(d => d !== dateStr)
-    : [...currentLocked, dateStr].sort();
+  const isLocked = currentLocked.includes(dateStr);
+  const newLocked = isLocked ? currentLocked.filter(d => d !== dateStr) : [...currentLocked, dateStr].sort();
 
-  const { data, error } = await q(sb)
-    .from('villas')
-    .update({ locked_dates: newLocked })
-    .eq('id', villaId)
-    .select('locked_dates')
-    .single();
-
+  const { data, error } = await sb.from('villas').update({ locked_dates: newLocked }).eq('id', villaId).select('locked_dates').single();
   if (error) return { error: error.message };
 
   invalidateVillaCache(villaId, current.owner_id);
@@ -237,6 +195,5 @@ export async function toggleLockDate(villaId: string, dateStr: string): Promise<
     ownerId: current.owner_id,
   });
 
-  const result = data as Pick<VillaRow, 'locked_dates'>;
-  return { data: result.locked_dates };
+  return { data: data.locked_dates };
 }

@@ -5,8 +5,6 @@
 // ╚══════════════════════════════════════════════════════════════╝
 
 import { createServerClient } from '@supabase/ssr';
-import { createClient }       from '@supabase/supabase-js';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { cookies }             from 'next/headers';
 import type { Database, ProfileRow } from '@/types/database';
 import type { User }           from '@supabase/supabase-js';
@@ -15,14 +13,10 @@ import type { User }           from '@supabase/supabase-js';
  * Tạo Supabase client cho Server Component / Route Handler.
  * Đọc session từ cookie — KHÔNG expose service_role key ra ngoài.
  */
-export async function createSupabaseServerClient(): Promise<SupabaseClient<Database>> {
+export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
 
-  // createServerClient handles cookie-based auth for SSR.
-  // We cast to SupabaseClient<Database> because @supabase/ssr@0.6.1 has a broken
-  // GenericSchema import path for supabase-js v2.105+, causing Schema to resolve as
-  // 'never' in the return type — even though the runtime behaviour is correct.
-  const client = createServerClient(
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -30,10 +24,10 @@ export async function createSupabaseServerClient(): Promise<SupabaseClient<Datab
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+        setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2]);
+              cookieStore.set(name, value, options);
             });
           } catch {
             // Server Component không thể set cookie — bỏ qua
@@ -43,7 +37,6 @@ export async function createSupabaseServerClient(): Promise<SupabaseClient<Datab
       },
     }
   );
-  return client as unknown as SupabaseClient<Database>;
 }
 
 /**
@@ -52,6 +45,8 @@ export async function createSupabaseServerClient(): Promise<SupabaseClient<Datab
  * Dùng khi cần bypass RLS (vd: admin tạo tài khoản, migrate data).
  */
 export function createSupabaseAdminClient() {
+  const { createClient } = require('@supabase/supabase-js');
+
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('[Supabase] SUPABASE_SERVICE_ROLE_KEY chưa được set trong .env.local');
   }
@@ -78,9 +73,7 @@ export async function getServerSession(): Promise<{ user: User; profile: Profile
   const { data: { user }, error } = await sb.auth.getUser();
   if (error || !user) return null;
 
-  // Dùng admin client để bypass RLS khi đọc profile
-  const adminSb = createSupabaseAdminClient();
-  const { data: _profile } = await adminSb
+  const { data: _profile } = await sb
     .from('profiles')
     .select('*')
     .eq('id', user.id)

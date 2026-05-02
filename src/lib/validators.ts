@@ -104,14 +104,17 @@ export function validateBooking(
   if (errors.length) return errors; // dừng sớm nếu ngày không hợp lệ
 
   // 6 — Ngày bị khóa bởi chủ villa
+  // lockedDates là các đêm bị khóa (half-open: [checkin, checkout))
+  // → chỉ block nếu đêm mới overlap với đêm đã lock, KHÔNG block ngày checkout của lock
   const villa = villas.find(v => v.id === villaId);
   if (villa?.lockedDates?.length) {
-    // dateRange chỉ dùng ở client nên inline để tránh import vòng
+    const lockedSet = new Set(villa.lockedDates);
+    // Các đêm của booking mới: [checkin, checkout) — không bao gồm ngày checkout
     let d = new Date(checkin + 'T00:00:00');
     const end = new Date(checkout + 'T00:00:00');
     while (d < end) {
       const ds = d.toISOString().split('T')[0];
-      if (villa.lockedDates.includes(ds)) {
+      if (lockedSet.has(ds)) {
         const [y, m, day] = ds.split('-');
         errors.push(_err('dates', 'DATE_LOCKED',
           `Ngày ${day}/${m}/${y} đã bị chủ nhà khóa. Vui lòng chọn ngày khác.`));
@@ -124,6 +127,7 @@ export function validateBooking(
   // 7 — Conflict check client-side (chỉ để UX warning sớm)
   //     ⚠️ Conflict check THẬT là PostgreSQL EXCLUDE constraint
   //     trong DB + _checkConflict() trong booking.service.ts
+  //     Logic: [ci1, co1) ∩ [ci2, co2) — half-open, checkout day KHÔNG conflict với checkin mới cùng ngày
   const conflict = bookings.find(b =>
     b.villaId !== villaId       ? false :
     b.status  === 'cancelled'   ? false :

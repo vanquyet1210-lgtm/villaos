@@ -7,7 +7,7 @@
 
 import { useMemo, useCallback } from 'react';
 import {
-  addDays, dateRange,
+  addDays, dateRange, groupConsecutiveDates,
   prevMonth, nextMonth, formatMonthYear,
   daysInMonth, firstDayOfMonth, todayISO,
 } from '@/lib/utils';
@@ -87,20 +87,24 @@ function buildDayMap(
   );
 
   for (const b of relevant) {
-    const { checkin: ci, checkout: co, customer, status, id: bkId } = b;
+    // ── Sanitize to date-only (fix UTC timezone shift from Supabase timestamptz) ──
+    const ci = b.checkin.split('T')[0];
+    const co = b.checkout.split('T')[0];
+    const { customer, status, id: bkId } = b;
     const shortName = customer ? customer.split(' ').pop() ?? customer : '';
     const info = { customer: shortName, fullName: customer, status, bkId };
 
-    // checkin day
+    // checkin day → right half colored (guest arrives, morning is free)
     if (!map[ci]) {
       map[ci] = { ...info, type: 'checkin' };
     } else if (map[ci].type === 'checkout') {
+      // same day: previous checkout + this checkin → split cell
       map[ci] = {
         type:          'checkout+checkin',
         customer:      map[ci].customer,
         fullName:      map[ci].fullName,
-        status,
-        bkId,
+        status:        map[ci].status,
+        bkId:          map[ci].bkId,
         rightCustomer: shortName,
         rightStatus:   status,
         rightBkId:     bkId,
@@ -109,16 +113,19 @@ function buildDayMap(
       };
     }
 
-    // middle days
+    // middle days: ci+1 .. co-1 (fully occupied nights)
+    // dateRange is half-open [start, end), so dateRange(ci+1, co) = ci+1..co-1 ✓
     const midRange = dateRange(addDays(ci, 1), co);
     for (const ds of midRange) {
       if (!map[ds]) map[ds] = { ...info, type: 'middle' };
     }
 
-    // checkout day
+    // checkout day → left half colored (guest leaves morning, evening is free)
+    // This day CAN be re-booked (new checkin on same day = checkout+checkin split)
     if (!map[co]) {
       map[co] = { ...info, type: 'checkout' };
     } else if (map[co].type === 'checkin') {
+      // New booking checks in same day this one checks out → split
       map[co] = {
         type:          'checkout+checkin',
         customer:      map[co].customer,
@@ -135,17 +142,31 @@ function buildDayMap(
   }
 
   // 2. Locked-date segments
-  // Mỗi lockedDate là 1 ĐÊM bị khóa (như 1 booking 1 đêm):
-  //   - ngày đó = checkin (nửa phải tô màu)
-  //   - ngày kế = checkout (nửa trái tô màu)
-  // Xử lý từng ngày riêng lẻ để tránh ghi đè nhau sai.
+  // lockedDates là mảng các ngày (đêm) bị khóa — mỗi phần tử là 1 đêm bị block.
+  // Hiển thị giống booking: segment đầu = checkin-half, giữa = middle, cuối = checkout-half của ngày TIẾP THEO.
   if (lockedDates.length) {
+    const sorted   = [...lockedDates].sort();
+    const segments = groupConsecutiveDates(sorted);
     const lockInfo = { customer: '🔒', status: 'locked', isLock: true };
 
-    for (const lockedDay of lockedDates) {
-      const nextDay = addDays(lockedDay, 1);
-      applyLock(map, lockedDay, 'locked-checkin',  lockInfo);
-      applyLock(map, nextDay,   'locked-checkout', lockInfo);
+    for (const { start, last } of segments) {
+      // Các ngày bị lock là đêm: start → last (inclusive nights)
+      // → hiển thị: nửa phải ngày start (checkin), các ngày giữa (middle), nửa trái ngày (last+1) (checkout)
+      const checkoutDs = addDays(last, 1); // ngày "trả phòng" = hôm sau ngày lock cuối
+
+      if (start === last) {
+        // Chỉ 1 đêm bị lock: nửa phải ngày start + nửa trái ngày start+1
+        applyLock(map, start,      'locked-checkin',  lockInfo);
+        applyLock(map, checkoutDs, 'locked-checkout', lockInfo);
+      } else {
+        // Nhiều đêm liên tiếp:
+        applyLock(map, start, 'locked-checkin', lockInfo);
+        // Các ngày giữa: start+1 → last (toàn bộ ngày, vì đêm đó bị lock)
+        for (const ds of dateRange(addDays(start, 1), addDays(last, 1))) {
+          applyLock(map, ds, 'locked-middle', lockInfo);
+        }
+        applyLock(map, checkoutDs, 'locked-checkout', lockInfo);
+      }
     }
   }
 
@@ -163,30 +184,31 @@ function applyLock(
   const existing = map[ds];
   const isBooking = ['checkin','checkout','middle','checkout+checkin'].includes(existing.type);
 
-  if (!isBooking) {
-    // Ghi đè lock cũ bằng lock mới (không có gì quan trọng hơn)
-    map[ds] = { ...lockInfo, type: lockType };
-    return;
+  if (isBooking) {
+    if ((lockType === 'locked-checkout' || lockType === 'locked-middle') && existing.type === 'checkin') {
+      map[ds] = {
+        ...existing, type: 'locked-split-left',
+        rightCustomer: existing.customer,
+        rightStatus:   existing.status,
+        leftStatus:    'locked',
+      };
+    } else if (lockType === 'locked-checkin' && existing.type === 'checkout') {
+      map[ds] = {
+        ...existing, type: 'locked-split-right',
+        leftStatus:   existing.status,
+        leftCustomer: existing.customer,
+      };
+    } else if (lockType === 'locked-checkout' && existing.type === 'middle') {
+      map[ds] = {
+        ...existing, type: 'locked-split-left',
+        rightCustomer: existing.customer,
+        rightStatus:   existing.status,
+        leftStatus:    'locked',
+      };
+    }
+  } else if (existing.isLock && lockType === 'locked-middle') {
+    map[ds] = { ...lockInfo, type: 'locked-middle' };
   }
-
-  // Booking tồn tại: chỉ split khi hợp lý, KHÔNG ghi đè middle
-  if (lockType === 'locked-checkin' && existing.type === 'checkout') {
-    // Lock checkin vào ngày checkout của booking → split: trái=booking, phải=lock
-    map[ds] = {
-      ...existing, type: 'locked-split-right',
-      leftStatus:   existing.status,
-      leftCustomer: existing.customer,
-    };
-  } else if (lockType === 'locked-checkout' && existing.type === 'checkin') {
-    // Lock checkout vào ngày checkin của booking → split: trái=lock, phải=booking
-    map[ds] = {
-      ...existing, type: 'locked-split-left',
-      rightCustomer: existing.customer,
-      rightStatus:   existing.status,
-      leftStatus:    'locked',
-    };
-  }
-  // Tất cả các trường hợp khác (middle, checkout+checkin, ...) → giữ nguyên booking
 }
 
 // ── Day Cell ──────────────────────────────────────────────────────
@@ -206,6 +228,13 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
 
   const handleClick = () => {
     if (readonly || isPast) return;
+    // Checkout day: click → tạo booking mới bắt đầu từ ngày đó (chiều trống)
+    // locked-checkout: tương tự — nửa phải trống, có thể checkin
+    if (info?.type === 'checkout' || info?.type === 'locked-checkout') {
+      onClick?.(ds, null);
+      return;
+    }
+    // checkout+checkin: đã có người checkin rồi, không cho tạo thêm
     onClick?.(ds, info ?? null);
   };
 
@@ -214,6 +243,12 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
   if (isPast)    cls += ' cal-past';
   if (isToday)   cls += ' cal-today';
   if (!info && (isPast || readonly)) cls += ' cal-no-cursor';
+  // Checkout day: nửa phải trống → vẫn có thể click để tạo booking mới
+  const isClickable = !readonly && !isPast && (
+    !info ||
+    info.type === 'checkout' ||
+    info.type === 'locked-checkout'
+  );
 
   // Segment-specific rendering
   const renderSegment = () => {
@@ -224,10 +259,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
     const bg  = bgOf(status);
     const txt = textOf(status);
 
-    const segBr = (t: string) =>
-      t.includes('checkin') ? '6px 0 0 6px' :
-      t.includes('checkout')? '0 6px 6px 0' :
-      t.includes('middle')  ? '0'            : 'var(--radius-sm)';
+    const segBr = (_t: string) => '0'; // bar liền mạch, không cần radius riêng
 
     switch (type) {
 
@@ -338,7 +370,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
       className={cls}
       onClick={handleClick}
       title={info?.fullName ?? undefined}
-      style={{ cursor: readonly || isPast ? 'default' : 'pointer' }}
+      style={{ cursor: isClickable ? 'pointer' : 'default' }}
     >
       {renderSegment()}
       <span className={`cal-dn${isToday ? ' cal-dn-today' : ''}`}>{day}</span>
@@ -487,8 +519,8 @@ export default function Calendar({
         .cal-grid {
           display:               grid;
           grid-template-columns: repeat(7, 1fr);
-          gap:                   3px;
-          padding:               10px;
+          gap:                   0;
+          padding:               10px 0;
           background:            var(--white);
         }
 
@@ -505,8 +537,8 @@ export default function Calendar({
         .cal-day {
           position:       relative;
           min-height:     52px;
-          border-radius:  var(--radius-sm);
-          overflow:       hidden;
+          border-radius:  0;
+          overflow:       visible;
           display:        flex;
           flex-direction: column;
           align-items:    center;
@@ -525,18 +557,17 @@ export default function Calendar({
 
         .cal-bg {
           position:       absolute;
-          inset:          0;
+          inset:          4px 0;
           z-index:        1;
           pointer-events: none;
         }
 
         .cal-split {
           position:       absolute;
-          inset:          0;
+          inset:          4px 0;
           z-index:        1;
           display:        flex;
           pointer-events: none;
-          border-radius:  var(--radius-sm);
           overflow:       hidden;
         }
 

@@ -1,4 +1,3 @@
-'use client';
 // VillaOS v7 — app/offline/page.tsx
 // Trang hiển thị khi người dùng mất mạng và không có cache
 

@@ -1,8 +1,16 @@
 // ╔══════════════════════════════════════════════════════════════╗
 // ║  VillaOS v7 — types/database.ts                             ║
-// ║  TypeScript types khớp 1:1 với Supabase schema              ║
-// ║  FIX: Thêm owner_id vào BookingRow + Booking (schema_patch) ║
+// ║  PHẦN 1: App types + mappers (viết tay, KHÔNG xóa)          ║
+// ║  PHẦN 2: Supabase generated types (gen bằng CLI)            ║
+// ║                                                             ║
+// ║  ⚠️  Khi chạy `supabase gen types` lại:                     ║
+// ║     - Chỉ thay PHẦN 2 (từ dòng "export type Json" trở đi)  ║
+// ║     - Giữ nguyên PHẦN 1                                     ║
 // ╚══════════════════════════════════════════════════════════════╝
+
+// ══════════════════════════════════════════════════════════════════
+// PHẦN 1: APP TYPES + MAPPERS — KHÔNG XÓA KHI GEN LẠI
+// ══════════════════════════════════════════════════════════════════
 
 export type UserRole      = 'admin' | 'owner' | 'sale' | 'customer';
 export type VillaStatus   = 'active' | 'inactive';
@@ -44,7 +52,7 @@ export interface VillaRow {
 export interface BookingRow {
   id:              string;
   villa_id:        string;
-  owner_id:        string;          // ← THÊM (schema_patch PATCH 1)
+  owner_id:        string;
   created_by:      string;
   created_by_role: UserRole;
   customer:        string;
@@ -101,7 +109,7 @@ export interface Villa {
 export interface Booking {
   id:            string;
   villaId:       string;
-  ownerId:       string;            // ← THÊM (schema_patch PATCH 1)
+  ownerId:       string;
   createdBy:     string;
   createdByRole: UserRole;
   customer:      string;
@@ -116,96 +124,9 @@ export interface Booking {
   createdAt:     string;
 }
 
-// ── Audit log row ─────────────────────────────────────────────────
-
-export interface AuditLogRow {
-  id:          string;
-  actor_id:    string;
-  actor_name:  string;
-  actor_role:  UserRole;
-  action:      string;
-  entity_type: string;
-  entity_id:   string;
-  entity_name: string | null;
-  old_data:    Record<string, unknown> | null;
-  new_data:    Record<string, unknown> | null;
-  owner_id:    string | null;
-  ip_address:  string | null;
-  user_agent:  string | null;
-  created_at:  string;
-}
-
-// ── Supabase Database type ────────────────────────────────────────
-
-export interface Database {
-  __InternalSupabase: {
-    PostgrestVersion: '12';
-  };
-  public: {
-    Tables: {
-      audit_logs: {
-        Row:           AuditLogRow;
-        Insert:        Omit<AuditLogRow, 'id' | 'created_at'>;
-        Update:        Partial<Omit<AuditLogRow, 'id' | 'created_at'>>;
-        Relationships: [];
-      };
-      profiles: {
-        Row:           ProfileRow;
-        Insert:        Omit<ProfileRow, 'joined_at' | 'updated_at'>;
-        Update:        Partial<Omit<ProfileRow, 'id'>>;
-        Relationships: [];
-      };
-      villas: {
-        Row:           VillaRow;
-        Insert:        Omit<VillaRow, 'id' | 'created_at' | 'updated_at'>;
-        Update:        Partial<Omit<VillaRow, 'id' | 'owner_id' | 'created_at'>>;
-        Relationships: [];
-      };
-      bookings: {
-        Row:           BookingRow;
-        Insert:        Omit<BookingRow, 'id' | 'owner_id' | 'created_at' | 'updated_at'>; // owner_id set by trigger
-        Update:        Partial<Omit<BookingRow, 'id' | 'villa_id' | 'owner_id' | 'created_by' | 'created_at'>>;
-        Relationships: [];
-      };
-      sale_villa_access: {
-        Row:           SaleVillaAccessRow;
-        Insert:        Omit<SaleVillaAccessRow, 'granted_at'>;
-        Update:        Partial<Omit<SaleVillaAccessRow, 'sale_id' | 'villa_id'>>;
-        Relationships: [];
-      };
-    };
-    Views: Record<string, { Row: Record<string, unknown>; Relationships: [] }>;
-    Functions: {
-      insert_audit_log: {
-        Args: {
-          p_actor_id:    string;
-          p_actor_role:  string;
-          p_actor_name:  string;
-          p_action:      string;
-          p_entity_type: string;
-          p_entity_id:   string;
-          p_entity_name?: string | null;
-          p_old_data?:    string | null;
-          p_new_data?:    string | null;
-          p_owner_id?:    string | null;
-          p_ip_address?:  string | null;
-          p_user_agent?:  string | null;
-        };
-        Returns: void;
-      };
-    };
-    CompositeTypes: Record<string, never>;
-    Enums: {
-      user_role:      UserRole;
-      villa_status:   VillaStatus;
-      booking_status: BookingStatus;
-    };
-  };
-}
-
 // ── Row → App mappers ─────────────────────────────────────────────
 
-export function mapProfile(row: ProfileRow): Profile {
+export function mapProfile(row: any): Profile {
   return {
     id:       row.id,
     name:     row.name,
@@ -215,7 +136,7 @@ export function mapProfile(row: ProfileRow): Profile {
   };
 }
 
-export function mapVilla(row: VillaRow): Villa {
+export function mapVilla(row: any): Villa {
   return {
     id:          row.id,
     ownerId:     row.owner_id,
@@ -238,22 +159,123 @@ export function mapVilla(row: VillaRow): Villa {
   };
 }
 
-export function mapBooking(row: BookingRow): Booking {
+export function mapBooking(row: any): Booking {
   return {
     id:            row.id,
     villaId:       row.villa_id,
-    ownerId:       row.owner_id,   // ← THÊM
+    ownerId:       row.owner_id,
     createdBy:     row.created_by,
     createdByRole: row.created_by_role,
     customer:      row.customer,
     email:         row.email ?? '',
     phone:         row.phone ?? '',
-    checkin:       row.checkin,
-    checkout:      row.checkout,
+    checkin:       row.checkin.split('T')[0],   // sanitize timezone
+    checkout:      row.checkout.split('T')[0],  // sanitize timezone
     status:        row.status,
     total:         row.total,
     note:          row.note ?? '',
     holdExpiresAt: row.hold_expires_at,
     createdAt:     row.created_at,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PHẦN 2: SUPABASE GENERATED TYPES
+// Thay thế phần này khi chạy lại: supabase gen types typescript ...
+// ══════════════════════════════════════════════════════════════════
+
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
+export interface Database {
+  public: {
+    Tables: {
+      audit_logs: {
+        Row: {
+          action:      string;
+          actor_id:    string | null;
+          actor_name:  string | null;
+          actor_role:  string | null;
+          created_at:  string;
+          entity_id:   string;
+          entity_name: string | null;
+          entity_type: string;
+          id:          string;
+          ip_address:  string | null;
+          new_data:    Json | null;
+          old_data:    Json | null;
+          owner_id:    string | null;
+          user_agent:  string | null;
+        };
+        Insert: {
+          action:       string;
+          actor_id?:    string | null;
+          actor_name?:  string | null;
+          actor_role?:  string | null;
+          created_at?:  string;
+          entity_id:    string;
+          entity_name?: string | null;
+          entity_type:  string;
+          id?:          string;
+          ip_address?:  string | null;
+          new_data?:    Json | null;
+          old_data?:    Json | null;
+          owner_id?:    string | null;
+          user_agent?:  string | null;
+        };
+        Update: Partial<Database['public']['Tables']['audit_logs']['Insert']>;
+      };
+      bookings: {
+        Row:    BookingRow;
+        Insert: Omit<BookingRow, 'id' | 'owner_id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<BookingRow, 'id' | 'villa_id' | 'owner_id' | 'created_by' | 'created_at'>>;
+      };
+      profiles: {
+        Row:    ProfileRow;
+        Insert: Omit<ProfileRow, 'joined_at' | 'updated_at'>;
+        Update: Partial<Omit<ProfileRow, 'id'>>;
+      };
+      sale_villa_access: {
+        Row:    SaleVillaAccessRow;
+        Insert: Omit<SaleVillaAccessRow, 'granted_at'>;
+        Update: never;
+      };
+      villas: {
+        Row:    VillaRow;
+        Insert: Omit<VillaRow, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<VillaRow, 'id' | 'owner_id' | 'created_at'>>;
+      };
+    };
+    Views:          Record<string, never>;
+    Functions: {
+      insert_audit_log: {
+        Args: {
+          p_actor_id:     string;
+          p_actor_role:   string;
+          p_actor_name:   string;
+          p_action:       string;
+          p_entity_type:  string;
+          p_entity_id:    string;
+          p_entity_name?: string | null;
+          p_old_data?:    string | null;
+          p_new_data?:    string | null;
+          p_owner_id?:    string | null;
+          p_ip_address?:  string | null;
+          p_user_agent?:  string | null;
+        };
+        Returns: void;
+      };
+    };
+    CompositeTypes: Record<string, never>;
+    Enums: {
+      user_role:      UserRole;
+      villa_status:   VillaStatus;
+      booking_status: BookingStatus;
+    };
   };
 }

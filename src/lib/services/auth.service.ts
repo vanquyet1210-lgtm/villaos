@@ -1,13 +1,11 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  VillaOS v7.1 — lib/services/auth.service.ts (updated)     ║
-// ║  Thêm: Audit log cho login/register/logout                  ║
+// ║  VillaOS v7.1 — lib/services/auth.service.ts               ║
 // ╚══════════════════════════════════════════════════════════════╝
 
 'use server';
 
 import { redirect }                   from 'next/navigation';
 import { revalidatePath }             from 'next/cache';
-import { headers }                    from 'next/headers';
 import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase/server';
 import { logAudit }                   from './audit.service';
 import type { UserRole }              from '@/types/database';
@@ -39,25 +37,20 @@ export async function loginAction(input: LoginInput): Promise<AuthResult> {
   }
 
   const user = data.user;
-  // Dùng admin client để bypass RLS khi đọc profile
-  const adminSb = createSupabaseAdminClient();
-  const { data: _profile } = await adminSb.from('profiles').select('*').eq('id', user.id).single();
+  const { data: _profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
   const profile = _profile as any;
 
-  // ── Audit: ghi log đăng nhập thành công ──
   if (profile) {
-    try {
-      await logAudit({
-        actorId:    profile.id,
-        actorRole:  profile.role,
-        actorName:  profile.name,
-        action:     'user.login',
-        entityType: 'user',
-        entityId:   profile.id,
-        entityName: profile.name,
-        ownerId:    profile.role === 'owner' ? profile.id : undefined,
-      });
-    } catch { /* audit không chặn login */ }
+    await logAudit({
+      actorId:    profile.id,
+      actorRole:  profile.role,
+      actorName:  profile.name,
+      action:     'user.login',
+      entityType: 'user',
+      entityId:   profile.id,
+      entityName: profile.name,
+      ownerId:    profile.role === 'owner' ? profile.id : undefined,
+    });
   }
 
   revalidatePath('/', 'layout');
@@ -65,7 +58,7 @@ export async function loginAction(input: LoginInput): Promise<AuthResult> {
 }
 
 
-// ── REGISTER ─────────────────────────────────────────────────────
+// ── REGISTER ──────────────────────────────────────────────────────
 
 export async function registerAction(input: RegisterInput): Promise<AuthResult> {
   const sb = await createSupabaseServerClient();
@@ -94,48 +87,40 @@ export async function registerAction(input: RegisterInput): Promise<AuthResult> 
 
   if (!data.user) return { success: false, error: 'Không tạo được tài khoản.' };
 
-  // Audit log đăng ký (actor = chính user mới tạo)
-  try {
-    await logAudit({
-      actorId:    data.user.id,
-      actorRole:  input.role,
-      actorName:  input.name,
-      action:     'user.registered',
-      entityType: 'user',
-      entityId:   data.user.id,
-      entityName: input.name,
-      newData:    { email: input.email, role: input.role },
-    });
-  } catch { /* audit không chặn register */ }
+  await logAudit({
+    actorId:    data.user.id,
+    actorRole:  input.role,
+    actorName:  input.name,
+    action:     'user.registered',
+    entityType: 'user',
+    entityId:   data.user.id,
+    entityName: input.name,
+    newData:    { email: input.email, role: input.role },
+  });
 
   return { success: true, code: input.role };
 }
 
 
-// ── LOGOUT ───────────────────────────────────────────────────────
+// ── LOGOUT ────────────────────────────────────────────────────────
 
 export async function logoutAction(): Promise<void> {
   const sb = await createSupabaseServerClient();
 
-  // Lấy user trước khi sign out để audit
   const { data: { user } } = await sb.auth.getUser();
   if (user) {
-    // Dùng admin client để bypass RLS khi đọc profile
-  const adminSb = createSupabaseAdminClient();
-  const { data: _profile } = await adminSb.from('profiles').select('*').eq('id', user.id).single();
-  const profile = _profile as any;
+    const { data: _profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+    const profile = _profile as any;
     if (profile) {
-      try {
-        await logAudit({
-          actorId:    profile.id,
-          actorRole:  profile.role,
-          actorName:  profile.name,
-          action:     'user.logout',
-          entityType: 'user',
-          entityId:   profile.id,
-          ownerId:    profile.role === 'owner' ? profile.id : undefined,
-        });
-      } catch { /* audit không chặn logout */ }
+      await logAudit({
+        actorId:    profile.id,
+        actorRole:  profile.role,
+        actorName:  profile.name,
+        action:     'user.logout',
+        entityType: 'user',
+        entityId:   profile.id,
+        ownerId:    profile.role === 'owner' ? profile.id : undefined,
+      });
     }
   }
 
@@ -172,7 +157,6 @@ export async function adminCreateUserAction(
 
   if (error) return { success: false, error: error.message.includes('already') ? 'Email đã tồn tại.' : error.message };
 
-  // Audit: admin tạo tài khoản cho ai
   await logAudit({
     actorId:    caller.id,
     actorRole:  caller.role,
@@ -188,7 +172,7 @@ export async function adminCreateUserAction(
 }
 
 
-// ── CHANGE PASSWORD ──────────────────────────────────────────────
+// ── CHANGE PASSWORD ───────────────────────────────────────────────
 
 export async function changePasswordAction(newPassword: string): Promise<AuthResult> {
   const sb = await createSupabaseServerClient();
@@ -202,5 +186,5 @@ export async function forgotPasswordAction(email: string): Promise<AuthResult> {
   await sb.auth.resetPasswordForEmail(email, {
     redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/auth/reset-password`,
   });
-  return { success: true }; // Always success — tránh email enumeration
+  return { success: true };
 }

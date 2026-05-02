@@ -44,8 +44,13 @@ const nextConfig: NextConfig = {
             { key: 'Referrer-Policy',            value: 'strict-origin-when-cross-origin' },
           ],
         },
-        // ✅ Đã xóa Cache-Control cho /_next/static/(.*)
-        // Next.js 16 tự quản lý cache cho static assets
+        {
+          // Cache static assets lâu dài
+          source:  '/_next/static/(.*)',
+          headers: [
+            { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+          ],
+        },
         {
           // Service Worker không cache
           source:  '/sw.js',

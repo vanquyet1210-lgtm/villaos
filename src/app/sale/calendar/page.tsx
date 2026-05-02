@@ -2,6 +2,8 @@
 import { getServerSession }  from '@/lib/supabase/server';
 import { redirect }          from 'next/navigation';
 import CalendarShell         from '@/app/owner/calendar/CalendarShell';
+import { mapVilla }          from '@/types/database';
+import type { VillaRow }     from '@/types/database';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,16 +16,15 @@ export default async function SaleCalendarPage({
   if (!session) redirect('/auth/login');
   const { profile } = session;
 
-  // ✅ Sale thấy tất cả villas active — không cần phân công
-  const { createSupabaseAdminClient } = await import('@/lib/supabase/server');
-  const adminSb = createSupabaseAdminClient();
-  const { data: _villas } = await adminSb
+  // Sale xem được TẤT CẢ villa — không cần phân công từ chủ nhà
+  const sb = await (await import('@/lib/supabase/server')).createSupabaseServerClient();
+  const { data: _villas } = await sb
     .from('villas')
     .select('*')
     .eq('status', 'active')
     .order('created_at', { ascending: false });
 
-  const villas: any[] = _villas ?? [];
+  const villas = (_villas ?? []).map((v: any) => mapVilla(v as VillaRow));
 
   const { villa: selectedVillaId } = await searchParams;
 
@@ -38,7 +39,7 @@ export default async function SaleCalendarPage({
           <span style={{ fontSize:56, display:'block', marginBottom:16 }}>📭</span>
           <h3>Chưa có villa nào</h3>
           <p style={{ marginTop:8, color:'var(--ink-muted)' }}>
-            Chưa có villa nào được thêm vào hệ thống.
+            Hệ thống chưa có villa nào đang hoạt động.
           </p>
         </div>
       </>

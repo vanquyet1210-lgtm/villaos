@@ -1,6 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  VillaOS v7.1 — proxy.ts (Next.js 16)                       ║
-// ║  Thêm: Rate limiting cho auth + booking routes              ║
+// ║  VillaOS v7.1 — middleware.ts                               ║
 // ╚══════════════════════════════════════════════════════════════╝
 
 import { NextResponse, type NextRequest } from 'next/server';
@@ -28,8 +27,8 @@ const RATE_LIMITED_ROUTES = [
   { path: '/auth/forgot-password',  key: 'FORGOT_PASSWORD' as const },
 ];
 
-export async function proxy(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
+export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl?.pathname ?? request.url;
   const method   = request.method;
 
   if (
@@ -68,11 +67,11 @@ export async function proxy(request: NextRequest) {
     {
       cookies: {
         getAll() { return request.cookies.getAll(); },
-        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+        setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2])
+            response.cookies.set(name, value, options)
           );
         },
       },
@@ -82,40 +81,29 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await sb.auth.getUser();
   const isPublicRoute = PUBLIC_ROUTES.some(r => pathname.startsWith(r));
 
-  // Chưa đăng nhập → redirect về login (trừ public routes và trang chủ)
   if (!user && !isPublicRoute && pathname !== '/') {
     const loginUrl = new URL('/auth/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Đã đăng nhập + đang ở public route → redirect về dashboard
-  // ✅ FIX: chỉ redirect nếu có profile và role hợp lệ, tránh loop
-  if (user && isPublicRoute && pathname !== '/auth/callback') {
-    const { data: profile } = await sb.from('profiles').select('role').eq('id', user.id).single();
-    const dashUrl = getDashboardUrl(profile?.role);
-    // Chỉ redirect nếu dashboard KHÁC với trang hiện tại
-    if (dashUrl !== '/auth/login' && dashUrl !== pathname) {
-      return NextResponse.redirect(new URL(dashUrl, request.url));
-    }
+  if (user && isPublicRoute) {
+    const { data: _rp } = await sb.from('profiles').select('role').eq('id', user.id).single();
+    const rp = _rp as any;
+    return NextResponse.redirect(new URL(getDashboardUrl(rp?.role), request.url));
   }
 
-  // Role-based protection
   if (user) {
     const matchedRoute = Object.keys(ROLE_ROUTES).find(r => pathname.startsWith(r));
     if (matchedRoute) {
-      const { data: profile } = await sb.from('profiles').select('role').eq('id', user.id).single();
+      const { data: _rp2 } = await sb.from('profiles').select('role').eq('id', user.id).single();
+      const rp2 = _rp2 as any;
       const allowedRoles = ROLE_ROUTES[matchedRoute];
-      const userRole = profile?.role as UserRole | undefined;
-
-      if (userRole && !allowedRoles.includes(userRole)) {
-        const dashUrl = getDashboardUrl(userRole);
-        // ✅ FIX: chỉ redirect nếu dashboard hợp lệ và khác trang hiện tại
-        if (dashUrl !== pathname) {
-          const forbidden = new URL(dashUrl, request.url);
-          forbidden.searchParams.set('error', 'unauthorized');
-          return NextResponse.redirect(forbidden);
-        }
+      const userRole = rp2?.role as UserRole | undefined;
+      if (!userRole || !allowedRoles.includes(userRole)) {
+        const forbidden = new URL(getDashboardUrl(userRole), request.url);
+        forbidden.searchParams.set('error', 'unauthorized');
+        return NextResponse.redirect(forbidden);
       }
     }
   }
