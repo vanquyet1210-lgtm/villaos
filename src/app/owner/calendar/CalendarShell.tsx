@@ -147,9 +147,14 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
     // Checkout day hoặc locked-checkout: nửa phải trống → cho tạo booking mới
     const isCheckoutOnly = info?.type === 'checkout' || info?.type === 'locked-checkout';
 
-    // ⚠️ Cảnh báo sớm nếu ngày đã bị khóa (owner locked)
+    // ⚠️ Nếu ngày đang bị khóa: owner mở khóa, sale cảnh báo
     if (info?.isLock && !isCheckoutOnly) {
-      show('warning', '🔒 Ngày bị khóa', 'Chủ nhà đã khóa ngày này. Không thể đặt phòng.');
+      if (userRole === 'owner' || userRole === 'admin') {
+        // Owner click vào ngày khóa → mở modal tạo (có nút Khóa/Mở khóa)
+        if (ds >= todayISO()) openCreateModal(ds);
+      } else {
+        show('warning', '🔒 Ngày bị khóa', 'Chủ nhà đã khóa ngày này. Không thể đặt phòng.');
+      }
       return;
     }
 
@@ -500,16 +505,21 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                 </div>
                 <div className="modal-footer">
                   <button className="btn-secondary" onClick={closeModal}>Hủy</button>
-                  {(userRole === 'owner' || userRole === 'admin') && modal?.checkin && (
-                    <button
-                      className="btn-secondary"
-                      style={{ background: '#dde8e3', borderColor: '#7aaba3', color: '#2d6b5e' }}
-                      onClick={() => handleLockDate(modal.checkin!)}
-                      disabled={isPending}
-                    >
-                      🔒 Khóa phòng
-                    </button>
-                  )}
+                  {(userRole === 'owner' || userRole === 'admin') && modal?.checkin && (() => {
+                    const isLocked = (localLockedDates ?? villa.lockedDates).includes(modal.checkin!);
+                    return (
+                      <button
+                        className="btn-secondary"
+                        style={isLocked
+                          ? { background: '#fff3e0', borderColor: '#f0b429', color: '#b8860b' }
+                          : { background: '#dde8e3', borderColor: '#7aaba3', color: '#2d6b5e' }}
+                        onClick={() => handleLockDate(modal.checkin!)}
+                        disabled={isPending}
+                      >
+                        {isLocked ? '🔓 Mở khóa ngày này' : '🔒 Khóa phòng'}
+                      </button>
+                    );
+                  })()}
                   <button className="btn-primary" onClick={handleCreateBooking} disabled={isPending}>
                     {isPending
                       ? 'Đang tạo...'

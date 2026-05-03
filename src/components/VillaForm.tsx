@@ -40,6 +40,7 @@ export default function VillaForm({ villa }: VillaFormProps) {
   const [amenities,   setAmenities]   = useState<string[]>(villa?.amenities ?? []);
   const [images,      setImages]      = useState<string[]>(villa?.images    ?? []);
   const [emoji,       setEmoji]       = useState(villa?.emoji ?? randomVillaEmoji());
+  const [phone,       setPhone]       = useState(villa?.phone      ?? '');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // ── Address cascades ───────────────────────────────────────────
@@ -75,6 +76,7 @@ export default function VillaForm({ villa }: VillaFormProps) {
       children: Number(children), price: Number(price),
       amenities, description: description.trim() || undefined,
       images, emoji,
+      phone: phone.trim() || undefined,
     };
 
     startTransition(async () => {
@@ -131,6 +133,19 @@ export default function VillaForm({ villa }: VillaFormProps) {
             disabled={isPending}
             style={{ resize: 'vertical' }}
           />
+        </div>
+        <div className="field-group">
+          <label>📞 Hotline liên hệ</label>
+          <input
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            placeholder="0974950440"
+            type="tel"
+            disabled={isPending}
+          />
+          <span style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>
+            Hiển thị cho sale để thuận tiện liên hệ chủ nhà khi cần xác nhận booking.
+          </span>
         </div>
       </section>
 

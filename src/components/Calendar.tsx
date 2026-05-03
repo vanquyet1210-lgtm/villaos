@@ -91,9 +91,18 @@ function buildDayMap(
   const map: DayMap = {};
 
   // 1. Booking segments
-  const relevant = bookings.filter(
-    b => b.villaId === villaId && b.status !== 'cancelled'
-  );
+  // Lọc bỏ hold đã hết hạn (không hiển thị trên lịch, coi như trống)
+  const now = Date.now();
+  const relevant = bookings.filter(b => {
+    if (b.villaId !== villaId) return false;
+    if (b.status === 'cancelled') return false;
+    // Hold hết hạn → ẩn khỏi lịch (tự động coi như trống)
+    if (b.status === 'hold' && b.holdExpiresAt) {
+      const expires = new Date(b.holdExpiresAt).getTime();
+      if (expires < now) return false;
+    }
+    return true;
+  });
 
   for (const b of relevant) {
     // ── Sanitize to date-only (fix UTC timezone shift from Supabase timestamptz) ──
@@ -151,15 +160,47 @@ function buildDayMap(
   }
 
   // 2. Locked-date segments
-  // Mỗi lockedDate = 1 ĐÊM bị khóa (night-based như OTA).
-  // Mỗi ngày xử lý độc lập: locked-checkin ngày đó + locked-checkout ngày kế.
-  // Không gom thành đoạn để tránh ghi đè booking-middle ở giữa.
+  // lockedDates = mảng các đêm bị khóa (YYYY-MM-DD).
+  // Gom thành các đoạn liên tiếp để hiển thị đúng:
+  //   - Đầu đoạn: locked-checkin (nửa phải xanh)
+  //   - Giữa đoạn: locked-middle (full xanh)  
+  //   - Cuối đoạn checkout: locked-checkout (nửa trái xanh)
   if (lockedDates.length) {
     const lockInfo = { customer: '🔒', status: 'locked', isLock: true };
-    for (const lockedDay of lockedDates) {
-      const nextDay = addDays(lockedDay, 1);
-      applyLock(map, lockedDay, 'locked-checkin',  lockInfo);
-      applyLock(map, nextDay,   'locked-checkout', lockInfo);
+    const sorted = [...lockedDates].sort();
+
+    // Gom thành đoạn liên tiếp
+    const segments: { start: string; end: string }[] = [];
+    let segStart = sorted[0];
+    let segEnd   = sorted[0];
+    for (let i = 1; i < sorted.length; i++) {
+      const expected = addDays(segEnd, 1);
+      if (sorted[i] === expected) {
+        segEnd = sorted[i]; // kéo dài đoạn
+      } else {
+        segments.push({ start: segStart, end: segEnd });
+        segStart = sorted[i];
+        segEnd   = sorted[i];
+      }
+    }
+    segments.push({ start: segStart, end: segEnd });
+
+    // Render từng đoạn
+    for (const { start, end } of segments) {
+      const checkoutDay = addDays(end, 1);
+      if (start === end) {
+        // 1 đêm: chỉ checkin + checkout
+        applyLock(map, start,       'locked-checkin',  lockInfo);
+        applyLock(map, checkoutDay, 'locked-checkout', lockInfo);
+      } else {
+        // Nhiều đêm liên tiếp
+        applyLock(map, start, 'locked-checkin', lockInfo);
+        // Các ngày giữa: start+1 .. end (toàn bộ ngày nằm trong đoạn lock)
+        for (const ds of dateRange(addDays(start, 1), checkoutDay)) {
+          applyLock(map, ds, 'locked-middle', lockInfo);
+        }
+        applyLock(map, checkoutDay, 'locked-checkout', lockInfo);
+      }
     }
   }
 
@@ -725,10 +766,8 @@ export default function Calendar({
           display:               grid;
           grid-template-columns: repeat(7, 1fr);
           gap:                   0;
-          padding:               10px 0;
+          padding:               6px 4px;
           background:            var(--white);
-          /* overflow hidden để bar không tràn ra ngoài grid */
-          overflow:              hidden;
         }
 
         .cal-hdr {
@@ -744,14 +783,16 @@ export default function Calendar({
         .cal-day {
           position:       relative;
           min-height:     62px;
-          border-radius:  0;
+          border-radius:  6px;
           overflow:       visible;
           display:        flex;
           flex-direction: column;
           align-items:    center;
           justify-content: flex-start;
           padding-top:    6px;
-          transition:     opacity .1s;
+          transition:     opacity .1s, background .1s;
+          border:         1px solid rgba(180,212,195,.18);
+          margin:         1px;
         }
 
         .cal-day:hover:not(.cal-past):not(.cal-no-cursor) {

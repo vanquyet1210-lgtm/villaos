@@ -19,6 +19,7 @@ export interface VillaInput {
   adults: number; children?: number; price: number;
   amenities?: string[]; description?: string;
   images?: string[]; emoji?: string;
+  phone?: string;
 }
 
 export interface ServiceResult<T = void> { data?: T; error?: string; }
@@ -85,6 +86,7 @@ export async function createVilla(input: VillaInput): Promise<ServiceResult<Vill
     description: input.description ?? null,
     images:      input.images ?? [],
     emoji:       input.emoji ?? '🏡',
+    phone:       input.phone?.trim() ?? null,
     locked_dates: [],
     status:      'active',
   };
@@ -136,6 +138,7 @@ export async function updateVilla(id: string, patch: Partial<VillaInput>): Promi
   if (patch.description !== undefined) dbPatch.description = patch.description;
   if (patch.images      !== undefined) dbPatch.images      = patch.images;
   if (patch.emoji       !== undefined) dbPatch.emoji       = patch.emoji;
+  if (patch.phone       !== undefined) dbPatch.phone       = patch.phone?.trim() ?? null;
 
   const { data, error } = await q(sb).from('villas').update(dbPatch).eq('id', id).select().single();
   if (error) return { error: error.message };
