@@ -588,9 +588,9 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                               </span>
                             </div>
                           </div>
-                      </>
-                    );
-                  })()}
+                        </>
+                      );
+                    })()}
                     {b.note && (
                       <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--parchment)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', color: 'var(--ink-light)' }}>
                         📝 {b.note}
