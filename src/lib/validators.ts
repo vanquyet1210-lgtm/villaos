@@ -109,18 +109,26 @@ export function validateBooking(
   const villa = villas.find(v => v.id === villaId);
   if (villa?.lockedDates?.length) {
     const lockedSet = new Set(villa.lockedDates);
+    // Dùng Date.UTC để tránh timezone shift trong browser (Vietnam UTC+7)
     // Các đêm của booking mới: [checkin, checkout) — không bao gồm ngày checkout
-    let d = new Date(checkin + 'T00:00:00');
-    const end = new Date(checkout + 'T00:00:00');
-    while (d < end) {
-      const ds = d.toISOString().split('T')[0];
+    const [cy, cm, cd] = checkin.slice(0,10).split('-').map(Number);
+    const [ey, em, ed] = checkout.slice(0,10).split('-').map(Number);
+    let ms = Date.UTC(cy, cm - 1, cd);
+    const endMs = Date.UTC(ey, em - 1, ed);
+    while (ms < endMs) {
+      const dt = new Date(ms);
+      const ds = [
+        dt.getUTCFullYear(),
+        String(dt.getUTCMonth() + 1).padStart(2, '0'),
+        String(dt.getUTCDate()).padStart(2, '0'),
+      ].join('-');
       if (lockedSet.has(ds)) {
         const [y, m, day] = ds.split('-');
         errors.push(_err('dates', 'DATE_LOCKED',
           `Ngày ${day}/${m}/${y} đã bị chủ nhà khóa. Vui lòng chọn ngày khác.`));
         break;
       }
-      d.setDate(d.getDate() + 1);
+      ms += 86_400_000;
     }
   }
 
