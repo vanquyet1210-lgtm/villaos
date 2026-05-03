@@ -310,17 +310,19 @@ async function _checkLockedDates(
   const villa = _villa as Pick<VillaRow, 'locked_dates'> | null;
   if (!villa?.locked_dates?.length) return null;
 
-  // Iterate dates safely using string arithmetic to avoid timezone issues
-  let ci = toDateOnly(checkin);
-  const co = toDateOnly(checkout);
+  // Check locked dates: dùng plain YYYY-MM-DD (KHÔNG dùng toDateOnly vì
+  // toDateOnly thêm T12:00:00Z — chỉ dùng cho INSERT, không dùng so sánh chuỗi)
+  // Logic half-open [checkin, checkout): ngày checkout KHÔNG bị check
+  let ci = checkin.slice(0, 10);
+  const co = checkout.slice(0, 10);
   while (ci < co) {
     if (villa.locked_dates.includes(ci)) {
       return { error: `Ngày ${ci} đã bị chủ nhà khóa.`, code: 'DATE_LOCKED' };
     }
-    // Advance by 1 day using date arithmetic
-    const d = new Date(ci + 'T12:00:00Z');
-    d.setUTCDate(d.getUTCDate() + 1);
-    ci = d.toISOString().slice(0, 10);
+    // Advance 1 day via Date.UTC (no timezone issue)
+    const [y, m, d] = ci.split('-').map(Number);
+    const next = new Date(Date.UTC(y, m - 1, d + 1));
+    ci = next.toISOString().slice(0, 10);
   }
   return null;
 }
