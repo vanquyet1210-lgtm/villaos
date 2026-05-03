@@ -1,6 +1,6 @@
 'use client';
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  VillaOS v7 — app/owner/calendar/CalendarShell.tsx          ║
+// ║  VillaOS v7.2 — app/owner/calendar/CalendarShell.tsx        ║
 // ║  Client shell: villa selector, calendar, booking modal      ║
 // ╚══════════════════════════════════════════════════════════════╝
 
