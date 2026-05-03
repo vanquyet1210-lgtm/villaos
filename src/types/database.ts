@@ -104,6 +104,7 @@ export interface Villa {
   lockedDates: string[];
   status:      VillaStatus;
   createdAt:   string;
+  phone:       string;
 }
 
 export interface Booking {
@@ -153,9 +154,10 @@ export function mapVilla(row: any): Villa {
     description: row.description ?? '',
     images:      row.images,
     emoji:       row.emoji,
-    lockedDates: row.locked_dates,
+    lockedDates: row.locked_dates ?? [],
     status:      row.status,
     createdAt:   row.created_at,
+    phone:       row.phone ?? '',
   };
 }
 
