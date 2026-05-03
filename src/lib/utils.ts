@@ -51,10 +51,11 @@ export function formatDateRange(checkin: string, checkout: string): string {
  * @example calcNights('2026-04-20', '2026-04-23') → 3
  */
 export function calcNights(checkin: string, checkout: string): number {
-  // Dùng UTC noon để tránh timezone shift
-  const ci = new Date(checkin.slice(0, 10)  + 'T12:00:00Z');
-  const co = new Date(checkout.slice(0, 10) + 'T12:00:00Z');
-  return Math.max(1, Math.round((co.getTime() - ci.getTime()) / 86_400_000));
+  // Dùng Date.UTC để tránh mọi timezone issue
+  const [cy, cm, cd] = checkin.slice(0, 10).split('-').map(Number);
+  const [oy, om, od] = checkout.slice(0, 10).split('-').map(Number);
+  const ms = Date.UTC(oy, om - 1, od) - Date.UTC(cy, cm - 1, cd);
+  return Math.max(1, Math.round(ms / 86_400_000));
 }
 
 /**
@@ -131,11 +132,16 @@ export function todayISO(): string {
  * @example addDays('2026-04-20', 3) → '2026-04-23'
  */
 export function addDays(iso: string, days: number): string {
-  // Dùng UTC noon để tránh timezone shift trong browser (Vietnam UTC+7)
-  // 'YYYY-MM-DD' + 'T12:00:00Z' → parse as UTC noon → setUTCDate an toàn
-  const d = new Date(iso.slice(0, 10) + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+  // Dùng Date.UTC để tránh mọi timezone issue trong browser
+  const s = iso.slice(0, 10);
+  const [y, m, d] = s.split('-').map(Number);
+  const ms = Date.UTC(y, m - 1, d + days);
+  const nd = new Date(ms);
+  return [
+    nd.getUTCFullYear(),
+    String(nd.getUTCMonth() + 1).padStart(2, '0'),
+    String(nd.getUTCDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 /**
@@ -144,12 +150,19 @@ export function addDays(iso: string, days: number): string {
  */
 export function dateRange(start: string, end: string): string[] {
   const dates: string[] = [];
-  // Dùng UTC noon để tránh timezone shift trong browser (Vietnam UTC+7)
-  let d      = new Date(start.slice(0, 10) + 'T12:00:00Z');
-  const endD = new Date(end.slice(0, 10)   + 'T12:00:00Z');
-  while (d < endD) {
-    dates.push(d.toISOString().slice(0, 10));
-    d.setUTCDate(d.getUTCDate() + 1);
+  // Dùng Date.UTC để tránh mọi timezone issue trong browser
+  const [sy, sm, sd] = start.slice(0, 10).split('-').map(Number);
+  const [ey, em, ed] = end.slice(0, 10).split('-').map(Number);
+  let ms = Date.UTC(sy, sm - 1, sd);
+  const endMs = Date.UTC(ey, em - 1, ed);
+  while (ms < endMs) {
+    const d = new Date(ms);
+    dates.push([
+      d.getUTCFullYear(),
+      String(d.getUTCMonth() + 1).padStart(2, '0'),
+      String(d.getUTCDate()).padStart(2, '0'),
+    ].join('-'));
+    ms += 86_400_000; // +1 day in ms
   }
   return dates;
 }
