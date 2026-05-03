@@ -138,13 +138,17 @@ export function getCachedVillaBookings(villaId: string) {
 
       const { data, error } = await sb
         .from('bookings')
-        .select('*')
+        .select('*, creator:profiles!created_by(name, phone)')
         .eq('villa_id', villaId)
         .neq('status', 'cancelled')
         .order('checkin', { ascending: true });
 
       if (error) throw new Error(error.message);
-      return (data as BookingRow[]).map(mapBooking);
+      return (data as any[]).map(row => ({
+        ...mapBooking(row),
+        createdByName:  row.creator?.name  ?? undefined,
+        createdByPhone: row.creator?.phone ?? undefined,
+      }));
     },
     [`bookings:villa:${villaId}`],
     {

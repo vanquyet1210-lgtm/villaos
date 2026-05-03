@@ -23,11 +23,13 @@ type SegmentType =
 
 interface DayInfo {
   type:           SegmentType;
-  customer?:      string;
+  customer?:      string;   // tên rút gọn khách
   fullName?:      string;
+  saleLabel?:     string;   // "Tên Sale • 0974950440" — hiển thị trên bar
   status?:        string;
   bkId?:          string;
   rightCustomer?: string;
+  rightSaleLabel?:string;
   rightStatus?:   string;
   rightBkId?:     string;
   leftStatus?:    string;
@@ -108,9 +110,13 @@ function buildDayMap(
     // ── Sanitize to date-only (fix UTC timezone shift from Supabase timestamptz) ──
     const ci = b.checkin.split('T')[0];
     const co = b.checkout.split('T')[0];
-    const { customer, status, id: bkId } = b;
+    const { customer, status, id: bkId, createdByRole, createdByName, createdByPhone } = b;
     const shortName = customer ? customer.split(' ').pop() ?? customer : '';
-    const info = { customer: shortName, fullName: customer, status, bkId };
+    // Bar label: nếu sale tạo → hiển thị tên sale + SĐT sale thay vì tên khách
+    const saleLabel = createdByRole === 'sale' && createdByName
+      ? `${createdByName}${createdByPhone ? ' • ' + createdByPhone : ''}`
+      : undefined;
+    const info = { customer: shortName, fullName: customer, saleLabel, status, bkId };
 
     // checkin day → right half colored (guest arrives, morning is free)
     if (!map[ci]) {
@@ -291,7 +297,10 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
     if (!info) return null;
 
     const { type, customer, status, rightCustomer, rightStatus,
-            leftStatus } = info;
+            leftStatus, saleLabel, rightSaleLabel } = info;
+    // Bar hiển thị: ưu tiên saleLabel (tên sale + SĐT), fallback sang tên khách
+    const barLabel        = saleLabel ?? customer;
+    const rightBarLabel   = rightSaleLabel ?? rightCustomer;
     const bg     = bgOf(status);
     const bar    = barOf(status);
     const txt    = textOf(status);
@@ -348,34 +357,35 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
 
     switch (type) {
 
-      // Checkin: nền phủ nửa phải, bar từ giữa → phải (không bo trái)
+      // Checkin: nền phủ 2/3 phải, bar từ 1/3 → right
+      // (khách đến buổi chiều → 2/3 ô có màu)
       case 'checkin':
         return (
           <>
             <div style={{
               position: 'absolute', inset: 0, zIndex: 1,
-              background: `linear-gradient(to right, transparent 50%, ${bg} 50%)`,
+              background: `linear-gradient(to right, transparent 33.3%, ${bg} 33.3%)`,
               pointerEvents: 'none',
             }} />
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '50%', right: '-1px',
+              left: '33.3%', right: '-1px',
               background: bar,
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
             }} />
-            {customer && (
+            {barLabel && (
               <span style={{
                 position: 'absolute',
                 top: BAR_TOP, height: BAR_HEIGHT,
-                left: 'calc(50% + 4px)', right: '2px',
+                left: 'calc(33.3% + 4px)', right: '2px',
                 zIndex: 3, fontSize: '0.62rem', fontWeight: 700,
                 color: '#fff', display: 'flex', alignItems: 'center',
                 overflow: 'hidden', whiteSpace: 'nowrap',
                 pointerEvents: 'none',
               }}>
-                {customer}
+                {barLabel}
               </span>
             )}
           </>
@@ -399,19 +409,20 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
           </>
         );
 
-      // Checkout: nền nửa trái, bar từ trái → giữa (bo tròn phải)
+      // Checkout: nền 1/3 trái, bar từ left → 1/3
+      // (khách trả phòng buổi sáng → chỉ 1/3 ô có màu)
       case 'checkout':
         return (
           <>
             <div style={{
               position: 'absolute', inset: 0, zIndex: 1,
-              background: `linear-gradient(to left, transparent 50%, ${bg} 50%)`,
+              background: `linear-gradient(to left, transparent 66.7%, ${bg} 66.7%)`,
               pointerEvents: 'none',
             }} />
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '-1px', right: '50%',
+              left: '-1px', right: '66.7%',
               background: bar,
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
@@ -419,48 +430,48 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
           </>
         );
 
-      // checkout+checkin: split — trái = checkout cũ, phải = checkin mới
+      // checkout+checkin: split — trái checkout 1/3, phải checkin 2/3
       case 'checkout+checkin': {
         const lBar = barOf(leftStatus);
         const rBg  = bgOf(rightStatus);
         const rBar = barOf(rightStatus);
         return (
           <>
-            {/* Nền split */}
+            {/* Nền split: checkout 1/3 | checkin 2/3 */}
             <div style={{
               position: 'absolute', inset: 0, zIndex: 1,
-              background: `linear-gradient(to right, ${bgOf(leftStatus)} 50%, ${rBg} 50%)`,
+              background: `linear-gradient(to right, ${bgOf(leftStatus)} 33.3%, ${rBg} 33.3%)`,
               pointerEvents: 'none',
             }} />
-            {/* Bar trái (checkout) */}
+            {/* Bar trái checkout → 1/3 */}
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '-1px', right: '50%',
+              left: '-1px', right: '66.7%',
               background: lBar,
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
             }} />
-            {/* Bar phải (checkin mới) */}
+            {/* Bar phải checkin → 2/3 */}
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '50%', right: '-1px',
+              left: '33.3%', right: '-1px',
               background: rBar,
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
             }} />
-            {rightCustomer && (
+            {rightBarLabel && (
               <span style={{
                 position: 'absolute',
                 top: BAR_TOP, height: BAR_HEIGHT,
-                left: 'calc(50% + 4px)', right: '2px',
+                left: 'calc(33.3% + 4px)', right: '2px',
                 zIndex: 3, fontSize: '0.62rem', fontWeight: 700,
                 color: '#fff', display: 'flex', alignItems: 'center',
                 overflow: 'hidden', whiteSpace: 'nowrap',
                 pointerEvents: 'none',
               }}>
-                {rightCustomer}
+                {rightBarLabel}
               </span>
             )}
           </>

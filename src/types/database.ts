@@ -108,21 +108,23 @@ export interface Villa {
 }
 
 export interface Booking {
-  id:            string;
-  villaId:       string;
-  ownerId:       string;
-  createdBy:     string;
-  createdByRole: UserRole;
-  customer:      string;
-  email:         string;
-  phone:         string;
-  checkin:       string;
-  checkout:      string;
-  status:        BookingStatus;
-  total:         number;
-  note:          string;
-  holdExpiresAt: string | null;
-  createdAt:     string;
+  id:              string;
+  villaId:         string;
+  ownerId:         string;
+  createdBy:       string;
+  createdByRole:   UserRole;
+  createdByName?:  string;   // tên sale/owner tạo booking
+  createdByPhone?: string;   // SĐT sale tạo booking
+  customer:        string;
+  email:           string;
+  phone:           string;
+  checkin:         string;
+  checkout:        string;
+  status:          BookingStatus;
+  total:           number;
+  note:            string;
+  holdExpiresAt:   string | null;
+  createdAt:       string;
 }
 
 // ── Row → App mappers ─────────────────────────────────────────────
@@ -197,9 +199,11 @@ export function mapBooking(row: any): Booking {
     id:            row.id,
     villaId:       row.villa_id,
     ownerId:       row.owner_id,
-    createdBy:     row.created_by,
-    createdByRole: row.created_by_role,
-    customer:      row.customer,
+    createdBy:      row.created_by,
+    createdByRole:  row.created_by_role,
+    createdByName:  row.created_by_name  ?? undefined,
+    createdByPhone: row.created_by_phone ?? undefined,
+    customer:       row.customer,
     email:         row.email ?? '',
     phone:         row.phone ?? '',
     checkin:       sanitizeDate(row.checkin),
