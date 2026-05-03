@@ -136,12 +136,17 @@ export function validateBooking(
   //     ⚠️ Conflict check THẬT là PostgreSQL EXCLUDE constraint
   //     trong DB + _checkConflict() trong booking.service.ts
   //     Logic: [ci1, co1) ∩ [ci2, co2) — half-open, checkout day KHÔNG conflict với checkin mới cùng ngày
-  const conflict = bookings.find(b =>
-    b.villaId !== villaId       ? false :
-    b.status  === 'cancelled'   ? false :
-    excludeId && b.id === excludeId ? false :
-    datesOverlap(checkin, checkout, b.checkin, b.checkout)
-  );
+  const nowMs = Date.now();
+  const conflict = bookings.find(b => {
+    if (b.villaId !== villaId) return false;
+    if (b.status  === 'cancelled') return false;
+    // Bỏ qua hold đã hết hạn (cùng logic với calendar display)
+    if (b.status === 'hold' && b.holdExpiresAt) {
+      if (new Date(b.holdExpiresAt).getTime() < nowMs) return false;
+    }
+    if (excludeId && b.id === excludeId) return false;
+    return datesOverlap(checkin, checkout, b.checkin, b.checkout);
+  });
 
   if (conflict) {
     const [cy, cm, cd] = conflict.checkin.split('-');

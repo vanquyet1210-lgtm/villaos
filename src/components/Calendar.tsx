@@ -484,13 +484,13 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
           <>
             <div style={{
               position: 'absolute', inset: 0, zIndex: 1,
-              background: 'linear-gradient(to right, transparent 50%, #dde8e3 50%)',
+              background: 'linear-gradient(to right, transparent 33.3%, #dde8e3 33.3%)',
               pointerEvents: 'none',
             }} />
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '50%', right: '-1px',
+              left: '33.3%', right: '-1px',
               background: '#7aaba3',
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
@@ -498,7 +498,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <span style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: 'calc(50% + 4px)', right: '2px',
+              left: 'calc(33.3% + 4px)', right: '2px',
               zIndex: 3, fontSize: '0.6rem',
               color: '#fff', display: 'flex', alignItems: 'center',
               pointerEvents: 'none',
@@ -528,13 +528,13 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
           <>
             <div style={{
               position: 'absolute', inset: 0, zIndex: 1,
-              background: 'linear-gradient(to left, transparent 50%, #dde8e3 50%)',
+              background: 'linear-gradient(to left, transparent 66.7%, #dde8e3 66.7%)',
               pointerEvents: 'none',
             }} />
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '-1px', right: '50%',
+              left: '-1px', right: '66.7%',
               background: '#7aaba3',
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',

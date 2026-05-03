@@ -78,6 +78,7 @@ export async function getCurrentActor(): Promise<{
   actorId:   string;
   actorRole: UserRole;
   actorName: string;
+  actorPhone?: string;
   ownerId?:  string;
 } | null> {
   const sb = await createSupabaseServerClient();
@@ -86,7 +87,7 @@ export async function getCurrentActor(): Promise<{
 
   const { data: _profile } = await sb
     .from('profiles')
-    .select('id, name, role')
+    .select('id, name, role, phone')
     .eq('id', user.id)
     .single();
 
@@ -95,6 +96,7 @@ export async function getCurrentActor(): Promise<{
 
   return {
     actorId:   profile.id,
+    actorPhone: profile.phone ?? undefined,
     actorRole: profile.role,
     actorName: profile.name,
     // owner_id cho audit: owner = chính họ, sale = cần truyền thêm
