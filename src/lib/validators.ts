@@ -41,11 +41,12 @@ export interface BookingValidateInput {
 }
 
 export interface BookingRef {
-  id:       string;
-  villaId:  string;
-  checkin:  string;
-  checkout: string;
-  status:   string;
+  id:             string;
+  villaId:        string;
+  checkin:        string;
+  checkout:       string;
+  status:         string;
+  holdExpiresAt?: string | null;
 }
 
 export interface VillaRef {
