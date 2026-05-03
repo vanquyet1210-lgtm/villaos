@@ -526,71 +526,64 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
             {/* VIEW BOOKING */}
             {modal.mode === 'view' && modal.booking && (() => {
               const b = modal.booking;
+              const canSeePrivate = userRole !== 'sale' || b.createdByRole === 'sale';
               return (
                 <>
-                  {/* Sale chỉ thấy đầy đủ booking của mình */}
-                  {(() => {
-                    const canSeePrivate = userRole !== 'sale' || b.createdByRole === 'sale';
-                    return (
-                      <>
-                        <div className="modal-header">
-                          <h3>
-                            <span className={`badge badge-${b.status}`} style={{ marginRight: 8 }}>
-                              {b.status === 'confirmed' ? '✅ Confirmed' : b.status === 'hold' ? '⏳ Hold' : '❌ Cancelled'}
-                            </span>
-                            {canSeePrivate ? b.customer : '🔒 Booking của chủ nhà'}
-                          </h3>
-                          <button className="modal-close" onClick={closeModal}>×</button>
+                  <div className="modal-header">
+                    <h3>
+                      <span className={`badge badge-${b.status}`} style={{ marginRight: 8 }}>
+                        {b.status === 'confirmed' ? '✅ Confirmed' : b.status === 'hold' ? '⏳ Hold' : '❌ Cancelled'}
+                      </span>
+                      {canSeePrivate ? b.customer : '🔒 Booking của chủ nhà'}
+                    </h3>
+                    <button className="modal-close" onClick={closeModal}>×</button>
+                  </div>
+                  <div className="modal-body">
+                    <div className="booking-detail-grid">
+                      <div className="booking-detail-item">
+                        <span className="booking-detail-label">Check-in</span>
+                        <span className="booking-detail-value">📅 {formatDate(b.checkin)}</span>
+                      </div>
+                      <div className="booking-detail-item">
+                        <span className="booking-detail-label">Check-out</span>
+                        <span className="booking-detail-value">📅 {formatDate(b.checkout)}</span>
+                      </div>
+                      <div className="booking-detail-item">
+                        <span className="booking-detail-label">Số đêm</span>
+                        <span className="booking-detail-value">🌙 {calcNights(b.checkin, b.checkout)} đêm</span>
+                      </div>
+                      <div className="booking-detail-item">
+                        <span className="booking-detail-label">Tổng tiền</span>
+                        <span className="booking-detail-value" style={{ color: 'var(--forest)', fontWeight: 700 }}>
+                          💰 {fmtMoney(b.total)}
+                        </span>
+                      </div>
+                      {canSeePrivate && b.phone && (
+                        <div className="booking-detail-item">
+                          <span className="booking-detail-label">Điện thoại</span>
+                          <span className="booking-detail-value">📞 {b.phone}</span>
                         </div>
-                        <div className="modal-body">
-                          <div className="booking-detail-grid">
-                            <div className="booking-detail-item">
-                              <span className="booking-detail-label">Check-in</span>
-                              <span className="booking-detail-value">📅 {formatDate(b.checkin)}</span>
-                            </div>
-                            <div className="booking-detail-item">
-                              <span className="booking-detail-label">Check-out</span>
-                              <span className="booking-detail-value">📅 {formatDate(b.checkout)}</span>
-                            </div>
-                            <div className="booking-detail-item">
-                              <span className="booking-detail-label">Số đêm</span>
-                              <span className="booking-detail-value">🌙 {calcNights(b.checkin, b.checkout)} đêm</span>
-                            </div>
-                            <div className="booking-detail-item">
-                              <span className="booking-detail-label">Tổng tiền</span>
-                              <span className="booking-detail-value" style={{ color: 'var(--forest)', fontWeight: 700 }}>
-                                💰 {fmtMoney(b.total)}
-                              </span>
-                            </div>
-                            {canSeePrivate && b.phone && (
-                              <div className="booking-detail-item">
-                                <span className="booking-detail-label">Điện thoại</span>
-                                <span className="booking-detail-value">📞 {b.phone}</span>
-                              </div>
-                            )}
-                            {canSeePrivate && b.email && (
-                              <div className="booking-detail-item">
-                                <span className="booking-detail-label">Email</span>
-                                <span className="booking-detail-value">✉️ {b.email}</span>
-                              </div>
-                            )}
-                            {!canSeePrivate && (
-                              <div className="booking-detail-item" style={{ gridColumn: '1 / -1' }}>
-                                <span style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', fontStyle: 'italic' }}>
-                                  🔒 Thông tin khách được ẩn — chỉ hiển thị với người tạo booking
-                                </span>
-                              </div>
-                            )}
-                            <div className="booking-detail-item">
-                              <span className="booking-detail-label">Tạo bởi</span>
-                              <span className="booking-detail-value">
-                                {b.createdByRole === 'owner' ? '👑' : b.createdByRole === 'sale' ? '🏷️' : '👥'} {b.createdByRole}
-                              </span>
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()}
+                      )}
+                      {canSeePrivate && b.email && (
+                        <div className="booking-detail-item">
+                          <span className="booking-detail-label">Email</span>
+                          <span className="booking-detail-value">✉️ {b.email}</span>
+                        </div>
+                      )}
+                      {!canSeePrivate && (
+                        <div className="booking-detail-item" style={{ gridColumn: '1 / -1' }}>
+                          <span style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', fontStyle: 'italic' }}>
+                            🔒 Thông tin khách được ẩn — chỉ hiển thị với người tạo booking
+                          </span>
+                        </div>
+                      )}
+                      <div className="booking-detail-item">
+                        <span className="booking-detail-label">Tạo bởi</span>
+                        <span className="booking-detail-value">
+                          {b.createdByRole === 'owner' ? '👑' : b.createdByRole === 'sale' ? '🏷️' : '👥'} {b.createdByRole}
+                        </span>
+                      </div>
+                    </div>
                     {b.note && (
                       <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--parchment)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', color: 'var(--ink-light)' }}>
                         📝 {b.note}
@@ -617,7 +610,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                     })()}
                   </div>
                   <div className="modal-footer">
-                    {/* Confirm: chỉ owner/admin mới được confirm hold */}
                     {b.status === 'hold' && (userRole === 'owner' || userRole === 'admin') && (
                       <button className="btn-primary" onClick={() => handleConfirm(b.id)} disabled={isPending}>
                         ✅ Xác nhận booking
