@@ -12,6 +12,7 @@ import { useToast }            from '@/components/Toast';
 import {
   createBooking, cancelBooking, confirmHold,
 } from '@/lib/services/booking.service';
+import { toggleLockDate } from '@/lib/services/villa.service';
 import { fetchVillaBookingsAction } from '@/lib/cache/booking-cache-actions';
 import {
   fmtMoney, formatDate, calcNights, calcTotal,
@@ -49,6 +50,8 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   const [month, setMonth] = useState(new Date().getMonth());
   const [modal, setModal] = useState<BookingModal | null>(null);
   const [serverBookings, setServerBookings] = useState<Booking[]>([]);
+  // Optimistic locked dates: update instantly without F5 (FIX 5)
+  const [localLockedDates, setLocalLockedDates] = useState<string[] | null>(null);
 
   // ── Villa filter state ─────────────────────────────────────────
   const [showFilter,    setShowFilter]    = useState(false);
@@ -57,21 +60,29 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   const [filterBedrooms,setFilterBedrooms] = useState('');
   const [filterPrice,   setFilterPrice]   = useState('');
   const [filterAdults,  setFilterAdults]  = useState('');
-  const [filterAmenity, setFilterAmenity] = useState<string[]>([]);
+  const [filterAmenity,  setFilterAmenity]  = useState<string[]>([]);
+  const [filterDistrict, setFilterDistrict] = useState('');
+  const [filterCheckin,  setFilterCheckin]  = useState('');
+  const [filterCheckout, setFilterCheckout] = useState('');
 
-  // Derived: danh sách province từ villas
+  // Derived: danh sách province và district từ villas
   const provinces = Array.from(new Set(villas.map(v => v.province).filter(Boolean))).sort();
+  const districts = Array.from(new Set(
+    villas.filter(v => !filterProvince || v.province === filterProvince)
+          .map(v => v.district).filter(Boolean)
+  )).sort();
   const allAmenities = Array.from(new Set(villas.flatMap(v => v.amenities ?? []))).sort();
 
-  // Filtered villas
+  // Filtered villas (kể cả filter ngày trống)
   const filteredVillas = villas.filter(v => {
     if (filterSearch) {
       const s = filterSearch.toLowerCase();
       if (!v.name.toLowerCase().includes(s) &&
-          !v.district?.toLowerCase().includes(s) &&
-          !v.province?.toLowerCase().includes(s)) return false;
+          !(v.district ?? '').toLowerCase().includes(s) &&
+          !(v.province ?? '').toLowerCase().includes(s)) return false;
     }
     if (filterProvince && v.province !== filterProvince) return false;
+    if (filterDistrict && v.district !== filterDistrict) return false;
     if (filterBedrooms && v.bedrooms !== Number(filterBedrooms)) return false;
     if (filterAdults && v.adults < Number(filterAdults)) return false;
     if (filterPrice) {
@@ -85,11 +96,12 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
     return true;
   });
 
-  const hasFilter = !!(filterSearch || filterProvince || filterBedrooms || filterPrice || filterAdults || filterAmenity.length);
+  const hasFilter = !!(filterSearch || filterProvince || filterDistrict || filterBedrooms || filterPrice || filterAdults || filterAmenity.length || filterCheckin || filterCheckout);
 
   function clearFilter() {
-    setFilterSearch(''); setFilterProvince(''); setFilterBedrooms('');
-    setFilterPrice(''); setFilterAdults(''); setFilterAmenity([]);
+    setFilterSearch(''); setFilterProvince(''); setFilterDistrict('');
+    setFilterBedrooms(''); setFilterPrice(''); setFilterAdults('');
+    setFilterAmenity([]); setFilterCheckin(''); setFilterCheckout('');
   }
 
   const villa = villas.find(v => v.id === selectedVillaId) ?? filteredVillas[0] ?? villas[0];
@@ -166,6 +178,25 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   }
 
   // ── Create booking ─────────────────────────────────────────────
+  async function handleLockDate(ds: string) {
+    const current = localLockedDates ?? villa.lockedDates;
+    const isLocked = current.includes(ds);
+    const optimistic = isLocked ? current.filter((d: string) => d !== ds) : [...current, ds].sort();
+    setLocalLockedDates(optimistic); // instant visual update
+
+    startTransition(async () => {
+      const result = await toggleLockDate(villa.id, ds);
+      if (result.error) {
+        show('error', '❌ Lỗi', result.error);
+        setLocalLockedDates(current); // revert
+      } else if (result.data) {
+        setLocalLockedDates(result.data);
+        show('success', isLocked ? '🔓 Đã mở khóa ngày' : '🔒 Đã khóa ngày', ds);
+      }
+    });
+    closeModal();
+  }
+
   function handleCreateBooking() {
     setFormError(null);
     const errs = validateBooking(
@@ -248,9 +279,16 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
               <div className="filter-row">
                 <div className="filter-field">
                   <label>Tỉnh / TP</label>
-                  <select value={filterProvince} onChange={e => setFilterProvince(e.target.value)}>
+                  <select value={filterProvince} onChange={e => { setFilterProvince(e.target.value); setFilterDistrict(''); }}>
                     <option value="">Tất cả tỉnh</option>
                     {provinces.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div className="filter-field">
+                  <label>Quận / Huyện</label>
+                  <select value={filterDistrict} onChange={e => setFilterDistrict(e.target.value)}>
+                    <option value="">Tất cả quận</option>
+                    {districts.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
                 <div className="filter-field">
@@ -278,6 +316,31 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                     {[2,4,6,8,10,12].map(n => <option key={n} value={n}>≥ {n} người</option>)}
                   </select>
                 </div>
+              </div>
+              <div className="filter-row">
+                <div className="filter-field">
+                  <label>Ngày check-in</label>
+                  <input type="date" value={filterCheckin}
+                    onChange={e => { setFilterCheckin(e.target.value); if (filterCheckout && e.target.value > filterCheckout) setFilterCheckout(''); }}
+                    style={{ padding:'7px 10px', border:'1.5px solid var(--stone)', borderRadius:'var(--radius-md)', fontFamily:'var(--font-body)', fontSize:'0.875rem' }}
+                  />
+                </div>
+                <div className="filter-field">
+                  <label>Ngày check-out</label>
+                  <input type="date" value={filterCheckout} min={filterCheckin}
+                    onChange={e => setFilterCheckout(e.target.value)}
+                    style={{ padding:'7px 10px', border:'1.5px solid var(--stone)', borderRadius:'var(--radius-md)', fontFamily:'var(--font-body)', fontSize:'0.875rem' }}
+                  />
+                </div>
+                {(filterCheckin || filterCheckout) && (
+                  <div className="filter-field" style={{ justifyContent:'flex-end', paddingTop:'20px' }}>
+                    <span style={{ fontSize:'0.8rem', color:'var(--ink-muted)' }}>
+                      {filterCheckin && filterCheckout
+                        ? `Tìm villa trống: ${filterCheckin} → ${filterCheckout}`
+                        : filterCheckin ? `Từ ngày ${filterCheckin}` : `Đến ngày ${filterCheckout}`}
+                    </span>
+                  </div>
+                )}
               </div>
               {allAmenities.length > 0 && (
                 <div className="filter-amenities">
@@ -325,6 +388,11 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
         <span className="villa-info-name">{villa.emoji} {villa.name}</span>
         <span className="villa-info-meta">
           🛏 {villa.bedrooms} phòng · 👥 {villa.adults} người · 💰 {fmtMoney(villa.price)}/đêm
+          {villa.phone && (
+            <span className="villa-hotline">
+              &nbsp;·&nbsp;📞 <a href={`tel:${villa.phone}`} className="hotline-link">{villa.phone}</a>
+            </span>
+          )}
         </span>
         <span className="booking-count">
           {bookings.filter(b => b.status !== 'cancelled').length} booking
@@ -335,7 +403,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
       <Calendar
         bookings={bookings}
         villaId={selectedVillaId}
-        lockedDates={villa.lockedDates}
+        lockedDates={localLockedDates ?? villa.lockedDates}
         month={month}
         year={year}
         onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
@@ -352,7 +420,14 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
             {modal.mode === 'create' && (
               <>
                 <div className="modal-header">
-                  <h3>📅 Tạo booking mới</h3>
+                  <h3>
+                    📅 Tạo booking mới
+                    {modal?.checkin && (localLockedDates ?? villa.lockedDates).includes(modal.checkin) && (
+                      <span style={{ marginLeft: 8, fontSize: '0.75rem', background: '#dde8e3', color: '#2d6b5e', padding: '2px 8px', borderRadius: 99 }}>
+                        🔒 Ngày này đang bị khóa
+                      </span>
+                    )}
+                  </h3>
                   <button className="modal-close" onClick={closeModal}>×</button>
                 </div>
                 <div className="modal-body">
@@ -425,6 +500,16 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                 </div>
                 <div className="modal-footer">
                   <button className="btn-secondary" onClick={closeModal}>Hủy</button>
+                  {(userRole === 'owner' || userRole === 'admin') && modal?.checkin && (
+                    <button
+                      className="btn-secondary"
+                      style={{ background: '#dde8e3', borderColor: '#7aaba3', color: '#2d6b5e' }}
+                      onClick={() => handleLockDate(modal.checkin!)}
+                      disabled={isPending}
+                    >
+                      🔒 Khóa phòng
+                    </button>
+                  )}
                   <button className="btn-primary" onClick={handleCreateBooking} disabled={isPending}>
                     {isPending
                       ? 'Đang tạo...'
@@ -443,54 +528,69 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
               const b = modal.booking;
               return (
                 <>
-                  <div className="modal-header">
-                    <h3>
-                      <span className={`badge badge-${b.status}`} style={{ marginRight: 8 }}>
-                        {b.status === 'confirmed' ? '✅ Confirmed' : b.status === 'hold' ? '⏳ Hold' : '❌ Cancelled'}
-                      </span>
-                      {b.customer}
-                    </h3>
-                    <button className="modal-close" onClick={closeModal}>×</button>
-                  </div>
-                  <div className="modal-body">
-                    <div className="booking-detail-grid">
-                      <div className="booking-detail-item">
-                        <span className="booking-detail-label">Check-in</span>
-                        <span className="booking-detail-value">📅 {formatDate(b.checkin)}</span>
-                      </div>
-                      <div className="booking-detail-item">
-                        <span className="booking-detail-label">Check-out</span>
-                        <span className="booking-detail-value">📅 {formatDate(b.checkout)}</span>
-                      </div>
-                      <div className="booking-detail-item">
-                        <span className="booking-detail-label">Số đêm</span>
-                        <span className="booking-detail-value">🌙 {calcNights(b.checkin, b.checkout)} đêm</span>
-                      </div>
-                      <div className="booking-detail-item">
-                        <span className="booking-detail-label">Tổng tiền</span>
-                        <span className="booking-detail-value" style={{ color: 'var(--forest)', fontWeight: 700 }}>
-                          💰 {fmtMoney(b.total)}
-                        </span>
-                      </div>
-                      {b.phone && (
-                        <div className="booking-detail-item">
-                          <span className="booking-detail-label">Điện thoại</span>
-                          <span className="booking-detail-value">📞 {b.phone}</span>
+                  {/* Sale chỉ thấy đầy đủ booking của mình */}
+                  {(() => {
+                    const canSeePrivate = userRole !== 'sale' || b.createdByRole === 'sale';
+                    return (
+                      <>
+                        <div className="modal-header">
+                          <h3>
+                            <span className={`badge badge-${b.status}`} style={{ marginRight: 8 }}>
+                              {b.status === 'confirmed' ? '✅ Confirmed' : b.status === 'hold' ? '⏳ Hold' : '❌ Cancelled'}
+                            </span>
+                            {canSeePrivate ? b.customer : '🔒 Booking của chủ nhà'}
+                          </h3>
+                          <button className="modal-close" onClick={closeModal}>×</button>
                         </div>
-                      )}
-                      {b.email && (
-                        <div className="booking-detail-item">
-                          <span className="booking-detail-label">Email</span>
-                          <span className="booking-detail-value">✉️ {b.email}</span>
-                        </div>
-                      )}
-                      <div className="booking-detail-item">
-                        <span className="booking-detail-label">Tạo bởi</span>
-                        <span className="booking-detail-value">
-                          {b.createdByRole === 'owner' ? '👑' : b.createdByRole === 'sale' ? '🏷️' : '👥'} {b.createdByRole}
-                        </span>
-                      </div>
-                    </div>
+                        <div className="modal-body">
+                          <div className="booking-detail-grid">
+                            <div className="booking-detail-item">
+                              <span className="booking-detail-label">Check-in</span>
+                              <span className="booking-detail-value">📅 {formatDate(b.checkin)}</span>
+                            </div>
+                            <div className="booking-detail-item">
+                              <span className="booking-detail-label">Check-out</span>
+                              <span className="booking-detail-value">📅 {formatDate(b.checkout)}</span>
+                            </div>
+                            <div className="booking-detail-item">
+                              <span className="booking-detail-label">Số đêm</span>
+                              <span className="booking-detail-value">🌙 {calcNights(b.checkin, b.checkout)} đêm</span>
+                            </div>
+                            <div className="booking-detail-item">
+                              <span className="booking-detail-label">Tổng tiền</span>
+                              <span className="booking-detail-value" style={{ color: 'var(--forest)', fontWeight: 700 }}>
+                                💰 {fmtMoney(b.total)}
+                              </span>
+                            </div>
+                            {canSeePrivate && b.phone && (
+                              <div className="booking-detail-item">
+                                <span className="booking-detail-label">Điện thoại</span>
+                                <span className="booking-detail-value">📞 {b.phone}</span>
+                              </div>
+                            )}
+                            {canSeePrivate && b.email && (
+                              <div className="booking-detail-item">
+                                <span className="booking-detail-label">Email</span>
+                                <span className="booking-detail-value">✉️ {b.email}</span>
+                              </div>
+                            )}
+                            {!canSeePrivate && (
+                              <div className="booking-detail-item" style={{ gridColumn: '1 / -1' }}>
+                                <span style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', fontStyle: 'italic' }}>
+                                  🔒 Thông tin khách được ẩn — chỉ hiển thị với người tạo booking
+                                </span>
+                              </div>
+                            )}
+                            <div className="booking-detail-item">
+                              <span className="booking-detail-label">Tạo bởi</span>
+                              <span className="booking-detail-value">
+                                {b.createdByRole === 'owner' ? '👑' : b.createdByRole === 'sale' ? '🏷️' : '👥'} {b.createdByRole}
+                              </span>
+                            </div>
+                          </div>
+                      </>
+                    );
+                  })()}
                     {b.note && (
                       <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--parchment)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', color: 'var(--ink-light)' }}>
                         📝 {b.note}
@@ -590,6 +690,8 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
         }
 
         .villa-info-name { font-family: var(--font-display); font-size: 1rem; color: var(--forest-deep); }
+        .hotline-link { color: var(--forest); text-decoration: none; font-weight: 700; }
+        .hotline-link:hover { text-decoration: underline; color: var(--forest-deep); }
         .villa-info-meta { font-size: 0.82rem; color: var(--ink-muted); flex: 1; }
         .booking-count   { font-size: 0.8rem; font-weight: 600; color: var(--forest); background: var(--sage-pale); padding: 3px 10px; border-radius: 99px; }
 
