@@ -51,9 +51,10 @@ export function formatDateRange(checkin: string, checkout: string): string {
  * @example calcNights('2026-04-20', '2026-04-23') → 3
  */
 export function calcNights(checkin: string, checkout: string): number {
-  return Math.max(1, Math.round(
-    (new Date(checkout).getTime() - new Date(checkin).getTime()) / 86_400_000
-  ));
+  // Dùng UTC noon để tránh timezone shift
+  const ci = new Date(checkin.slice(0, 10)  + 'T12:00:00Z');
+  const co = new Date(checkout.slice(0, 10) + 'T12:00:00Z');
+  return Math.max(1, Math.round((co.getTime() - ci.getTime()) / 86_400_000));
 }
 
 /**
@@ -130,9 +131,11 @@ export function todayISO(): string {
  * @example addDays('2026-04-20', 3) → '2026-04-23'
  */
 export function addDays(iso: string, days: number): string {
-  const d = new Date(iso + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  // Dùng UTC noon để tránh timezone shift trong browser (Vietnam UTC+7)
+  // 'YYYY-MM-DD' + 'T12:00:00Z' → parse as UTC noon → setUTCDate an toàn
+  const d = new Date(iso.slice(0, 10) + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -141,11 +144,12 @@ export function addDays(iso: string, days: number): string {
  */
 export function dateRange(start: string, end: string): string[] {
   const dates: string[] = [];
-  let d    = new Date(start + 'T00:00:00');
-  const endD = new Date(end   + 'T00:00:00');
+  // Dùng UTC noon để tránh timezone shift trong browser (Vietnam UTC+7)
+  let d      = new Date(start.slice(0, 10) + 'T12:00:00Z');
+  const endD = new Date(end.slice(0, 10)   + 'T12:00:00Z');
   while (d < endD) {
-    dates.push(d.toISOString().split('T')[0]);
-    d.setDate(d.getDate() + 1);
+    dates.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() + 1);
   }
   return dates;
 }
