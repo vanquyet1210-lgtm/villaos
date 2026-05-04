@@ -380,7 +380,11 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                 className={`villa-tab${v.id === selectedVillaId ? ' active' : ''}`}
                 onClick={() => setSelectedVillaId(v.id)}
               >
-                {v.emoji} {v.name}
+                <span style={{ fontSize: '1.2rem' }}>{v.emoji}</span>
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{v.name}</span>
+                  <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>🛏 {v.bedrooms} phòng · 👥 {v.adults} người</span>
+                </span>
               </button>
             ))}
           </div>
@@ -653,107 +657,50 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
       <style>{`
         .cal-shell { display: flex; flex-direction: column; gap: 16px; }
 
+        /* ── Villa Selector: horizontal scroll cards ── */
         .villa-selector {
-          display:   flex;
-          gap:       8px;
-          flex-wrap: wrap;
+          display:     flex;
+          gap:         10px;
+          overflow-x:  auto;
+          padding:     4px 2px 10px;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
         }
+        .villa-selector::-webkit-scrollbar { display: none; }
 
         .villa-tab {
-          padding:       8px 16px;
-          border:        1.5px solid var(--stone);
-          border-radius: 99px;
-          background:    var(--white);
-          font-family:   var(--font-body);
-          font-size:     0.875rem;
-          cursor:        pointer;
-          transition:    all .15s;
-          color:         var(--ink);
+          flex:           0 0 auto;
+          display:        flex;
+          align-items:    center;
+          gap:            8px;
+          padding:        10px 14px;
+          border:         1.5px solid var(--stone);
+          border-radius:  14px;
+          background:     var(--white);
+          font-family:    var(--font-body);
+          font-size:      0.875rem;
+          cursor:         pointer;
+          color:          var(--ink-muted);
+          transition:     all .15s;
+          white-space:    nowrap;
+          box-shadow:     0 1px 4px rgba(0,0,0,.04);
+          min-width:      120px;
         }
-
-        .villa-tab:hover  { border-color: var(--sage); background: var(--sage-pale); }
+        .villa-tab:hover {
+          border-color: var(--sage);
+          background:   var(--sage-pale);
+          color:        var(--forest);
+          box-shadow:   0 2px 8px rgba(0,0,0,.08);
+        }
         .villa-tab.active {
           background:   var(--forest);
           border-color: var(--forest);
-          color:        white;
+          color:        #fff;
           font-weight:  600;
+          box-shadow:   0 3px 10px rgba(45,90,45,.25);
         }
 
-        .villa-info-bar {
-          display:       flex;
-          align-items:   center;
-          gap:           12px;
-          padding:       12px 16px;
-          background:    var(--white);
-          border-radius: var(--radius-md);
-          border:        1px solid rgba(180,212,195,.3);
-          flex-wrap:     wrap;
-        }
-
-        .villa-info-name { font-family: var(--font-display); font-size: 1rem; color: var(--forest-deep); }
-        .hotline-link { color: var(--forest); text-decoration: none; font-weight: 700; }
-        .hotline-link:hover { text-decoration: underline; color: var(--forest-deep); }
-        .villa-info-meta { font-size: 0.82rem; color: var(--ink-muted); flex: 1; }
-        .booking-count   { font-size: 0.8rem; font-weight: 600; color: var(--forest); background: var(--sage-pale); padding: 3px 10px; border-radius: 99px; }
-
-        .booking-summary {
-          display:       flex;
-          gap:           16px;
-          padding:       10px 14px;
-          background:    var(--sage-pale);
-          border-radius: var(--radius-md);
-          font-size:     0.9rem;
-          font-weight:   600;
-          color:         var(--forest);
-        }
-
-        .status-toggle { display: flex; gap: 8px; }
-        .status-btn {
-          flex: 1;
-          padding:       8px 12px;
-          border:        1.5px solid var(--stone);
-          border-radius: var(--radius-md);
-          background:    var(--white);
-          font-family:   var(--font-body);
-          font-size:     0.85rem;
-          cursor:        pointer;
-          transition:    all .15s;
-          color:         var(--ink);
-        }
-        .status-btn.active.confirmed { background: var(--sage-pale); border-color: var(--sage); color: var(--forest); font-weight: 700; }
-        .status-btn.active.hold      { background: var(--amber-light); border-color: var(--amber); color: var(--amber); font-weight: 700; }
-
-        .booking-detail-grid {
-          display:               grid;
-          grid-template-columns: 1fr 1fr;
-          gap:                   10px;
-        }
-
-        .booking-detail-item {
-          display:        flex;
-          flex-direction: column;
-          gap:            2px;
-          padding:        10px 12px;
-          background:     var(--parchment);
-          border-radius:  var(--radius-md);
-        }
-
-        .booking-detail-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); font-weight: 700; }
-        .booking-detail-value { font-size: 0.9rem; color: var(--ink); }
-
-        .form-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-        .form-row .field-group { flex: 1; min-width: 120px; }
-        .field-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
-        .field-group label { font-size: 0.82rem; font-weight: 600; color: var(--forest); text-transform: uppercase; letter-spacing: 0.03em; }
-        .field-group input, .field-group select {
-          padding: 9px 12px; border: 1.5px solid var(--stone); border-radius: var(--radius-md);
-          font-family: var(--font-body); font-size: 0.9rem; color: var(--ink);
-          outline: none; transition: border-color .15s;
-        }
-        .field-group input:focus, .field-group select:focus { border-color: var(--sage); }
-
-        /* ── Villa Filter ── */
-        .villa-filter-bar {
+                .villa-filter-bar {
           display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
         }
         .villa-filter-search {
