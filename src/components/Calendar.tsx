@@ -311,8 +311,8 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
     const txt    = textOf(status);
 
     // Bar height: dải nằm giữa ô, cao 20px
-    const BAR_TOP    = '28px';
-    const BAR_HEIGHT = '20px';
+    const BAR_TOP    = '24px';
+    const BAR_HEIGHT = '26px';
 
     // Helper: render bar strip + optional name label
     const Strip = ({
@@ -377,6 +377,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '33.3%', right: '0',
               background: bar,
+              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
             }} />
@@ -384,13 +385,21 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               <span style={{
                 position: 'absolute',
                 top: BAR_TOP, height: BAR_HEIGHT,
-                left: 'calc(33.3% + 4px)', right: '2px',
-                zIndex: 3, fontSize: '0.62rem', fontWeight: 700,
-                color: '#fff', display: 'flex', alignItems: 'center',
-                overflow: 'hidden', whiteSpace: 'nowrap',
+                left: 'calc(33.3% + 5px)', right: '3px',
+                zIndex: 3,
+                display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                overflow: 'hidden',
                 pointerEvents: 'none',
+                lineHeight: 1.2,
               }}>
-                {barLabel}
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {info.fullName ?? barLabel}
+                </span>
+                {saleLabel && (
+                  <span style={{ fontSize: '0.56rem', color: 'rgba(255,255,255,.85)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {saleLabel}
+                  </span>
+                )}
               </span>
             )}
           </>
@@ -409,6 +418,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '0', right: '0',
               background: bar,
+              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
               zIndex: 2, pointerEvents: 'none',
             }} />
           </>
@@ -798,7 +808,7 @@ export default function Calendar({
 
         .cal-day {
           position:       relative;
-          min-height:     62px;
+          min-height:     68px;
           border-radius:  6px;
           overflow:       visible;
           display:        flex;

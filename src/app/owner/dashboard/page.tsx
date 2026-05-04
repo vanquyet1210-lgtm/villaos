@@ -331,64 +331,85 @@ export default async function OwnerDashboardPage() {
         }
 
         /* Villa grid */
+        /* ── Villa grid: horizontal scroll ── */
         .villa-grid {
           display: flex;
-          flex-direction: column;
-          gap: 12px;
+          flex-direction: row;
+          gap: 14px;
+          overflow-x: auto;
+          padding-bottom: 8px;
+          scrollbar-width: none; /* Firefox */
+          -ms-overflow-style: none;
         }
+        .villa-grid::-webkit-scrollbar { display: none; }
 
         .villa-card {
-          border: 1px solid rgba(180,212,195,.3);
-          border-radius: var(--radius-md);
-          padding: 14px 16px;
-          transition: box-shadow .12s, border-color .12s;
+          flex: 0 0 280px;
+          min-width: 280px;
+          border: 1.5px solid rgba(180,212,195,.35);
+          border-radius: 16px;
+          padding: 16px;
+          transition: box-shadow .15s, border-color .15s, transform .12s;
           background: var(--white);
+          box-shadow: 0 2px 8px rgba(0,0,0,.04);
         }
-        .villa-card:hover { box-shadow: var(--shadow-sm); border-color: var(--sage); }
-        .villa-occupied { border-left: 3px solid var(--forest); background: linear-gradient(to right, rgba(180,212,195,.08), var(--white)); }
+        .villa-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,.09); border-color: var(--sage); transform: translateY(-2px); }
+        .villa-occupied {
+          border-color: var(--forest);
+          background: linear-gradient(135deg, rgba(180,212,195,.12) 0%, var(--white) 60%);
+        }
 
         .villa-card-top {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 12px;
           margin-bottom: 12px;
         }
         .villa-emoji-wrap { position: relative; flex-shrink: 0; }
-        .villa-emoji { font-size: 1.8rem; }
+        .villa-emoji {
+          font-size: 2.2rem;
+          display: block;
+          width: 48px; height: 48px;
+          background: rgba(180,212,195,.15);
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+        }
         .villa-status-dot {
           position: absolute;
-          bottom: 0; right: 0;
-          width: 10px; height: 10px;
+          top: -2px; right: -2px;
+          width: 12px; height: 12px;
           border-radius: 50%;
           border: 2px solid var(--white);
+          box-shadow: 0 1px 3px rgba(0,0,0,.2);
         }
-        .dot-occupied { background: var(--forest); }
-        .dot-free     { background: var(--stone); }
+        .dot-occupied { background: #22c55e; }
+        .dot-free     { background: #94a3b8; }
 
         .villa-card-info { flex: 1; min-width: 0; }
         .villa-card-name {
           font-weight: 700;
-          font-size: 0.95rem;
+          font-size: 1rem;
           color: var(--forest-deep);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          line-height: 1.3;
         }
-        .villa-card-meta { font-size: 0.78rem; color: var(--ink-muted); margin-top: 2px; }
+        .villa-card-meta { font-size: 0.76rem; color: var(--ink-muted); margin-top: 3px; line-height: 1.5; }
 
-        .villa-card-status { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+        .villa-card-status { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; align-items: flex-end; }
 
-        /* Villa stats bar */
+        /* Stats row */
         .villa-card-stats {
-          display: grid;
-          grid-template-columns: repeat(3,1fr);
-          gap: 8px;
+          display: flex;
+          gap: 0;
           padding: 10px 0;
-          border-top: 1px solid var(--sage-pale);
-          border-bottom: 1px solid var(--sage-pale);
-          margin-bottom: 10px;
+          border-top: 1px solid rgba(180,212,195,.25);
+          border-bottom: 1px solid rgba(180,212,195,.25);
+          margin-bottom: 12px;
         }
-        .vstat { text-align: center; }
-        .vstat-val { display: block; font-weight: 700; font-size: 0.9rem; color: var(--forest-deep); }
-        .vstat-lbl { font-size: 0.7rem; color: var(--ink-muted); }
+        .vstat { flex: 1; text-align: center; }
+        .vstat + .vstat { border-left: 1px solid rgba(180,212,195,.25); }
+        .vstat-val { display: block; font-weight: 700; font-size: 0.88rem; color: var(--forest-deep); line-height: 1.4; }
+        .vstat-lbl { font-size: 0.68rem; color: var(--ink-muted); }
 
         .villa-card-actions { display: flex; gap: 8px; }
 
