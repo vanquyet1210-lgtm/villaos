@@ -377,7 +377,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '33.3%', right: '0',
               background: bar,
-              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
+              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
             }} />
@@ -418,7 +418,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '0', right: '0',
               background: bar,
-              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
+              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               zIndex: 2, pointerEvents: 'none',
             }} />
           </>
@@ -439,7 +439,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '0', right: '66.7%',
               background: bar,
-              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
+              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
             } />
@@ -465,7 +465,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '0', right: '66.7%',
               background: lBar,
-              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
+              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
             }} />
@@ -475,7 +475,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '33.3%', right: '0',
               background: rBar,
-              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
+              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
             }} />
@@ -510,7 +510,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '33.3%', right: '0',
               background: '#7aaba3',
-              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
+              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
             } />
@@ -537,7 +537,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '0', right: '0',
               background: '#7aaba3',
-              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
+              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               zIndex: 2, pointerEvents: 'none',
             } />
           </>
@@ -556,7 +556,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '0', right: '66.7%',
               background: '#7aaba3',
-              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
+              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
             } />
@@ -588,7 +588,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '33.3%', right: '0',
               background: rBar,
-              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
+              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
             }} />
@@ -625,7 +625,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               top: BAR_TOP, height: BAR_HEIGHT,
               left: '0', right: '66.7%',
               background: lBar,
-              backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)`,
+              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
             }} />
