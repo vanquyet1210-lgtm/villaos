@@ -7,5 +7,13 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
   if (!session) redirect('/auth/login');
   const { profile } = session;
   const isAdmin = profile.role === 'admin';
-  return <OwnerLayoutClient profile={profile} isAdmin={isAdmin}>{children}</OwnerLayoutClient>;
+  return (
+    <OwnerLayoutClient
+      profileName={profile.name}
+      profileBrand={(profile as any).brand ?? ''}
+      isAdmin={isAdmin}
+    >
+      {children}
+    </OwnerLayoutClient>
+  );
 }

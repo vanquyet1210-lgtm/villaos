@@ -1,27 +1,22 @@
 'use client';
-// ╔══════════════════════════════════════════════════════════════╗
-// ║  VillaOS v7 — app/owner/OwnerLayoutClient.tsx               ║
-// ║  Mobile-first shell: top bar + bottom nav                   ║
-// ╚══════════════════════════════════════════════════════════════╝
-
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { Profile } from '@/types/database';
 
 interface Props {
   children: React.ReactNode;
-  profile: Profile;
+  profileName: string;
+  profileBrand: string;
   isAdmin: boolean;
 }
 
-export default function OwnerLayoutClient({ children, profile, isAdmin }: Props) {
+export default function OwnerLayoutClient({ children, profileName, profileBrand, isAdmin }: Props) {
   const path = usePathname();
 
   const tabs = [
-    { href: '/owner/calendar', icon: CalIcon,   label: 'Lịch phòng'   },
-    { href: '/owner/holds',    icon: HoldIcon,  label: 'Yêu cầu giữ', badge: true },
-    { href: '/owner/villas',   icon: HomeIcon,  label: 'Villa của tôi' },
-    { href: '/owner/more',     icon: MoreIcon,  label: 'Thêm'          },
+    { href: '/owner/calendar', label: 'Lịch phòng',    Icon: CalIcon   },
+    { href: '/owner/holds',    label: 'Yêu cầu giữ',   Icon: HoldIcon, badge: true },
+    { href: '/owner/villas',   label: 'Villa của tôi',  Icon: HomeIcon  },
+    { href: '/owner/more',     label: 'Thêm',           Icon: MoreIcon  },
   ];
 
   return (
@@ -43,17 +38,16 @@ export default function OwnerLayoutClient({ children, profile, isAdmin }: Props)
               <span style={{ fontWeight:700, fontSize:'1rem', color:'#1a3a2a' }}>VillaOS</span>
             </div>
             <div style={{ fontSize:'0.7rem', color:'#888', marginTop:-1 }}>
-              {isAdmin ? '⚡ Super Admin' : `Chủ Villa • ${profile.brand || profile.name}`}
+              {isAdmin ? '⚡ Super Admin' : `Chủ Villa • ${profileBrand || profileName}`}
             </div>
           </div>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          {/* Bell */}
           <div style={{ position:'relative' }}>
             <button style={{
               background:'#f5f5f0', border:'none', borderRadius:'50%',
-              width:36, height:36, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
-              fontSize:18,
+              width:36, height:36, cursor:'pointer',
+              display:'flex', alignItems:'center', justifyContent:'center', fontSize:18,
             }}>🔔</button>
             <span style={{
               position:'absolute', top:0, right:0,
@@ -63,7 +57,6 @@ export default function OwnerLayoutClient({ children, profile, isAdmin }: Props)
               border:'2px solid #fff',
             }}>5</span>
           </div>
-          {/* Add */}
           <Link href="/owner/calendar" style={{
             background:'#2e7d52', color:'#fff', borderRadius:'50%',
             width:36, height:36, display:'flex', alignItems:'center', justifyContent:'center',
@@ -86,9 +79,8 @@ export default function OwnerLayoutClient({ children, profile, isAdmin }: Props)
       }}>
         {tabs.map((tab, i) => {
           const active = path.startsWith(tab.href);
-          const Icon = tab.icon;
+          const { Icon } = tab;
           if (i === 1) {
-            // Yêu cầu giữ — center special
             return (
               <Link key={tab.href} href={tab.href} style={{
                 flex:1, display:'flex', flexDirection:'column',
@@ -123,7 +115,7 @@ export default function OwnerLayoutClient({ children, profile, isAdmin }: Props)
             </Link>
           );
         })}
-        {/* FAB center */}
+        {/* FAB */}
         <Link href="/owner/calendar" style={{
           position:'absolute', left:'50%', top:-20,
           transform:'translateX(-50%)',
@@ -138,7 +130,6 @@ export default function OwnerLayoutClient({ children, profile, isAdmin }: Props)
   );
 }
 
-// ── Icons ─────────────────────────────────────────────────────────
 function CalIcon({ active }: { active: boolean }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? '#2e7d52' : '#bbb'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
