@@ -372,7 +372,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '33.3%', right: '-1px',
+              left: '33.3%', right: '0',
               background: bar,
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
@@ -404,7 +404,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '-1px', right: '-1px',
+              left: '0', right: '0',
               background: bar,
               zIndex: 2, pointerEvents: 'none',
             }} />
@@ -424,7 +424,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '-1px', right: '66.7%',
+              left: '0', right: '66.7%',
               background: bar,
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
@@ -449,7 +449,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '-1px', right: '66.7%',
+              left: '0', right: '66.7%',
               background: lBar,
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
@@ -458,7 +458,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '33.3%', right: '-1px',
+              left: '33.3%', right: '0',
               background: rBar,
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
@@ -492,7 +492,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '33.3%', right: '-1px',
+              left: '33.3%', right: '0',
               background: '#7aaba3',
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
@@ -518,7 +518,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '-1px', right: '-1px',
+              left: '0', right: '0',
               background: '#7aaba3',
               zIndex: 2, pointerEvents: 'none',
             }} />
@@ -536,7 +536,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '-1px', right: '66.7%',
+              left: '0', right: '66.7%',
               background: '#7aaba3',
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
@@ -567,7 +567,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '50%', right: '-1px',
+              left: '50%', right: '0',
               background: rBar,
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
@@ -603,7 +603,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
             <div style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
-              left: '-1px', right: '50%',
+              left: '0', right: '50%',
               background: lBar,
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
@@ -777,9 +777,9 @@ export default function Calendar({
 
         .cal-grid {
           display:               grid;
-          grid-template-columns: repeat(7, 1fr);
+          grid-template-columns: repeat(7, minmax(0, 1fr));
           gap:                   0;
-          padding:               6px 4px;
+          padding:               6px 2px;
           background:            var(--white);
         }
 
@@ -806,6 +806,7 @@ export default function Calendar({
           transition:     opacity .1s, background .1s;
           border:         1px solid rgba(180,212,195,.18);
           margin:         1px;
+          min-width:      0; /* prevent bar overflow on mobile */
         }
 
         .cal-day:hover:not(.cal-past):not(.cal-no-cursor) {
