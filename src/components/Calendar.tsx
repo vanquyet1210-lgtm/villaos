@@ -230,23 +230,26 @@ function applyLock(
     return;
   }
 
-  // Booking tồn tại — chỉ split tại điểm giao, KHÔNG ghi đè middle
-  if (lockType === 'locked-checkin' && existing.type === 'checkout') {
-    // Lock checkin vào ngày checkout của booking → split: trái=booking, phải=lock
+  // Booking tồn tại — split tại điểm giao
+  const isCheckout = existing.type === 'checkout';
+  const isCheckin  = existing.type === 'checkin';
+
+  if ((lockType === 'locked-checkin' || lockType === 'locked-middle') && isCheckout) {
+    // Lock overlap với ngày checkout booking → trái=booking checkout (1/3), phải=lock (2/3)
     map[ds] = {
       ...existing, type: 'locked-split-right',
       leftStatus:   existing.status,
       leftCustomer: existing.customer,
-      isLock:       true,  // có phần lock → owner có thể mở khóa
+      isLock:       true,
     };
-  } else if (lockType === 'locked-checkout' && existing.type === 'checkin') {
-    // Lock checkout vào ngày checkin của booking → split: trái=lock, phải=booking
+  } else if ((lockType === 'locked-checkout' || lockType === 'locked-middle') && isCheckin) {
+    // Lock overlap với ngày checkin booking → trái=lock (1/3), phải=booking (2/3)
     map[ds] = {
       ...existing, type: 'locked-split-left',
       rightCustomer: existing.customer,
       rightStatus:   existing.status,
       leftStatus:    'locked',
-      isLock:        true,  // có phần lock → owner có thể mở khóa
+      isLock:        true,
     };
   }
   // Mọi trường hợp khác (middle, checkout+checkin...) → giữ nguyên booking
