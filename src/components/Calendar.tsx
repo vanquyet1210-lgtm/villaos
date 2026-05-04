@@ -237,6 +237,7 @@ function applyLock(
       ...existing, type: 'locked-split-right',
       leftStatus:   existing.status,
       leftCustomer: existing.customer,
+      isLock:       true,  // có phần lock → owner có thể mở khóa
     };
   } else if (lockType === 'locked-checkout' && existing.type === 'checkin') {
     // Lock checkout vào ngày checkin của booking → split: trái=lock, phải=booking
@@ -245,6 +246,7 @@ function applyLock(
       rightCustomer: existing.customer,
       rightStatus:   existing.status,
       leftStatus:    'locked',
+      isLock:        true,  // có phần lock → owner có thể mở khóa
     };
   }
   // Mọi trường hợp khác (middle, checkout+checkin...) → giữ nguyên booking

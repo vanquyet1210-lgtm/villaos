@@ -147,10 +147,10 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
     // Checkout day hoặc locked-checkout: nửa phải trống → cho tạo booking mới
     const isCheckoutOnly = info?.type === 'checkout' || info?.type === 'locked-checkout';
 
-    // ⚠️ Nếu ngày đang bị khóa: owner mở khóa, sale cảnh báo
-    if (info?.isLock && !isCheckoutOnly) {
+    // ⚠️ Ngày có phần bị khóa (kể cả split) → owner mở khóa, sale cảnh báo
+    if (info?.isLock) {
       if (userRole === 'owner' || userRole === 'admin') {
-        // Owner click vào ngày khóa → mở modal tạo (có nút Khóa/Mở khóa)
+        // Owner click vào ngày có lock → mở modal (có nút Mở khóa)
         if (ds >= todayISO()) openCreateModal(ds);
       } else {
         show('warning', '🔒 Ngày bị khóa', 'Chủ nhà đã khóa ngày này. Không thể đặt phòng.');
@@ -164,7 +164,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
         const found = bookings.find(b => b.id === info.bkId);
         if (found) { openViewModal(found); return; }
       }
-      // Không tìm thấy booking → cảnh báo chung
       const statusLabel = info.status === 'hold' ? 'Hold' : 'Confirmed';
       show('warning', `📅 Ngày đã có ${statusLabel}`, 'Ngày này đã được đặt. Vui lòng chọn ngày khác.');
       return;
