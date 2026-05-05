@@ -18,6 +18,7 @@ export default async function SaleLayout({ children }: { children: React.ReactNo
         <nav className="sidebar-nav">
           <Link href="/sale/calendar" className="nav-item"><span className="nav-icon">📅</span> Lịch villa</Link>
           <Link href="/sale/bookings" className="nav-item"><span className="nav-icon">📋</span> Booking của tôi</Link>
+          <Link href="/sale/customers" className="nav-item"><span className="nav-icon">👥</span> Khách hàng</Link>
         </nav>
         <div className="sidebar-footer">
           <div style={{ padding: '8px 14px', fontSize: '0.82rem', color: 'rgba(255,255,255,.5)', marginBottom: 8 }}>{profile.name}</div>
