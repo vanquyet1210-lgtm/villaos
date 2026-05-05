@@ -105,24 +105,17 @@ function buildClickMap(
     addRange(seg, ci, co);
   }
 
-  // Locked dates
-  if (lockedDates.length) {
-    const sorted = [...lockedDates].map(d => d.split('T')[0]).sort();
-    let start = sorted[0], end = sorted[0];
-    const flush = () => {
-      const co = addDays(end, 1);
-      const seg: BarSegment = {
-        bkId: `lock-${start}`, status: 'locked',
-        customer: '🔒', fullName: 'Ngày khóa',
-        total: 0, checkin: start, checkout: co, type: 'locked',
-      };
-      addRange(seg, start, co);
+  // Locked dates — mỗi ngày khóa = 1 đêm độc lập (không gộp range)
+  // lockedDate 'YYYY-MM-DD' = đêm đó, thanh từ nửa phải ngày D đến nửa trái ngày D+1
+  for (const raw of lockedDates) {
+    const d  = raw.split('T')[0];
+    const co = addDays(d, 1);
+    const seg: BarSegment = {
+      bkId: `lock-${d}`, status: 'locked',
+      customer: '🔒', fullName: 'Ngày khóa',
+      total: 0, checkin: d, checkout: co, type: 'locked',
     };
-    for (let i = 1; i < sorted.length; i++) {
-      if (sorted[i] === addDays(end, 1)) { end = sorted[i]; }
-      else { flush(); start = sorted[i]; end = sorted[i]; }
-    }
-    flush();
+    addRange(seg, d, co);
   }
 
   return map;
@@ -230,26 +223,17 @@ function buildBarPieces(
     addPieces(seg, ci, co, `bk-${b.id}`);
   }
 
-  // Locked
-  if (lockedDates.length) {
-    const sorted = [...lockedDates].map(d => d.split('T')[0]).sort();
-    let start = sorted[0], end = sorted[0];
-    let lockIdx = 0;
-    const flush = () => {
-      const co = addDays(end, 1);
-      const seg: BarSegment = {
-        bkId: `lock-${lockIdx}`, status: 'locked',
-        customer: '🔒', fullName: 'Ngày khóa',
-        total: 0, checkin: start, checkout: co, type: 'locked',
-      };
-      addPieces(seg, start, co, `lock-${lockIdx}`);
-      lockIdx++;
+  // Locked — mỗi ngày khóa = 1 đêm độc lập, không gộp range
+  // Giống booking: checkin = ngày D (bắt đầu nửa phải), checkout = D+1 (kết thúc nửa trái)
+  for (const raw of lockedDates) {
+    const d  = raw.split('T')[0];
+    const co = addDays(d, 1);
+    const seg: BarSegment = {
+      bkId: `lock-${d}`, status: 'locked',
+      customer: '🔒', fullName: 'Ngày khóa',
+      total: 0, checkin: d, checkout: co, type: 'locked',
     };
-    for (let i = 1; i < sorted.length; i++) {
-      if (sorted[i] === addDays(end, 1)) { end = sorted[i]; }
-      else { flush(); start = sorted[i]; end = sorted[i]; }
-    }
-    flush();
+    addPieces(seg, d, co, `lock-${d}`);
   }
 
   // Assign vertical slots per row — mỗi piece được assign độc lập theo từng row
