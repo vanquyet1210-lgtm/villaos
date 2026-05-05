@@ -51,10 +51,11 @@ const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : 
 
 // ── Constants ─────────────────────────────────────────────────────
 
-const CELL_H   = 68;   // px — height của 1 ô ngày
-const BAR_T    = 28;   // px từ top ô đến top bar
-const BAR_H    = 22;   // px chiều cao bar
-const BAR_R    = 8;    // px border-radius đầu/cuối bar
+const CELL_H   = 72;   // px — height của 1 ô ngày
+const BAR_T    = 26;   // px từ top ô đến top bar đầu tiên
+const BAR_H    = 20;   // px chiều cao bar
+const BAR_GAP  = 3;    // px khoảng cách giữa 2 bar chồng nhau
+const BAR_R    = 7;    // px border-radius đầu/cuối bar
 
 // ── Build click map ───────────────────────────────────────────────
 
@@ -141,6 +142,7 @@ interface BarPiece {
   isFirst:   boolean;      // rounded left
   isLast:    boolean;      // rounded right
   seg:       BarSegment;
+  slot:      number;       // 0,1,2... — vị trí vertical trong row (để stack)
 }
 
 function buildBarPieces(
@@ -194,6 +196,7 @@ function buildBarPieces(
         isFirst:  isFirstSeg && visStart === ci,
         isLast:   isLastSeg  && visEnd   === co,
         seg,
+        slot:     0,   // assigned later
       });
 
       cur = segEnd + 1;
@@ -246,6 +249,37 @@ function buildBarPieces(
       else { flush(); start = sorted[i]; end = sorted[i]; }
     }
     flush();
+  }
+
+  // Assign vertical slots per row to avoid overlap
+  // Dùng interval scheduling: mỗi row, sắp xếp pieces theo colStart,
+  // assign slot thấp nhất không bị overlap
+  const rowSlotMap: Record<string, number[]> = {}; // key=`row-slot`, value=colEnd của piece chiếm slot đó
+
+  // Group pieces by (bkId, row) — mỗi booking có 1 slot duy nhất trong mỗi row
+  // Nhưng thực ra mỗi booking chỉ có 1 piece per row, nên slot assign per booking globally
+  const bkSlot: Record<string, number> = {};
+  // Sort pieces by row then colStart for greedy slot assignment
+  pieces.sort((a, b) => a.row !== b.row ? a.row - b.row : a.colStart - b.colStart);
+
+  // Per-row slot tracking: slot[i] = colEnd của booking cuối cùng ở slot i
+  const rowSlots: Record<number, number[]> = {};
+  for (const p of pieces) {
+    if (bkSlot[p.seg.bkId] !== undefined) {
+      p.slot = bkSlot[p.seg.bkId];
+      continue;
+    }
+    if (!rowSlots[p.row]) rowSlots[p.row] = [];
+    const slots = rowSlots[p.row];
+    // Tìm slot trống (colStart > colEnd của slot đó)
+    let assigned = -1;
+    for (let s = 0; s < slots.length; s++) {
+      if (p.colStart > slots[s]) { assigned = s; break; }
+    }
+    if (assigned === -1) { assigned = slots.length; slots.push(p.colEnd); }
+    else { slots[assigned] = p.colEnd; }
+    p.slot = assigned;
+    bkSlot[p.seg.bkId] = assigned;
   }
 
   return pieces;
@@ -301,7 +335,7 @@ export default function Calendar({
     // right = (7 - colEnd - 1 + rightFrac) / 7 * 100%  →  (6 - colEnd + rightFrac) / 7 * 100%
     const leftPct  = ((colStart + leftFrac)      / 7) * 100;
     const rightPct = ((6 - colEnd + rightFrac)   / 7) * 100;
-    const topPx    = row * CELL_H + BAR_T;
+    const topPx    = row * CELL_H + BAR_T + p.slot * (BAR_H + BAR_GAP);
 
     const label = p.seg.saleLabel ?? p.seg.fullName ?? p.seg.customer;
 
@@ -404,8 +438,8 @@ export default function Calendar({
         return (
           <div key={`tint-${q.key}`} style={{
             position:      'absolute',
-            top:           q.row * CELL_H,
-            height:        CELL_H,
+            top:           q.row * CELL_H + BAR_T + q.slot * (BAR_H + BAR_GAP) - 2,
+            height:        BAR_H + 4,
             left:          `${leftPct}%`,
             right:         `${rightPct}%`,
             background:    c.bg,
