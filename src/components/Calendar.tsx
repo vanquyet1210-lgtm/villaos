@@ -192,7 +192,7 @@ function buildBarPieces(
       //   → công thức render: right% = (6 - colEnd + rightFrac)/7*100
       //                              = (6 - colEnd + 6/8)/7*100
       //   → thanh kết thúc tại colEnd + 1 - 6/8 = colEnd + 2/8 ✓
-      const leftFrac  = isFirstSeg && visStart === ci ? (5 / 8) : 0;
+      const leftFrac  = isFirstSeg && visStart === ci ? 0.35 : 0;
       const rightFrac = isLastSeg  && visEnd   === co ? (6 / 8) : 0;
 
       pieces.push({
