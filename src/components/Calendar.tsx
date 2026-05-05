@@ -407,8 +407,10 @@ function DayCell({ day, ds, info, today, onClick, readonly, isRowEnd }: DayCellP
                 <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{info.fullName ?? barLabel}</span>
                   {(info.isLastMiddle || isRowEnd) && (info.total ?? 0) > 0 && (
-                    <span style={{ flexShrink: 0, fontSize: '0.6rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                      {new Intl.NumberFormat('vi-VN').format(info.total ?? 0)}đ
+                    <span style={{ flexShrink: 0, fontSize: '0.6rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '3px', maxWidth: '55%' }}>
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {new Intl.NumberFormat('vi-VN').format(info.total ?? 0)}đ
+                      </span>
                       {status === 'confirmed' && (
                         <span style={{
                           width: 14, height: 14, borderRadius: '50%',
@@ -455,7 +457,6 @@ function DayCell({ day, ds, info, today, onClick, readonly, isRowEnd }: DayCellP
               backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               zIndex: 2, pointerEvents: 'none',
             }} />
-            {/* Tổng tiền + tick chỉ hiện ở ngày cuối cùng của bar (cuối thực hoặc cuối dòng) */}
             {showTotal && (info.total ?? 0) > 0 && (
               <span style={{
                 position: 'absolute',
@@ -463,8 +464,9 @@ function DayCell({ day, ds, info, today, onClick, readonly, isRowEnd }: DayCellP
                 right: '4px', zIndex: 3,
                 display: 'flex', alignItems: 'center', gap: '4px',
                 pointerEvents: 'none',
+                maxWidth: '60%',
               }}>
-                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {new Intl.NumberFormat('vi-VN').format(info.total ?? 0)}đ
                 </span>
                 {status === 'confirmed' && (
