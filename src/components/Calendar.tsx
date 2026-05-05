@@ -184,10 +184,10 @@ function buildBarPieces(
       const isFirstSeg = cur === startGI;
       const isLastSeg  = segEnd === endGI;
 
-      // leftFrac: 1/3 nếu là ô checkin thật (bar bắt đầu từ 1/3 ô)
-      const leftFrac  = isFirstSeg && visStart === ci ? 1/3 : 0;
-      // rightFrac: 2/3 nếu là ô checkout thật (bar kết thúc tại 1/3 ô từ trái = 2/3 từ phải)
-      const rightFrac = isLastSeg  && visEnd   === co ? 2/3 : 0;
+      // leftFrac: 40% nếu là ô checkin thật (khách đến chiều, sáng còn trống)
+      const leftFrac  = isFirstSeg && visStart === ci ? 0.40 : 0;
+      // rightFrac: 60% nếu là ô checkout thật (khách đi sáng, chiều còn trống → 40% trái)
+      const rightFrac = isLastSeg  && visEnd   === co ? 0.60 : 0;
 
       pieces.push({
         key:      `${keyPrefix}-${pieceIdx}`,
@@ -262,22 +262,30 @@ function buildBarPieces(
   // Sort pieces by row then colStart for greedy slot assignment
   pieces.sort((a, b) => a.row !== b.row ? a.row - b.row : a.colStart - b.colStart);
 
-  // Per-row slot tracking: slot[i] = colEnd của booking cuối cùng ở slot i
-  const rowSlots: Record<number, number[]> = {};
+  // Per-row slot tracking: dùng colStart thực (bao gồm leftFrac) để so sánh
+  // Hai bar overlap khi: startA < endB AND startB < endA
+  // startA = colStart + leftFrac, endA = colEnd + 1 - rightFrac
+  const rowSlots: Record<number, Array<{ start: number; end: number; slot: number }>> = {};
   for (const p of pieces) {
     if (bkSlot[p.seg.bkId] !== undefined) {
       p.slot = bkSlot[p.seg.bkId];
       continue;
     }
     if (!rowSlots[p.row]) rowSlots[p.row] = [];
-    const slots = rowSlots[p.row];
-    // Tìm slot trống (colStart > colEnd của slot đó)
-    let assigned = -1;
-    for (let s = 0; s < slots.length; s++) {
-      if (p.colStart > slots[s]) { assigned = s; break; }
+    const existing = rowSlots[p.row];
+    const pStart = p.colStart + p.leftFrac;
+    const pEnd   = p.colEnd + 1 - p.rightFrac;
+    // Tìm slot thấp nhất không overlap với bất kỳ piece nào đã có
+    let assigned = 0;
+    let found = false;
+    while (!found) {
+      const conflicts = existing.filter(e => e.slot === assigned &&
+        pStart < e.end - 0.01 && pEnd > e.start + 0.01
+      );
+      if (conflicts.length === 0) found = true;
+      else assigned++;
     }
-    if (assigned === -1) { assigned = slots.length; slots.push(p.colEnd); }
-    else { slots[assigned] = p.colEnd; }
+    existing.push({ start: pStart, end: pEnd, slot: assigned });
     p.slot = assigned;
     bkSlot[p.seg.bkId] = assigned;
   }
