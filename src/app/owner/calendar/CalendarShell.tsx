@@ -5,7 +5,6 @@
 // ╚══════════════════════════════════════════════════════════════╝
 
 import { useState, useTransition, useEffect } from 'react';
-import { createPortal }           from 'react-dom';
 import { useRouter }           from 'next/navigation';
 import Calendar, { type BarSegment } from '@/components/Calendar';
 import { useBookingsRealtime } from '@/hooks/useBookingsRealtime';
@@ -54,6 +53,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   // Optimistic locked dates: update instantly without F5 (FIX 5)
   const [localLockedDates, setLocalLockedDates] = useState<string[] | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [detailVillaId, setDetailVillaId] = useState<string | null>(null);
 
   // ── Villa filter state ─────────────────────────────────────────
   const [showFilter,    setShowFilter]    = useState(false);
@@ -107,8 +107,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   }
 
   const villa = villas.find(v => v.id === selectedVillaId) ?? filteredVillas[0] ?? villas[0];
-
-  useEffect(() => { setShowDetail(false); }, [selectedVillaId]);
+  const detailVilla = villas.find(v => v.id === detailVillaId) ?? villa;
 
   // Realtime bookings (merge server + realtime)
   const bookings = useBookingsRealtime(selectedVillaId, serverBookings);
@@ -374,7 +373,10 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                 className={`villa-card${v.id === selectedVillaId ? ' active' : ''}`}
                 onClick={() => {
                   setSelectedVillaId(v.id);
-                  if (userRole === 'sale') setShowDetail(true);
+                  if (userRole === 'sale') {
+                    setDetailVillaId(v.id);
+                    setShowDetail(true);
+                  }
                 }}
               >
                 {/* Ảnh */}
@@ -425,17 +427,17 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
         <div className="modal-overlay" onClick={() => setShowDetail(false)}>
           <div className="modal modal-detail" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>{villa.emoji} {villa.name}</h3>
+              <h3>{detailVilla.emoji} {detailVilla.name}</h3>
               <button className="modal-close" onClick={() => setShowDetail(false)}>×</button>
             </div>
             <div className="modal-body" style={{ padding: 0 }}>
-              {villa.images && villa.images.length > 0 && (
+              {detailVilla.images && detailVilla.images.length > 0 && (
                 <div className="detail-gallery">
-                  {villa.images.map((src, i) => (
+                  {detailVilla.images.map((src, i) => (
                     <div key={i} className="detail-gallery-cell">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={src} alt={`${villa.name} ${i + 1}`} />
-                      <a className="detail-img-dl" href={src} download={`${villa.name}-${i+1}.jpg`}
+                      <img src={src} alt={`${detailVilla.name} ${i + 1}`} />
+                      <a className="detail-img-dl" href={src} download={`${detailVilla.name}-${i+1}.jpg`}
                         target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>⬇</a>
                     </div>
                   ))}
@@ -445,57 +447,57 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                 <div className="detail-section">
                   <div className="detail-status-row">
                     <span className="detail-status-badge"><span className="detail-status-dot" /> Đang hoạt động</span>
-                    <span className="detail-price">{fmtMoney(villa.price)}<span style={{ fontSize:'0.8rem', fontWeight:400, color:'var(--ink-muted)' }}>/đêm</span></span>
+                    <span className="detail-price">{fmtMoney(detailVilla.price)}<span style={{ fontSize:'0.8rem', fontWeight:400, color:'var(--ink-muted)' }}>/đêm</span></span>
                   </div>
                   <div className="detail-meta-grid">
                     <div className="detail-meta-item">
                       <span className="detail-meta-icon">📍</span>
                       <div>
                         <div className="detail-meta-label">Địa chỉ</div>
-                        <div className="detail-meta-val">{[villa.street, villa.ward, villa.district, villa.province].filter(Boolean).join(', ')}</div>
+                        <div className="detail-meta-val">{[detailVilla.street, detailVilla.ward, detailVilla.district, detailVilla.province].filter(Boolean).join(', ')}</div>
                       </div>
                     </div>
                     <div className="detail-meta-item">
                       <span className="detail-meta-icon">🛏</span>
-                      <div><div className="detail-meta-label">Phòng ngủ</div><div className="detail-meta-val">{villa.bedrooms} phòng</div></div>
+                      <div><div className="detail-meta-label">Phòng ngủ</div><div className="detail-meta-val">{detailVilla.bedrooms} phòng</div></div>
                     </div>
                     <div className="detail-meta-item">
                       <span className="detail-meta-icon">👥</span>
-                      <div><div className="detail-meta-label">Sức chứa</div><div className="detail-meta-val">{villa.adults} người lớn{villa.children > 0 ? ` · ${villa.children} trẻ em` : ''}</div></div>
+                      <div><div className="detail-meta-label">Sức chứa</div><div className="detail-meta-val">{detailVilla.adults} người lớn{detailVilla.children > 0 ? ` · ${detailVilla.children} trẻ em` : ''}</div></div>
                     </div>
-                    {villa.phone && (
+                    {detailVilla.phone && (
                       <div className="detail-meta-item">
                         <span className="detail-meta-icon">📞</span>
                         <div><div className="detail-meta-label">Hotline</div>
-                          <div className="detail-meta-val"><a href={`tel:${villa.phone}`} style={{ color:'var(--forest)', fontWeight:600 }}>{villa.phone}</a></div>
+                          <div className="detail-meta-val"><a href={`tel:${detailVilla.phone}`} style={{ color:'var(--forest)', fontWeight:600 }}>{detailVilla.phone}</a></div>
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
-                {villa.amenities && villa.amenities.length > 0 && (
+                {detailVilla.amenities && detailVilla.amenities.length > 0 && (
                   <div className="detail-section">
                     <div className="detail-section-title">✨ Tiện ích</div>
                     <div className="detail-amenities">
-                      {villa.amenities.map(a => {
+                      {detailVilla.amenities.map(a => {
                         const icons: Record<string,string> = { pool:'🏊', bbq:'🔥', garden:'🌿', gym:'💪', jacuzzi:'🛁', karaoke:'🎤', parking:'🅿️', billiard:'🎱', 'xe đạp':'🚲', wifi:'📶' };
                         return <div key={a} className="detail-amenity-chip"><span>{icons[a]??'✅'}</span><span>{a}</span></div>;
                       })}
                     </div>
                   </div>
                 )}
-                {villa.description && (
+                {detailVilla.description && (
                   <div className="detail-section">
                     <div className="detail-section-title">📝 Giới thiệu villa</div>
-                    <p className="detail-description">{villa.description}</p>
+                    <p className="detail-description">{detailVilla.description}</p>
                   </div>
                 )}
-                {villa.images && villa.images.length > 0 && (
+                {detailVilla.images && detailVilla.images.length > 0 && (
                   <div className="detail-section">
                     <div className="detail-section-title">📸 Tải ảnh gửi khách</div>
                     <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                      {villa.images.map((src, i) => (
-                        <a key={i} href={src} download={`${villa.name}-anh-${i+1}.jpg`}
+                      {detailVilla.images.map((src, i) => (
+                        <a key={i} href={src} download={`${detailVilla.name}-anh-${i+1}.jpg`}
                           target="_blank" rel="noopener noreferrer" className="btn-download">
                           ⬇ Ảnh {i+1}
                         </a>
