@@ -186,11 +186,14 @@ function buildBarPieces(
       const isFirstSeg = cur === startGI;
       const isLastSeg  = segEnd === endGI;
 
-      // Checkin bắt đầu tại 5/8 ô (62.5% từ trái)
-      // Checkout kết thúc tại 2/8 ô (25% từ trái → rightFrac = 1 - 2/8 = 6/8 = 0.75)
-      // → khoảng trống rõ ràng giữa các bar liền nhau
-      const leftFrac  = isFirstSeg && visStart === ci ? (5/8) : 0;
-      const rightFrac = isLastSeg  && visEnd   === co ? (6/8) : 0;
+      // Checkin: bar bắt đầu tại 5/8 ô (62.5% từ trái)  → leftFrac = 5/8
+      // Checkout: bar kết thúc tại 2/8 ô (25% từ trái)
+      //   rightFrac = phần trống bên phải = 1 - 2/8 = 6/8
+      //   → công thức render: right% = (6 - colEnd + rightFrac)/7*100
+      //                              = (6 - colEnd + 6/8)/7*100
+      //   → thanh kết thúc tại colEnd + 1 - 6/8 = colEnd + 2/8 ✓
+      const leftFrac  = isFirstSeg && visStart === ci ? (5 / 8) : 0;
+      const rightFrac = isLastSeg  && visEnd   === co ? (6 / 8) : 0;
 
       pieces.push({
         key:      `${keyPrefix}-${pieceIdx}`,
@@ -270,9 +273,9 @@ function buildBarPieces(
     let assigned = 0;
     let found = false;
     while (!found) {
-      // Hai bar tiếp giáp kiểu Agoda: bar A kết thúc ở cột N+0.5, bar B bắt đầu ở cột N+0.5
-      // Bar A kết thúc tại cột N + 2/8, bar B bắt đầu tại cột N + 5/8
-      // → không overlap (5/8 > 2/8) → dùng ngưỡng 0.3 để không tính là overlap
+      // Hai bar liền kề: bar A kết thúc tại colN + 2/8 (= 0.25)
+      //                  bar B bắt đầu tại colN + 5/8 (= 0.625)
+      // Khoảng cách = 3/8 = 0.375 → dùng ngưỡng 0.3 để không tính là overlap ✓
       const conflicts = existing.filter(e => e.slot === assigned &&
         pStart < e.end - 0.3 && pEnd > e.start + 0.3
       );
@@ -434,8 +437,12 @@ export default function Calendar({
       const allPieces = pieces.filter(q => q.seg.bkId === p.seg.bkId);
       return allPieces.map(q => {
         const c = col(q.seg.status);
-        const leftPct  = ((q.colStart + q.leftFrac)  / 7) * 100;
-        const rightPct = ((6 - q.colEnd + q.rightFrac) / 7) * 100;
+        // Tint dùng cùng leftFrac/rightFrac với bar để align chính xác:
+        // - piece đầu: leftFrac = 5/8  (checkin bắt đầu 62.5% từ trái)
+        // - piece cuối: rightFrac = 6/8 (checkout kết thúc tại 25% từ trái)
+        // - piece giữa: cả hai = 0 (toàn bộ chiều rộng cột)
+        const leftPct  = ((q.colStart + q.leftFrac)      / 7) * 100;
+        const rightPct = ((6 - q.colEnd + q.rightFrac)   / 7) * 100;
         return (
           <div key={`tint-${q.key}`} style={{
             position:      'absolute',
