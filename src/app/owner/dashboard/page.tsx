@@ -163,73 +163,7 @@ export default async function OwnerDashboardPage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════ */}
-      {/* 2. LỊCH SỬ HOLD & BOOKING                            */}
-      {/* ══════════════════════════════════════════════════════ */}
-      <section className="dash-section">
-        <div className="section-header">
-          <h2>📋 Lịch sử Hold & Booking</h2>
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            {holdB.length > 0 && (
-              <span className="badge-pill badge-amber">⏳ {holdB.length} hold đang chờ</span>
-            )}
-          </div>
-        </div>
-        <div className="history-table-wrap">
-          <table className="history-table">
-            <thead>
-              <tr>
-                <th>Khách</th>
-                <th>Villa</th>
-                <th>Check-in / out</th>
-                <th>Đêm</th>
-                <th>Tổng</th>
-                <th>Trạng thái</th>
-                <th>Tạo bởi</th>
-                <th>Ngày tạo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historyBookings.map(b => {
-                const v       = villas.find(x => x.id === b.villa_id);
-                const nights  = calcNights(b.checkin, b.checkout);
-                const isExpiredHold = b.status === 'hold' && b.hold_expires_at && new Date(b.hold_expires_at) < new Date();
-                return (
-                  <tr key={b.id} className={b.status === 'cancelled' ? 'row-cancelled' : ''}>
-                    <td>
-                      <div className="cell-name">{b.customer}</div>
-                      <div className="cell-sub">📞 {b.phone}</div>
-                    </td>
-                    <td>
-                      <div className="cell-name">{v?.emoji} {v?.name ?? '—'}</div>
-                    </td>
-                    <td>
-                      <div className="cell-name">{formatDate(b.checkin)}</div>
-                      <div className="cell-sub">→ {formatDate(b.checkout)}</div>
-                    </td>
-                    <td className="cell-center">{nights}</td>
-                    <td className="cell-money">{fmtMoney(b.total)}</td>
-                    <td>
-                      {b.status === 'confirmed' && <span className="tag tag-confirm">✅ Confirmed</span>}
-                      {b.status === 'hold' && !isExpiredHold && <span className="tag tag-hold">⏳ Hold</span>}
-                      {b.status === 'hold' && isExpiredHold && <span className="tag tag-expired">⌛ Hết hạn</span>}
-                      {b.status === 'cancelled' && <span className="tag tag-cancel">✕ Đã hủy</span>}
-                    </td>
-                    <td>
-                      <div className="cell-name">{b.created_by_name ?? '—'}</div>
-                      <div className="cell-sub">{b.created_by_role}</div>
-                    </td>
-                    <td className="cell-sub">
-                      {new Date(b.created_at).toLocaleDateString('vi-VN')}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
-      {/* ══════════════════════════════════════════════════════ */}
       {/* 3. DOANH THU CHI TIẾT                                */}
       {/* ══════════════════════════════════════════════════════ */}
       <section className="dash-section">
@@ -308,6 +242,72 @@ export default async function OwnerDashboardPage() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* 2. LỊCH SỬ HOLD & BOOKING                            */}
+      {/* ══════════════════════════════════════════════════════ */}
+      <section className="dash-section">
+        <div className="section-header">
+          <h2>📋 Lịch sử Hold & Booking</h2>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            {holdB.length > 0 && (
+              <span className="badge-pill badge-amber">⏳ {holdB.length} hold đang chờ</span>
+            )}
+          </div>
+        </div>
+        <div className="history-table-wrap">
+          <table className="history-table">
+            <thead>
+              <tr>
+                <th>Khách</th>
+                <th>Villa</th>
+                <th>Check-in / out</th>
+                <th>Đêm</th>
+                <th>Tổng</th>
+                <th>Trạng thái</th>
+                <th>Tạo bởi</th>
+                <th>Ngày tạo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {historyBookings.map(b => {
+                const v       = villas.find(x => x.id === b.villa_id);
+                const nights  = calcNights(b.checkin, b.checkout);
+                const isExpiredHold = b.status === 'hold' && b.hold_expires_at && new Date(b.hold_expires_at) < new Date();
+                return (
+                  <tr key={b.id} className={b.status === 'cancelled' ? 'row-cancelled' : ''}>
+                    <td>
+                      <div className="cell-name">{b.customer}</div>
+                      <div className="cell-sub">📞 {b.phone}</div>
+                    </td>
+                    <td>
+                      <div className="cell-name">{v?.emoji} {v?.name ?? '—'}</div>
+                    </td>
+                    <td>
+                      <div className="cell-name">{formatDate(b.checkin)}</div>
+                      <div className="cell-sub">→ {formatDate(b.checkout)}</div>
+                    </td>
+                    <td className="cell-center">{nights}</td>
+                    <td className="cell-money">{fmtMoney(b.total)}</td>
+                    <td>
+                      {b.status === 'confirmed' && <span className="tag tag-confirm">✅ Confirmed</span>}
+                      {b.status === 'hold' && !isExpiredHold && <span className="tag tag-hold">⏳ Hold</span>}
+                      {b.status === 'hold' && isExpiredHold && <span className="tag tag-expired">⌛ Hết hạn</span>}
+                      {b.status === 'cancelled' && <span className="tag tag-cancel">✕ Đã hủy</span>}
+                    </td>
+                    <td>
+                      <div className="cell-name">{b.created_by_name ?? '—'}</div>
+                      <div className="cell-sub">{b.created_by_role}</div>
+                    </td>
+                    <td className="cell-sub">
+                      {new Date(b.created_at).toLocaleDateString('vi-VN')}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </section>
 
