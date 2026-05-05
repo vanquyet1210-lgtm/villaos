@@ -107,6 +107,8 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
 
   const villa = villas.find(v => v.id === selectedVillaId) ?? filteredVillas[0] ?? villas[0];
 
+  useEffect(() => { setShowDetail(false); }, [selectedVillaId]);
+
   // Realtime bookings (merge server + realtime)
   const bookings = useBookingsRealtime(selectedVillaId, serverBookings);
 
@@ -367,7 +369,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
               <button
                 key={v.id}
                 className={`villa-card${v.id === selectedVillaId ? ' active' : ''}`}
-                onClick={() => setSelectedVillaId(v.id)}
+                onClick={() => { setSelectedVillaId(v.id); setShowDetail(true); }}
               >
                 {/* Ảnh */}
                 <div className="villa-card-img">
@@ -392,17 +394,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                     <span>·</span>
                     <span className="villa-card-price">{fmtMoney(v.price)}/đêm</span>
                   </div>
-                  <button
-                    className="villa-card-view-btn"
-                    onClick={e => {
-                      e.stopPropagation();
-                      setSelectedVillaId(v.id);
-                      // dùng setTimeout để tránh race condition với setSelectedVillaId
-                      setTimeout(() => setShowDetail(true), 0);
-                    }}
-                  >
-                    🏠 Xem
-                  </button>
                 </div>
               </button>
             ))}
@@ -843,7 +834,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
           display: flex;
           flex-direction: column;
           gap: 4px;
-          flex: 1;
         }
         .villa-card-name {
           font-size:     0.84rem;
@@ -875,23 +865,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
           font-weight: 700;
           font-size:   0.75rem;
         }
-        .villa-card-view-btn {
-          margin-top:    auto;
-          align-self:    flex-end;
-          padding:       4px 10px;
-          border:        1.5px solid var(--sage);
-          border-radius: var(--radius-md);
-          background:    var(--sage-pale);
-          color:         var(--forest);
-          font-family:   var(--font-body);
-          font-size:     0.72rem;
-          font-weight:   600;
-          cursor:        pointer;
-          transition:    all .15s;
-        }
-        .villa-card-view-btn:hover { background: var(--sage); color: white; }
-        .villa-card.active .villa-card-view-btn { background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.5); color: white; }
-        .villa-card.active .villa-card-view-btn:hover { background: rgba(255,255,255,.35); }
 
                 .villa-filter-bar {
           display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
