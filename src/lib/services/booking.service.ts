@@ -5,6 +5,7 @@
 'use server';
 
 import { revalidatePath }             from 'next/cache';
+import { invalidateBookingCache }     from '@/lib/cache/cache-invalidation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapBooking }                 from '@/types/database';
 import { logAudit, getCurrentActor }  from './audit.service';
@@ -112,7 +113,9 @@ export async function createBooking(
     ownerId:    booking.ownerId,
   });
 
+  invalidateBookingCache(booking.villaId, booking.ownerId);
   revalidatePath('/owner/villas');
+  revalidatePath('/owner/calendar');
   revalidatePath('/sale/calendar');
   return { data: booking };
 }
@@ -152,7 +155,10 @@ export async function confirmHold(id: string): Promise<ServiceResult<Booking>> {
     ownerId:    booking.ownerId,
   });
 
+  invalidateBookingCache(booking.villaId, booking.ownerId);
   revalidatePath('/owner/villas');
+  revalidatePath('/owner/calendar');
+  revalidatePath('/sale/calendar');
   return { data: booking };
 }
 
@@ -193,7 +199,10 @@ export async function cancelBooking(id: string): Promise<ServiceResult<Booking>>
     ownerId:    booking.ownerId,
   });
 
+  invalidateBookingCache(booking.villaId, booking.ownerId);
   revalidatePath('/owner/villas');
+  revalidatePath('/owner/calendar');
+  revalidatePath('/sale/calendar');
   return { data: booking };
 }
 
@@ -262,7 +271,10 @@ export async function updateBooking(
     ownerId:    booking.ownerId,
   });
 
+  invalidateBookingCache(booking.villaId, booking.ownerId);
   revalidatePath('/owner/villas');
+  revalidatePath('/owner/calendar');
+  revalidatePath('/sale/calendar');
   return { data: booking };
 }
 
