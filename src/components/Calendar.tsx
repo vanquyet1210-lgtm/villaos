@@ -514,7 +514,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               borderRadius: '10px 0 0 10px',
               zIndex: 2, pointerEvents: 'none',
             }} />
-            <span style={
+            <span style={{
               position: 'absolute',
               top: BAR_TOP, height: BAR_HEIGHT,
               left: 'calc(33.3% + 4px)', right: '2px',
