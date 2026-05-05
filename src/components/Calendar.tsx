@@ -252,31 +252,19 @@ function buildBarPieces(
     flush();
   }
 
-  // Assign vertical slots per row to avoid overlap
-  // Dùng interval scheduling: mỗi row, sắp xếp pieces theo colStart,
-  // assign slot thấp nhất không bị overlap
-  const rowSlotMap: Record<string, number[]> = {}; // key=`row-slot`, value=colEnd của piece chiếm slot đó
-
-  // Group pieces by (bkId, row) — mỗi booking có 1 slot duy nhất trong mỗi row
-  // Nhưng thực ra mỗi booking chỉ có 1 piece per row, nên slot assign per booking globally
-  const bkSlot: Record<string, number> = {};
-  // Sort pieces by row then colStart for greedy slot assignment
+  // Assign vertical slots per row — mỗi piece được assign độc lập theo từng row
+  // Hai bar cùng row cần slot khác nhau khi chúng overlap về cột
+  // Nếu không overlap (vd: booking kết thúc ngày T2, booking mới bắt đầu ngày T3)
+  // → cả 2 dùng slot 0, nằm cùng hàng, không lãng phí slot
   pieces.sort((a, b) => a.row !== b.row ? a.row - b.row : a.colStart - b.colStart);
 
-  // Per-row slot tracking: dùng colStart thực (bao gồm leftFrac) để so sánh
-  // Hai bar overlap khi: startA < endB AND startB < endA
-  // startA = colStart + leftFrac, endA = colEnd + 1 - rightFrac
   const rowSlots: Record<number, Array<{ start: number; end: number; slot: number }>> = {};
   for (const p of pieces) {
-    if (bkSlot[p.seg.bkId] !== undefined) {
-      p.slot = bkSlot[p.seg.bkId];
-      continue;
-    }
     if (!rowSlots[p.row]) rowSlots[p.row] = [];
     const existing = rowSlots[p.row];
     const pStart = p.colStart + p.leftFrac;
     const pEnd   = p.colEnd + 1 - p.rightFrac;
-    // Tìm slot thấp nhất không overlap với bất kỳ piece nào đã có
+    // Tìm slot thấp nhất không bị overlap trong row này
     let assigned = 0;
     let found = false;
     while (!found) {
@@ -288,7 +276,6 @@ function buildBarPieces(
     }
     existing.push({ start: pStart, end: pEnd, slot: assigned });
     p.slot = assigned;
-    bkSlot[p.seg.bkId] = assigned;
   }
 
   return pieces;
