@@ -397,11 +397,20 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
                 <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{info.fullName ?? barLabel}</span>
                   {(info.total ?? 0) > 0 && (
-                    <span style={{ flexShrink: 0, fontSize: '0.6rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                      {(info.total ?? 0) >= 1000000
-                        ? ((info.total ?? 0) % 1000000 === 0 ? `${(info.total ?? 0)/1000000}tr` : `${((info.total ?? 0)/1000000).toFixed(1)}tr`)
-                        : `${(info.total ?? 0)/1000}k`}
-                      {status === 'confirmed' && <span style={{fontSize:'0.7rem'}}>✅</span>}
+                    <span style={{ flexShrink: 0, fontSize: '0.6rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                      {new Intl.NumberFormat('vi-VN').format(info.total ?? 0)}đ
+                      {status === 'confirmed' && (
+                        <span style={{
+                          width: 14, height: 14, borderRadius: '50%',
+                          background: '#2e7d52', border: '1.5px solid #fff',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
+                            <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </span>
+                      )}
                     </span>
                   )}
                 </span>
@@ -436,21 +445,6 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               zIndex: 2, pointerEvents: 'none',
             }} />
-            {(info.total ?? 0) > 0 && (
-              <span style={{
-                position: 'absolute',
-                top: BAR_TOP, height: BAR_HEIGHT,
-                right: '4px', zIndex: 3,
-                display: 'flex', alignItems: 'center', gap: '2px',
-                fontSize: '0.6rem', fontWeight: 700, color: '#fff',
-                pointerEvents: 'none',
-              }}>
-                {(info.total ?? 0) >= 1000000
-                  ? ((info.total ?? 0) % 1000000 === 0 ? `${(info.total ?? 0)/1000000}tr` : `${((info.total ?? 0)/1000000).toFixed(1)}tr`)
-                  : `${(info.total ?? 0)/1000}k`}
-                {status === 'confirmed' && <span style={{fontSize:'0.7rem'}}>✅</span>}
-              </span>
-            )}
           </>
         );
 
@@ -473,6 +467,33 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               borderRadius: '0 10px 10px 0',
               zIndex: 2, pointerEvents: 'none',
             }} />
+            {/* Tổng tiền + tick tròn cuối bar */}
+            <span style={{
+              position: 'absolute',
+              top: BAR_TOP, height: BAR_HEIGHT,
+              right: 'calc(66.7% + 4px)', zIndex: 3,
+              display: 'flex', alignItems: 'center', gap: '4px',
+              pointerEvents: 'none',
+            }}>
+              {(info.total ?? 0) > 0 && (
+                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>
+                  {new Intl.NumberFormat('vi-VN').format(info.total ?? 0)}đ
+                </span>
+              )}
+              {status === 'confirmed' && (
+                <span style={{
+                  width: 16, height: 16, borderRadius: '50%',
+                  background: '#2e7d52',
+                  border: '2px solid #fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                    <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+              )}
+            </span>
           </>
         );
 
