@@ -372,8 +372,8 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
               <button
                 key={v.id}
                 className={`villa-card${v.id === selectedVillaId ? ' active' : ''}`}
-                onClick={() => {
-                  setSelectedVillaId(v.id);
+                onClick={() => setSelectedVillaId(v.id)}
+                onDoubleClick={() => {
                   if (userRole === 'sale') {
                     setDetailVillaId(v.id);
                     setShowDetail(true);
@@ -403,6 +403,9 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                     <span>·</span>
                     <span className="villa-card-price">{fmtMoney(v.price)}/đêm</span>
                   </div>
+                  {userRole === 'sale' && (
+                    <div className="villa-card-hint">Nhấn đúp để xem chi tiết</div>
+                  )}
                 </div>
               </button>
             ))}
@@ -875,6 +878,15 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
           font-weight: 700;
           font-size:   0.75rem;
         }
+        .villa-card-hint {
+          font-size:  0.65rem;
+          color:      var(--ink-muted);
+          opacity:    0;
+          margin-top: 4px;
+          transition: opacity .15s;
+          text-align: right;
+        }
+        .villa-card:hover .villa-card-hint { opacity: 1; }
         .villa-card-view-btn {
           margin-top:    4px;
           align-self:    flex-end;
