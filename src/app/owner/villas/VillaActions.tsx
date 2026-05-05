@@ -1,6 +1,7 @@
 'use client';
 // VillaOS v7 — app/owner/villas/VillaActions.tsx
 import { useState, useTransition } from 'react';
+import { createPortal }  from 'react-dom';
 import { useRouter }     from 'next/navigation';
 import { useToast }      from '@/components/Toast';
 import { deleteVilla }   from '@/lib/services/villa.service';
@@ -70,8 +71,8 @@ export default function VillaActions({ villa }: { villa: Villa }) {
         </button>
       </div>
 
-      {/* ── VILLA DETAIL MODAL ── */}
-      {showDetail && (
+      {/* ── VILLA DETAIL MODAL (portal to body) ── */}
+      {showDetail && createPortal(
         <div className="vd-overlay" onClick={() => setShowDetail(false)}>
           <div className="vd-modal" onClick={e => e.stopPropagation()}>
             {/* Header */}
@@ -203,7 +204,8 @@ export default function VillaActions({ villa }: { villa: Villa }) {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <style>{`
