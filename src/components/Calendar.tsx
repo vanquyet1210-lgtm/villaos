@@ -266,15 +266,16 @@ function applyLock(
 // ── Day Cell ──────────────────────────────────────────────────────
 
 interface DayCellProps {
-  day:      number;
-  ds:       string;
-  info:     DayInfo | undefined;
-  today:    string;
-  onClick?: (ds: string, info: DayInfo | null) => void;
-  readonly: boolean;
+  day:       number;
+  ds:        string;
+  info:      DayInfo | undefined;
+  today:     string;
+  onClick?:  (ds: string, info: DayInfo | null) => void;
+  readonly:  boolean;
+  isRowEnd?: boolean;
 }
 
-function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
+function DayCell({ day, ds, info, today, onClick, readonly, isRowEnd }: DayCellProps) {
   const isPast  = ds < today;
   const isToday = ds === today;
 
@@ -317,6 +318,9 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
     const bg     = bgOf(status);
     const bar    = barOf(status);
     const txt    = textOf(status);
+
+    // Hiển thị total+tick khi: ngày cuối thực của bar HOẶC cuối dòng (T7/cuối tháng)
+    const showTotal = (info.isLastMiddle || isRowEnd) && type === 'middle';
 
     // Bar height: dải nằm giữa ô, cao 20px
     const BAR_TOP    = '24px';
@@ -402,7 +406,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               }}>
                 <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{info.fullName ?? barLabel}</span>
-                  {info.isLastMiddle && (info.total ?? 0) > 0 && (
+                  {(info.isLastMiddle || isRowEnd) && (info.total ?? 0) > 0 && (
                     <span style={{ flexShrink: 0, fontSize: '0.6rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '3px' }}>
                       {new Intl.NumberFormat('vi-VN').format(info.total ?? 0)}đ
                       {status === 'confirmed' && (
@@ -451,8 +455,8 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               zIndex: 2, pointerEvents: 'none',
             }} />
-            {/* Tổng tiền + tick chỉ hiện ở ngày cuối cùng của bar */}
-            {info.isLastMiddle && (info.total ?? 0) > 0 && (
+            {/* Tổng tiền + tick chỉ hiện ở ngày cuối cùng của bar (cuối thực hoặc cuối dòng) */}
+            {showTotal && (info.total ?? 0) > 0 && (
               <span style={{
                 position: 'absolute',
                 top: BAR_TOP, height: BAR_HEIGHT,
@@ -775,7 +779,12 @@ export default function Calendar({
         {/* Day cells */}
         {Array.from({ length: totalDays }).map((_, i) => {
           const day = i + 1;
-          const ds  = `${year}-${monthPad}-${String(day).padStart(2, '0')}`;
+          const ds  = `${year}-${monthPad}-${String(day).padStart(2, '0')}`;\
+          // colIndex: 0=CN,1=T2,...,6=T7 — ô cuối dòng = CN (index 0 trong grid CN-đầu)
+          // startDay: số ô trống đầu tháng (0=CN, 1=T2...)
+          const colIndex = (startDay + i) % 7; // 0=CN..6=T7
+          const isRowEnd = colIndex === 6; // T7 = cuối dòng
+          const isMonthEnd = day === totalDays;
           return (
             <DayCell
               key={ds}
@@ -785,6 +794,7 @@ export default function Calendar({
               today={today}
               onClick={onDayClick}
               readonly={readonly}
+              isRowEnd={isRowEnd || isMonthEnd}
             />
           );
         })}
