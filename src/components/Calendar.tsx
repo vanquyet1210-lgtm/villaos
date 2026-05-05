@@ -184,11 +184,11 @@ function buildBarPieces(
       const isFirstSeg = cur === startGI;
       const isLastSeg  = segEnd === endGI;
 
-      // leftFrac/rightFrac: khoảng trống đối xứng 8% ở đầu checkin và cuối checkout
-      // giúp các thanh thẳng hàng và dễ phân biệt giữa các booking liền nhau
-      const GAP_FRAC  = 0.08;
-      const leftFrac  = isFirstSeg && visStart === ci ? GAP_FRAC : 0;
-      const rightFrac = isLastSeg  && visEnd   === co ? GAP_FRAC : 0;
+      // Kiểu Agoda: checkin bắt đầu từ nửa phải ô (50%), checkout kết thúc ở nửa trái (50%)
+      // → ô checkin: nửa trái trống (có thể đặt checkout cùng ngày)
+      // → ô checkout: nửa phải trống (có thể đặt checkin cùng ngày)
+      const leftFrac  = isFirstSeg && visStart === ci ? 0.5 : 0;
+      const rightFrac = isLastSeg  && visEnd   === co ? 0.5 : 0;
 
       pieces.push({
         key:      `${keyPrefix}-${pieceIdx}`,
@@ -268,8 +268,10 @@ function buildBarPieces(
     let assigned = 0;
     let found = false;
     while (!found) {
+      // Hai bar tiếp giáp kiểu Agoda: bar A kết thúc ở cột N+0.5, bar B bắt đầu ở cột N+0.5
+      // → pStart === e.end chính xác → dùng ngưỡng 0.49 để không tính là overlap
       const conflicts = existing.filter(e => e.slot === assigned &&
-        pStart < e.end - 0.01 && pEnd > e.start + 0.01
+        pStart < e.end - 0.49 && pEnd > e.start + 0.49
       );
       if (conflicts.length === 0) found = true;
       else assigned++;
