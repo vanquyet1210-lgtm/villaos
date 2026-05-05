@@ -414,6 +414,18 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
       )}
 
 
+      {/* Calendar */}
+      <Calendar
+        bookings={bookings}
+        villaId={selectedVillaId}
+        lockedDates={localLockedDates ?? villa.lockedDates}
+        month={month}
+        year={year}
+        onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
+        onDayClick={handleDayClick}
+        role={userRole}
+      />
+
       {/* ── YÊU CẦU GIỮ PHÒNG — chỉ owner ─────────────────────── */}
       {userRole === 'owner' && (() => {
         const pendingHolds = bookings.filter(b =>
@@ -492,17 +504,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
         );
       })()}
 
-      {/* Calendar */}
-      <Calendar
-        bookings={bookings}
-        villaId={selectedVillaId}
-        lockedDates={localLockedDates ?? villa.lockedDates}
-        month={month}
-        year={year}
-        onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
-        onDayClick={handleDayClick}
-        role={userRole}
-      />
 
       {/* ── VILLA DETAIL MODAL ───────────────────────────────── */}
       {showDetail && createPortal(
