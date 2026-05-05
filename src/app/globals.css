@@ -842,3 +842,128 @@ html { -webkit-overflow-scrolling: touch; }
 .main-content {
   padding-bottom: calc(32px + env(safe-area-inset-bottom));
 }
+
+/* ── Yêu cầu giữ phòng ──────────────────────────────────────────── */
+.hold-requests {
+  margin: 0 0 16px;
+  border: 1px solid #f0c97a;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fffdf5;
+}
+.hold-requests__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fef3cd;
+  border-bottom: 1px solid #f0c97a;
+}
+.hold-requests__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #7a4f00;
+}
+.hold-requests__badge {
+  background: #e6a817;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 99px;
+  padding: 1px 7px;
+  min-width: 20px;
+  text-align: center;
+}
+.hold-requests__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.hold-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #fbe8a6;
+  transition: background 0.15s;
+}
+.hold-card:last-child { border-bottom: none; }
+.hold-card:hover { background: #fffaed; }
+.hold-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.hold-card__sale {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-primary, #1a1a1a);
+}
+.hold-card__phone {
+  color: #2563eb;
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+.hold-card__phone:hover { text-decoration: underline; }
+.hold-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--ink-secondary, #444);
+}
+.hold-card__dot {
+  color: #ccc;
+}
+.hold-card__guest {
+  font-size: 0.78rem;
+  color: var(--ink-muted, #888);
+}
+.hold-card__timer {
+  font-size: 0.72rem;
+  color: #d97706;
+  font-weight: 500;
+}
+.hold-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.hold-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+.hold-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.hold-btn:not(:disabled):hover { opacity: 0.85; }
+.hold-btn:not(:disabled):active { transform: scale(0.97); }
+.hold-btn--reject {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+.hold-btn--approve {
+  background: #16a34a;
+  color: #fff;
+}
+@media (max-width: 640px) {
+  .hold-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .hold-card__actions {
+    width: 100%;
+  }
+  .hold-btn {
+    flex: 1;
+    text-align: center;
+  }
+}
