@@ -107,8 +107,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
 
   const villa = villas.find(v => v.id === selectedVillaId) ?? filteredVillas[0] ?? villas[0];
 
-  useEffect(() => { setShowDetail(false); }, [selectedVillaId]);
-
   // Realtime bookings (merge server + realtime)
   const bookings = useBookingsRealtime(selectedVillaId, serverBookings);
 
@@ -396,7 +394,12 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                   </div>
                   <button
                     className="villa-card-view-btn"
-                    onClick={e => { e.stopPropagation(); setSelectedVillaId(v.id); setShowDetail(true); }}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setSelectedVillaId(v.id);
+                      // dùng setTimeout để tránh race condition với setSelectedVillaId
+                      setTimeout(() => setShowDetail(true), 0);
+                    }}
                   >
                     🏠 Xem
                   </button>
@@ -840,6 +843,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
           display: flex;
           flex-direction: column;
           gap: 4px;
+          flex: 1;
         }
         .villa-card-name {
           font-size:     0.84rem;
@@ -872,7 +876,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
           font-size:   0.75rem;
         }
         .villa-card-view-btn {
-          margin-top:    4px;
+          margin-top:    auto;
           align-self:    flex-end;
           padding:       4px 10px;
           border:        1.5px solid var(--sage);
