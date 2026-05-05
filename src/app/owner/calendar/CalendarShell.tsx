@@ -5,6 +5,7 @@
 // ╚══════════════════════════════════════════════════════════════╝
 
 import { useState, useTransition, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter }           from 'next/navigation';
 import Calendar, { type BarSegment } from '@/components/Calendar';
 import { useBookingsRealtime } from '@/hooks/useBookingsRealtime';
