@@ -256,6 +256,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
               value={filterSearch}
               onChange={e => setFilterSearch(e.target.value)}
             />
+            {userRole !== 'owner' && (
             <button
               className={`villa-filter-toggle${showFilter ? ' active' : ''}`}
               onClick={() => setShowFilter(v => !v)}
@@ -263,13 +264,14 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
               {showFilter ? '▲ Ẩn bộ lọc' : '▼ Bộ lọc'}
               {hasFilter && <span className="filter-badge"> ●</span>}
             </button>
+            )}
             {hasFilter && (
               <button className="villa-filter-clear" onClick={clearFilter}>✕ Xóa bộ lọc</button>
             )}
           </div>
 
           {/* Expanded filter panel */}
-          {showFilter && (
+          {userRole !== 'owner' && showFilter && (
             <div className="villa-filter-panel">
               <div className="filter-row">
                 <div className="filter-field">
@@ -369,7 +371,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
               <button
                 key={v.id}
                 className={`villa-card${v.id === selectedVillaId ? ' active' : ''}`}
-                onClick={() => { setSelectedVillaId(v.id); setShowDetail(true); }}
+                onClick={() => setSelectedVillaId(v.id)}
               >
                 {/* Ảnh */}
                 <div className="villa-card-img">
@@ -394,6 +396,12 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                     <span>·</span>
                     <span className="villa-card-price">{fmtMoney(v.price)}/đêm</span>
                   </div>
+                  <button
+                    className="villa-card-view-btn"
+                    onClick={e => { e.stopPropagation(); setSelectedVillaId(v.id); setShowDetail(true); }}
+                  >
+                    🏠 Xem
+                  </button>
                 </div>
               </button>
             ))}
@@ -865,6 +873,23 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
           font-weight: 700;
           font-size:   0.75rem;
         }
+        .villa-card-view-btn {
+          margin-top:    4px;
+          align-self:    flex-end;
+          padding:       4px 10px;
+          border:        1.5px solid var(--sage);
+          border-radius: var(--radius-md);
+          background:    var(--sage-pale);
+          color:         var(--forest);
+          font-family:   var(--font-body);
+          font-size:     0.72rem;
+          font-weight:   600;
+          cursor:        pointer;
+          transition:    all .15s;
+        }
+        .villa-card-view-btn:hover { background: var(--sage); color: white; }
+        .villa-card.active .villa-card-view-btn { background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.5); color: white; }
+        .villa-card.active .villa-card-view-btn:hover { background: rgba(255,255,255,.35); }
 
                 .villa-filter-bar {
           display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
