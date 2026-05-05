@@ -193,7 +193,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
     setFormError(null);
     const errs = validateBooking(
       { villaId: selectedVillaId, checkin, checkout, customer, phone },
-      bookings, [{ id: villa.id, lockedDates: villa.lockedDates }],
+      bookings, [{ id: villa.id, lockedDates: localLockedDates ?? villa.lockedDates }],
       userRole,
     );
     if (errs.length) { setFormError(errs[0].msg); return; }
