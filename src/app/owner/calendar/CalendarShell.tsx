@@ -41,6 +41,39 @@ interface BookingModal {
 
 // ── Component ─────────────────────────────────────────────────────
 
+// ── Amenity icon map ─────────────────────────────────────────────
+const AMENITY_ICONS: Record<string, string> = {
+  'pool':         '🏊',
+  'bbq':          '🔥',
+  'garden':       '🌿',
+  'gym':          '💪',
+  'jacuzzi':      '🛁',
+  'karaoke':      '🎤',
+  'parking':      '🅿️',
+  'billiard':     '🎱',
+  'xe đạp':       '🚲',
+  'wifi':         '📶',
+  'bếp':          '🍳',
+  'điều hòa':     '❄️',
+  'máy giặt':     '🫧',
+  'tivi':         '📺',
+  'bãi biển':     '🏖️',
+  'view biển':    '🌊',
+  'sân vườn':     '🌳',
+  'ban công':     '🪟',
+  'hồ bơi':       '🏊',
+  'phòng tắm':    '🚿',
+  'bồn tắm':      '🛁',
+  'thang máy':    '🛗',
+  'bảo vệ':       '💂',
+  'camera':       '📷',
+  'lò sưởi':      '🔥',
+  'sauna':        '🧖',
+  'tennis':       '🎾',
+  'cafe':         '☕',
+  'bar':          '🍹',
+};
+
 export default function CalendarShell({ villas, initialVillaId, userRole }: CalendarShellProps) {
   const router = useRouter();
   const { show } = useToast();
@@ -352,7 +385,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                           prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]
                         )}
                       >
-                        {a}
+                        {AMENITY_ICONS[a.toLowerCase()] ?? '✨'} {a}
                       </button>
                     ))}
                   </div>
@@ -563,8 +596,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                     <div className="detail-section-title">✨ Tiện ích</div>
                     <div className="detail-amenities">
                       {detailVilla.amenities.map(a => {
-                        const icons: Record<string,string> = { pool:'🏊', bbq:'🔥', garden:'🌿', gym:'💪', jacuzzi:'🛁', karaoke:'🎤', parking:'🅿️', billiard:'🎱', 'xe đạp':'🚲', wifi:'📶' };
-                        return <div key={a} className="detail-amenity-chip"><span>{icons[a]??'✅'}</span><span>{a}</span></div>;
+                        return <div key={a} className="detail-amenity-chip"><span>{AMENITY_ICONS[a.toLowerCase()]??'✨'}</span><span>{a}</span></div>;
                       })}
                     </div>
                   </div>
