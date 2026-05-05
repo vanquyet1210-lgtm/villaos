@@ -184,10 +184,11 @@ function buildBarPieces(
       const isFirstSeg = cur === startGI;
       const isLastSeg  = segEnd === endGI;
 
-      // leftFrac: 40% nếu là ô checkin thật (khách đến chiều, sáng còn trống)
-      const leftFrac  = isFirstSeg && visStart === ci ? 0.40 : 0;
-      // rightFrac: 60% nếu là ô checkout thật (khách đi sáng, chiều còn trống → 40% trái)
-      const rightFrac = isLastSeg  && visEnd   === co ? 0.60 : 0;
+      // leftFrac/rightFrac: khoảng trống đối xứng 8% ở đầu checkin và cuối checkout
+      // giúp các thanh thẳng hàng và dễ phân biệt giữa các booking liền nhau
+      const GAP_FRAC  = 0.08;
+      const leftFrac  = isFirstSeg && visStart === ci ? GAP_FRAC : 0;
+      const rightFrac = isLastSeg  && visEnd   === co ? GAP_FRAC : 0;
 
       pieces.push({
         key:      `${keyPrefix}-${pieceIdx}`,
