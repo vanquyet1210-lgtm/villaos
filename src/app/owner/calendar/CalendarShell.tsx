@@ -143,14 +143,16 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   function closeModal() { setModal(null); }
 
   // ── Day click handler ──────────────────────────────────────────
-  function handleDayClick(ds: string, info: { bkId?: string; type?: string; status?: string; isLock?: boolean } | null) {
-    // Checkout day hoặc locked-checkout: nửa phải trống → cho tạo booking mới
-    const isCheckoutOnly = info?.type === 'checkout' || info?.type === 'locked-checkout';
+  function handleDayClick(ds: string, info: BarSegment | null) {
+    // info = null → ngày trống hoặc checkout day → tạo booking mới
+    if (!info) {
+      if (ds >= todayISO()) openCreateModal(ds);
+      return;
+    }
 
-    // ⚠️ Ngày có phần bị khóa (kể cả split) → owner mở khóa, sale cảnh báo
-    if (info?.isLock) {
+    // Ngày bị khóa
+    if (info.type === 'locked') {
       if (userRole === 'owner' || userRole === 'admin') {
-        // Owner click vào ngày có lock → mở modal (có nút Mở khóa)
         if (ds >= todayISO()) openCreateModal(ds);
       } else {
         show('warning', '🔒 Ngày bị khóa', 'Chủ nhà đã khóa ngày này. Không thể đặt phòng.');
@@ -158,26 +160,12 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
       return;
     }
 
-    // ⚠️ Cảnh báo sớm nếu ngày đã có booking confirmed/hold (trừ checkout)
-    if (info?.type === 'middle' || info?.type === 'checkin') {
-      if (info.bkId) {
-        const found = bookings.find(b => b.id === info.bkId);
-        if (found) { openViewModal(found); return; }
-      }
-      const statusLabel = info.status === 'hold' ? 'Hold' : 'Confirmed';
-      show('warning', `📅 Ngày đã có ${statusLabel}`, 'Ngày này đã được đặt. Vui lòng chọn ngày khác.');
-      return;
-    }
-
-    if (!info || isCheckoutOnly) {
-      if (ds >= todayISO()) openCreateModal(ds);
-      return;
-    }
-    // checkout+checkin split: click opens the existing booking on left side
+    // Ngày có booking → mở view modal
     if (info.bkId) {
       const found = bookings.find(b => b.id === info.bkId);
       if (found) { openViewModal(found); return; }
     }
+
     if (ds >= todayISO()) openCreateModal(ds);
   }
 

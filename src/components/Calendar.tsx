@@ -1,8 +1,7 @@
 'use client';
 // ╔══════════════════════════════════════════════════════════════╗
 // ║  VillaOS v7 — components/Calendar.tsx                       ║
-// ║  Port từ calendar.js — Agoda-style calendar engine          ║
-// ║  Pure React, không dùng external calendar lib               ║
+// ║  Agoda overlay: bar xuyên suốt, total+tick cuối bar 1 lần  ║
 // ╚══════════════════════════════════════════════════════════════╝
 
 import { useMemo, useCallback } from 'react';
@@ -11,735 +10,267 @@ import {
   prevMonth, nextMonth, formatMonthYear,
   daysInMonth, firstDayOfMonth, todayISO,
 } from '@/lib/utils';
-import { CONFIG } from '@/lib/config';
-import type { Booking } from '@/types/database';
+import { CONFIG }          from '@/lib/config';
+import type { Booking }    from '@/types/database';
 
-// ── Types ─────────────────────────────────────────────────────────
+// ── Public types ──────────────────────────────────────────────────
 
-type SegmentType =
-  | 'checkin' | 'middle' | 'checkout' | 'checkout+checkin'
-  | 'locked-checkin' | 'locked-middle' | 'locked-checkout'
-  | 'locked-split-left' | 'locked-split-right';
-
-interface DayInfo {
-  type:           SegmentType;
-  customer?:      string;   // tên rút gọn khách
-  fullName?:      string;
-  saleLabel?:     string;   // "Tên Sale • 0974950440" — hiển thị trên bar
-  status?:        string;
-  bkId?:          string;
-  rightCustomer?: string;
-  rightSaleLabel?:string;
-  rightStatus?:   string;
-  rightBkId?:     string;
-  leftStatus?:    string;
-  leftCustomer?:  string;
-  isLock?:        boolean;
-  total?:         number;
-  phone?:         string;
-  isLastMiddle?:  boolean;
+export interface BarSegment {
+  bkId:       string;
+  status:     string;
+  customer:   string;
+  fullName:   string;
+  saleLabel?: string;
+  phone?:     string;
+  total:      number;
+  checkin:    string;
+  checkout:   string;
+  type:       'booking' | 'locked';
 }
-
-type DayMap = Record<string, DayInfo>;
 
 export interface CalendarProps {
-  /** Bookings để render lên lịch */
-  bookings:    Booking[];
-  /** ID villa đang xem */
-  villaId:     string;
-  /** Ngày bị khóa (owner set) */
-  lockedDates?: string[];
-  /** Tháng đang hiển thị (0-indexed) */
-  month:       number;
-  /** Năm đang hiển thị */
-  year:        number;
-  /** Callback khi bấm prev/next tháng */
+  bookings:      Booking[];
+  villaId:       string;
+  lockedDates?:  string[];
+  month:         number;
+  year:          number;
   onMonthChange: (year: number, month: number) => void;
-  /** Callback khi click vào 1 ngày */
-  onDayClick?:   (dateStr: string, info: DayInfo | null) => void;
-  /** Role hiện tại — ảnh hưởng đến hiển thị */
-  role?: 'owner' | 'sale' | 'customer' | 'admin';
-  /** Có cho phép click hay không */
-  readonly?: boolean;
+  onDayClick?:   (dateStr: string, info: BarSegment | null) => void;
+  role?:         'owner' | 'sale' | 'customer' | 'admin';
+  readonly?:     boolean;
 }
 
-// ── Color helpers — theo spec màu sắc chuẩn ───────────────────────
-// Confirmed: nền #fde8e8 · bar #e57373
-// Hold:      nền #fef6e4 · bar #f0b429
-// Locked:    nền #dde8e3 · bar #7aaba3
+// ── Colors ────────────────────────────────────────────────────────
 
-function bgOf(status?: string): string {
-  if (status === 'hold')   return '#fef6e4';
-  if (status === 'locked') return '#dde8e3';
-  return '#fde8e8'; // confirmed
+const C = {
+  confirmed: { bg: '#fde8e8', bar: '#e57373' },
+  hold:      { bg: '#fef6e4', bar: '#f0b429' },
+  locked:    { bg: '#dde8e3', bar: '#7aaba3' },
+};
+const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : C.confirmed;
+
+// ── Constants ─────────────────────────────────────────────────────
+
+const CELL_H   = 68;   // px — height của 1 ô ngày
+const BAR_T    = 28;   // px từ top ô đến top bar
+const BAR_H    = 22;   // px chiều cao bar
+const BAR_R    = 8;    // px border-radius đầu/cuối bar
+
+// ── Build click map ───────────────────────────────────────────────
+
+interface ClickEntry {
+  seg:        BarSegment;
+  isCheckout: boolean;
 }
 
-function barOf(status?: string): string {
-  if (status === 'hold')   return '#f0b429';
-  if (status === 'locked') return '#7aaba3';
-  return '#e57373'; // confirmed
-}
-
-function textOf(status?: string): string {
-  if (status === 'hold')   return '#b8860b';
-  if (status === 'locked') return '#4a7a72';
-  return '#c0392b'; // confirmed
-}
-
-// ── Build DayMap ──────────────────────────────────────────────────
-
-function buildDayMap(
+function buildClickMap(
   bookings:    Booking[],
   villaId:     string,
   lockedDates: string[],
-): DayMap {
-  const map: DayMap = {};
-
-  // 1. Booking segments
-  // Lọc bỏ hold đã hết hạn (không hiển thị trên lịch, coi như trống)
+): Record<string, ClickEntry> {
   const now = Date.now();
-  const relevant = bookings.filter(b => {
-    if (b.villaId !== villaId) return false;
-    if (b.status === 'cancelled') return false;
-    // Hold hết hạn → ẩn khỏi lịch (tự động coi như trống)
-    if (b.status === 'hold' && b.holdExpiresAt) {
-      const expires = new Date(b.holdExpiresAt).getTime();
-      if (expires < now) return false;
-    }
-    return true;
-  });
+  const map: Record<string, ClickEntry> = {};
 
-  for (const b of relevant) {
-    // ── Sanitize to date-only (fix UTC timezone shift from Supabase timestamptz) ──
+  const addRange = (seg: BarSegment, ci: string, co: string) => {
+    let d = ci;
+    while (d <= co) {
+      map[d] = { seg, isCheckout: d === co };
+      d = addDays(d, 1);
+    }
+  };
+
+  // Bookings
+  for (const b of bookings) {
+    if (b.villaId !== villaId || b.status === 'cancelled') continue;
+    if (b.status === 'hold' && b.holdExpiresAt) {
+      if (new Date(b.holdExpiresAt).getTime() < now) continue;
+    }
     const ci = b.checkin.split('T')[0];
     const co = b.checkout.split('T')[0];
-    const { customer, status, id: bkId, createdByRole, createdByName, createdByPhone } = b;
-    const shortName = customer ? customer.split(' ').pop() ?? customer : '';
-    // Bar label: nếu sale tạo → hiển thị tên sale + SĐT sale thay vì tên khách
-    const saleLabel = createdByRole === 'sale' && createdByName
-      ? `${createdByName}${createdByPhone ? ' • ' + createdByPhone : ''}`
-      : undefined;
-    const info = { customer: shortName, fullName: customer, saleLabel, status, bkId, total: b.total ?? 0, phone: b.phone ?? '' };
-    // 1-đêm booking: checkin = ngày cuối bar (không có middle)
-    const isOneNight = addDays(ci, 1) === co;
-
-    // checkin day → right half colored (guest arrives, morning is free)
-    if (!map[ci]) {
-      map[ci] = { ...info, type: 'checkin', isLastMiddle: isOneNight };
-    } else if (map[ci].type === 'checkout') {
-      // same day: previous checkout + this checkin → split cell
-      map[ci] = {
-        type:          'checkout+checkin',
-        customer:      map[ci].customer,
-        fullName:      map[ci].fullName,
-        status:        map[ci].status,
-        bkId:          map[ci].bkId,
-        rightCustomer: shortName,
-        rightStatus:   status,
-        rightBkId:     bkId,
-        leftStatus:    map[ci].status,
-        leftCustomer:  map[ci].customer,
-      };
-    }
-
-    // middle days: ci+1 .. co-1 (fully occupied nights)
-    // dateRange is half-open [start, end), so dateRange(ci+1, co) = ci+1..co-1 ✓
-    const midRange = dateRange(addDays(ci, 1), co);
-    const midArr = [...midRange];
-    for (let mi = 0; mi < midArr.length; mi++) {
-      const ds = midArr[mi];
-      const isLastMiddle = mi === midArr.length - 1;
-      if (!map[ds]) map[ds] = { ...info, type: 'middle', isLastMiddle };
-    }
-
-    // checkout day → left half colored (guest leaves morning, evening is free)
-    // This day CAN be re-booked (new checkin on same day = checkout+checkin split)
-    if (!map[co]) {
-      map[co] = { ...info, type: 'checkout' };
-    } else if (map[co].type === 'checkin') {
-      // New booking checks in same day this one checks out → split
-      map[co] = {
-        type:          'checkout+checkin',
-        customer:      map[co].customer,
-        fullName:      map[co].fullName,
-        status:        map[co].status,
-        bkId:          map[co].bkId,
-        rightCustomer: map[co].customer,
-        rightStatus:   map[co].status,
-        rightBkId:     map[co].bkId,
-        leftStatus:    status,
-        leftCustomer:  shortName,
-      };
-    }
+    const seg: BarSegment = {
+      bkId:      b.id,
+      status:    b.status,
+      customer:  (b.customer ?? '').split(' ').pop() ?? '',
+      fullName:  b.customer ?? '',
+      saleLabel: (b as any).createdByRole === 'sale' && (b as any).createdByName
+        ? `${(b as any).createdByName}${(b as any).createdByPhone ? ' • ' + (b as any).createdByPhone : ''}`
+        : undefined,
+      phone:     b.phone ?? '',
+      total:     b.total ?? 0,
+      checkin:   ci,
+      checkout:  co,
+      type:      'booking',
+    };
+    addRange(seg, ci, co);
   }
 
-  // 2. Locked-date segments
-  // lockedDates = mảng các đêm bị khóa (YYYY-MM-DD).
-  // Gom thành các đoạn liên tiếp để hiển thị đúng:
-  //   - Đầu đoạn: locked-checkin (nửa phải xanh)
-  //   - Giữa đoạn: locked-middle (full xanh)  
-  //   - Cuối đoạn checkout: locked-checkout (nửa trái xanh)
+  // Locked dates
   if (lockedDates.length) {
-    const lockInfo = { customer: '🔒', status: 'locked', isLock: true };
-    const sorted = [...lockedDates].sort();
-
-    // Gom thành đoạn liên tiếp
-    const segments: { start: string; end: string }[] = [];
-    let segStart = sorted[0];
-    let segEnd   = sorted[0];
+    const sorted = [...lockedDates].map(d => d.split('T')[0]).sort();
+    let start = sorted[0], end = sorted[0];
+    const flush = () => {
+      const co = addDays(end, 1);
+      const seg: BarSegment = {
+        bkId: `lock-${start}`, status: 'locked',
+        customer: '🔒', fullName: 'Ngày khóa',
+        total: 0, checkin: start, checkout: co, type: 'locked',
+      };
+      addRange(seg, start, co);
+    };
     for (let i = 1; i < sorted.length; i++) {
-      const expected = addDays(segEnd, 1);
-      if (sorted[i] === expected) {
-        segEnd = sorted[i]; // kéo dài đoạn
-      } else {
-        segments.push({ start: segStart, end: segEnd });
-        segStart = sorted[i];
-        segEnd   = sorted[i];
-      }
+      if (sorted[i] === addDays(end, 1)) { end = sorted[i]; }
+      else { flush(); start = sorted[i]; end = sorted[i]; }
     }
-    segments.push({ start: segStart, end: segEnd });
-
-    // Render từng đoạn
-    for (const { start, end } of segments) {
-      const checkoutDay = addDays(end, 1);
-      if (start === end) {
-        // 1 đêm: chỉ checkin + checkout
-        applyLock(map, start,       'locked-checkin',  lockInfo);
-        applyLock(map, checkoutDay, 'locked-checkout', lockInfo);
-      } else {
-        // Nhiều đêm liên tiếp
-        applyLock(map, start, 'locked-checkin', lockInfo);
-        // Các ngày giữa: start+1 .. end (toàn bộ ngày nằm trong đoạn lock)
-        for (const ds of dateRange(addDays(start, 1), checkoutDay)) {
-          applyLock(map, ds, 'locked-middle', lockInfo);
-        }
-        applyLock(map, checkoutDay, 'locked-checkout', lockInfo);
-      }
-    }
+    flush();
   }
 
   return map;
 }
 
-function applyLock(
-  map:      DayMap,
-  ds:       string,
-  lockType: SegmentType,
-  lockInfo: { customer: string; status: string; isLock: boolean },
-) {
-  if (!map[ds]) { map[ds] = { ...lockInfo, type: lockType }; return; }
+// ── Build bar render list ─────────────────────────────────────────
+// Mỗi booking → 1+ "bar pieces" (bị cắt khi xuống hàng mới)
+// Mỗi piece có: row, colStart, colEnd, leftOffset, rightOffset (px fraction)
 
-  const existing = map[ds];
-  const isBooking = ['checkin','checkout','middle','checkout+checkin'].includes(existing.type);
-
-  if (!isBooking) {
-    // Không có booking — ghi đè lock cũ
-    map[ds] = { ...lockInfo, type: lockType };
-    return;
-  }
-
-  // Booking tồn tại — split tại điểm giao
-  const isCheckout = existing.type === 'checkout';
-  const isCheckin  = existing.type === 'checkin';
-
-  if ((lockType === 'locked-checkin' || lockType === 'locked-middle') && isCheckout) {
-    // Lock overlap với ngày checkout booking → trái=booking checkout (1/3), phải=lock (2/3)
-    map[ds] = {
-      ...existing, type: 'locked-split-right',
-      leftStatus:   existing.status,
-      leftCustomer: existing.customer,
-      isLock:       true,
-    };
-  } else if ((lockType === 'locked-checkout' || lockType === 'locked-middle') && isCheckin) {
-    // Lock overlap với ngày checkin booking → trái=lock (1/3), phải=booking (2/3)
-    map[ds] = {
-      ...existing, type: 'locked-split-left',
-      rightCustomer: existing.customer,
-      rightStatus:   existing.status,
-      leftStatus:    'locked',
-      isLock:        true,
-    };
-  }
-  // Mọi trường hợp khác (middle, checkout+checkin...) → giữ nguyên booking
+interface BarPiece {
+  key:       string;
+  row:       number;
+  colStart:  number;       // 0..6
+  colEnd:    number;       // 0..6
+  leftFrac:  number;       // 0..1 — phần trăm trong cột bắt đầu
+  rightFrac: number;       // 0..1 — phần trăm trong cột cuối (từ phải)
+  isFirst:   boolean;      // rounded left
+  isLast:    boolean;      // rounded right
+  seg:       BarSegment;
 }
 
-// ── Day Cell ──────────────────────────────────────────────────────
+function buildBarPieces(
+  bookings:    Booking[],
+  villaId:     string,
+  lockedDates: string[],
+  year:        number,
+  month:       number,
+  totalDays:   number,
+  startDay:    number,    // firstDayOfMonth
+): BarPiece[] {
+  const pieces: BarPiece[] = [];
+  const now      = Date.now();
+  const monthPad = String(month + 1).padStart(2, '0');
+  const mStart   = `${year}-${monthPad}-01`;
+  const mEnd     = `${year}-${monthPad}-${String(totalDays).padStart(2,'0')}`;
 
-interface DayCellProps {
-  day:       number;
-  ds:        string;
-  info:      DayInfo | undefined;
-  today:     string;
-  onClick?:  (ds: string, info: DayInfo | null) => void;
-  readonly:  boolean;
-  isRowEnd?: boolean;
-}
+  const addPieces = (seg: BarSegment, ci: string, co: string, keyPrefix: string) => {
+    // Clamp to month
+    const visStart = ci < mStart ? mStart : ci;
+    const visEnd   = co > mEnd   ? mEnd   : co;
+    if (visStart > visEnd) return;
 
-function DayCell({ day, ds, info, today, onClick, readonly, isRowEnd }: DayCellProps) {
-  const isPast  = ds < today;
-  const isToday = ds === today;
+    const startDay2 = parseInt(visStart.split('-')[2], 10);
+    const endDay    = parseInt(visEnd.split('-')[2],   10);
+    const startGI   = startDay + startDay2 - 1;
+    const endGI     = startDay + endDay   - 1;
 
-  const handleClick = () => {
-    if (readonly || isPast) return;
-    // Checkout day: click → tạo booking mới bắt đầu từ ngày đó (chiều trống)
-    // locked-checkout: tương tự — nửa phải trống, có thể checkin
-    if (info?.type === 'checkout' || info?.type === 'locked-checkout') {
-      onClick?.(ds, null);
-      return;
-    }
-    // checkout+checkin: đã có người checkin rồi, không cho tạo thêm
-    onClick?.(ds, info ?? null);
-  };
+    let cur = startGI;
+    let pieceIdx = 0;
 
-  // Base classes
-  let cls = 'cal-day';
-  if (isPast)    cls += ' cal-past';
-  if (isToday)   cls += ' cal-today';
-  if (!info && (isPast || readonly)) cls += ' cal-no-cursor';
-  // Checkout day: nửa phải trống → vẫn có thể click để tạo booking mới
-  const isClickable = !readonly && !isPast && (
-    !info ||
-    info.type === 'checkout' ||
-    info.type === 'locked-checkout'
-  );
+    while (cur <= endGI) {
+      const row    = Math.floor(cur / 7);
+      const rowEnd = row * 7 + 6;
+      const segEnd = Math.min(endGI, rowEnd);
 
-  // Segment-specific rendering — Agoda bar style
-  // Bar: dải màu nằm ở giữa ô (inset 4px 0), kéo liền mạch qua các ngày
-  // Tên khách: hiển thị trên bar tại ô checkin (z-index cao hơn bar)
-  // Màu nền ô theo trạng thái, màu bar đậm hơn để tạo độ tương phản
-  const renderSegment = () => {
-    if (!info) return null;
+      const colStart = cur % 7;
+      const colEnd   = segEnd % 7;
+      const isFirstSeg = cur === startGI;
+      const isLastSeg  = segEnd === endGI;
 
-    const { type, customer, status, rightCustomer, rightStatus,
-            leftStatus, saleLabel, rightSaleLabel } = info;
-    // Bar hiển thị: ưu tiên saleLabel (tên sale + SĐT), fallback sang tên khách
-    const barLabel        = saleLabel ?? customer;
-    const rightBarLabel   = rightSaleLabel ?? rightCustomer;
-    const bg     = bgOf(status);
-    const bar    = barOf(status);
-    const txt    = textOf(status);
+      // leftFrac: 1/3 nếu là ô checkin thật (bar bắt đầu từ 1/3 ô)
+      const leftFrac  = isFirstSeg && visStart === ci ? 1/3 : 0;
+      // rightFrac: 2/3 nếu là ô checkout thật (bar kết thúc tại 1/3 ô từ trái = 2/3 từ phải)
+      const rightFrac = isLastSeg  && visEnd   === co ? 2/3 : 0;
 
-    // Hiển thị total+tick khi: ngày cuối thực của bar HOẶC cuối dòng (T7/cuối tháng)
-    const showTotal = (info.isLastMiddle || isRowEnd) && type === 'middle';
+      pieces.push({
+        key:      `${keyPrefix}-${pieceIdx}`,
+        row, colStart, colEnd,
+        leftFrac, rightFrac,
+        isFirst:  isFirstSeg && visStart === ci,
+        isLast:   isLastSeg  && visEnd   === co,
+        seg,
+      });
 
-    // Bar height: dải nằm giữa ô, cao 20px
-    const BAR_TOP    = '24px';
-    const BAR_HEIGHT = '26px';
-
-    // Helper: render bar strip + optional name label
-    const Strip = ({
-      left = '0', right = '0', color = bar,
-      roundLeft = false, roundRight = false,
-      label, labelColor = '#fff',
-    }: {
-      left?: string; right?: string; color?: string;
-      roundLeft?: boolean; roundRight?: boolean;
-      label?: string; labelColor?: string;
-    }) => (
-      <>
-        {/* Nền ô */}
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 1,
-          background: color === bar ? bg : bgOf(leftStatus ?? status),
-          pointerEvents: 'none',
-        }} />
-        {/* Bar strip */}
-        <div style={{
-          position: 'absolute',
-          top: BAR_TOP, height: BAR_HEIGHT,
-          left, right,
-          background: color,
-          borderRadius: `${roundLeft ? '10px' : '0'} ${roundRight ? '10px' : '0'} ${roundRight ? '10px' : '0'} ${roundLeft ? '10px' : '0'}`,
-          zIndex: 2,
-          pointerEvents: 'none',
-        }} />
-        {/* Tên khách trên bar */}
-        {label && (
-          <span style={{
-            position: 'absolute',
-            top: BAR_TOP, height: BAR_HEIGHT,
-            left: '4px', right: '2px',
-            zIndex: 3,
-            fontSize: '0.62rem', fontWeight: 700,
-            color: labelColor,
-            display: 'flex', alignItems: 'center',
-            overflow: 'hidden', whiteSpace: 'nowrap',
-            pointerEvents: 'none',
-          }}>
-            {label}
-          </span>
-        )}
-      </>
-    );
-
-    switch (type) {
-
-      // Checkin: nền phủ 2/3 phải, bar từ 1/3 → right
-      // (khách đến buổi chiều → 2/3 ô có màu)
-      case 'checkin':
-        return (
-          <>
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 1,
-              background: `linear-gradient(to right, transparent 33.3%, ${bg} 33.3%)`,
-              pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '33.3%', right: '0',
-              background: bar,
-              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
-              borderRadius: '10px 0 0 10px',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-            {barLabel && (
-              <span style={{
-                position: 'absolute',
-                top: BAR_TOP, height: BAR_HEIGHT,
-                left: 'calc(33.3% + 5px)', right: '3px',
-                zIndex: 3,
-                display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                overflow: 'hidden',
-                pointerEvents: 'none',
-                lineHeight: 1.2,
-              }}>
-                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{info.fullName ?? barLabel}</span>
-                  {(info.isLastMiddle || isRowEnd) && (info.total ?? 0) > 0 && (
-                    <span style={{ flexShrink: 0, fontSize: '0.6rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '3px', maxWidth: '55%' }}>
-                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {new Intl.NumberFormat('vi-VN').format(info.total ?? 0)}đ
-                      </span>
-                      {status === 'confirmed' && (
-                        <span style={{
-                          width: 14, height: 14, borderRadius: '50%',
-                          background: '#2e7d52', border: '1.5px solid #fff',
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          flexShrink: 0,
-                        }}>
-                          <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
-                            <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        </span>
-                      )}
-                    </span>
-                  )}
-                </span>
-                {info.phone && (
-                  <span style={{ fontSize: '0.56rem', color: 'rgba(255,255,255,.85)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {info.phone}
-                  </span>
-                )}
-                {saleLabel && !info.phone && (
-                  <span style={{ fontSize: '0.56rem', color: 'rgba(255,255,255,.85)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {saleLabel}
-                  </span>
-                )}
-              </span>
-            )}
-          </>
-        );
-
-      // Middle: nền full, bar full width (liền mạch với ô kề)
-      case 'middle':
-        return (
-          <>
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 1,
-              background: bg, pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '0', right: '0',
-              background: bar,
-              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-            {showTotal && (info.total ?? 0) > 0 && (
-              <span style={{
-                position: 'absolute',
-                top: BAR_TOP, height: BAR_HEIGHT,
-                right: '4px', zIndex: 3,
-                display: 'flex', alignItems: 'center', gap: '4px',
-                pointerEvents: 'none',
-                maxWidth: '60%',
-              }}>
-                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {new Intl.NumberFormat('vi-VN').format(info.total ?? 0)}đ
-                </span>
-                {status === 'confirmed' && (
-                  <span style={{
-                    width: 16, height: 16, borderRadius: '50%',
-                    background: '#2e7d52', border: '2px solid #fff',
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
-                    <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </span>
-                )}
-              </span>
-            )}
-          </>
-        );
-
-      // Checkout: nền 1/3 trái, bar từ left → 1/3
-      // (khách trả phòng buổi sáng → chỉ 1/3 ô có màu)
-      case 'checkout':
-        return (
-          <>
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 1,
-              background: `linear-gradient(to left, transparent 66.7%, ${bg} 66.7%)`,
-              pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '0', right: '66.7%',
-              background: bar,
-              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
-              borderRadius: '0 10px 10px 0',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-          </>
-        );
-
-      // checkout+checkin: split — trái checkout 1/3, phải checkin 2/3
-      case 'checkout+checkin': {
-        const lBar = barOf(leftStatus);
-        const rBg  = bgOf(rightStatus);
-        const rBar = barOf(rightStatus);
-        return (
-          <>
-            {/* Nền split: checkout 1/3 | checkin 2/3 */}
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 1,
-              background: `linear-gradient(to right, ${bgOf(leftStatus)} 33.3%, ${rBg} 33.3%)`,
-              pointerEvents: 'none',
-            }} />
-            {/* Bar trái checkout → 1/3 */}
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '0', right: '66.7%',
-              background: lBar,
-              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
-              borderRadius: '0 10px 10px 0',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-            {/* Bar phải checkin → 2/3 */}
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '33.3%', right: '0',
-              background: rBar,
-              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
-              borderRadius: '10px 0 0 10px',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-            {rightBarLabel && (
-              <span style={{
-                position: 'absolute',
-                top: BAR_TOP, height: BAR_HEIGHT,
-                left: 'calc(33.3% + 4px)', right: '2px',
-                zIndex: 3, fontSize: '0.62rem', fontWeight: 700,
-                color: '#fff', display: 'flex', alignItems: 'center',
-                overflow: 'hidden', whiteSpace: 'nowrap',
-                pointerEvents: 'none',
-              }}>
-                {rightBarLabel}
-              </span>
-            )}
-          </>
-        );
-      }
-
-      // Locked checkin: nền xanh mint nửa phải, bar xanh từ giữa
-      case 'locked-checkin':
-        return (
-          <>
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 1,
-              background: 'linear-gradient(to right, transparent 33.3%, #dde8e3 33.3%)',
-              pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '33.3%', right: '0',
-              background: '#7aaba3',
-              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
-              borderRadius: '10px 0 0 10px',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-            <span style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: 'calc(33.3% + 4px)', right: '2px',
-              zIndex: 3, fontSize: '0.6rem',
-              color: '#fff', display: 'flex', alignItems: 'center',
-              pointerEvents: 'none',
-            }}>🔒</span>
-          </>
-        );
-
-      case 'locked-middle':
-        return (
-          <>
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 1,
-              background: '#dde8e3', pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '0', right: '0',
-              background: '#7aaba3',
-              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-          </>
-        );
-
-      case 'locked-checkout':
-        return (
-          <>
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 1,
-              background: 'linear-gradient(to left, transparent 66.7%, #dde8e3 66.7%)',
-              pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '0', right: '66.7%',
-              background: '#7aaba3',
-              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
-              borderRadius: '0 10px 10px 0',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-          </>
-        );
-
-      // locked-split-left: trái=lock, phải=booking checkin
-      case 'locked-split-left': {
-        const rBar = barOf(rightStatus);
-        const rBg  = bgOf(rightStatus);
-        const rc   = info.rightCustomer ?? customer;
-        return (
-          <>
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 1,
-              background: `linear-gradient(to right, #dde8e3 33.3%, ${rBg} 33.3%)`,
-              pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '0', right: '66.7%',
-              background: '#7aaba3',
-              borderRadius: '0 10px 10px 0',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '33.3%', right: '0',
-              background: rBar,
-              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
-              borderRadius: '10px 0 0 10px',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-            {rc && (
-              <span style={{
-                position: 'absolute',
-                top: BAR_TOP, height: BAR_HEIGHT,
-                left: 'calc(33.3% + 4px)', right: '2px',
-                zIndex: 3, fontSize: '0.62rem', fontWeight: 700,
-                color: '#fff', display: 'flex', alignItems: 'center',
-                overflow: 'hidden', whiteSpace: 'nowrap',
-                pointerEvents: 'none',
-              }}>
-                {rc}
-              </span>
-            )}
-          </>
-        );
-      }
-
-      // locked-split-right: trái=booking checkout, phải=lock
-      case 'locked-split-right': {
-        const lBar = barOf(leftStatus);
-        const lBg  = bgOf(leftStatus);
-        return (
-          <>
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 1,
-              background: `linear-gradient(to right, ${lBg} 33.3%, #dde8e3 33.3%)`,
-              pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '0', right: '66.7%',
-              background: lBar,
-              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
-              borderRadius: '0 10px 10px 0',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-            <div style={{
-              position: 'absolute',
-              top: BAR_TOP, height: BAR_HEIGHT,
-              left: '33.3%', right: '0',
-              background: '#7aaba3',
-              borderRadius: '10px 0 0 10px',
-              zIndex: 2, pointerEvents: 'none',
-            }} />
-          </>
-        );
-      }
-
-      default: return null;
+      cur = segEnd + 1;
+      pieceIdx++;
     }
   };
 
-  return (
-    <div
-      className={cls}
-      onClick={handleClick}
-      title={info?.fullName ?? undefined}
-      style={{ cursor: isClickable ? 'pointer' : 'default' }}
-    >
-      {renderSegment()}
-      <span className={`cal-dn${isToday ? ' cal-dn-today' : ''}`}>{day}</span>
-    </div>
-  );
+  // Bookings
+  for (const b of bookings) {
+    if (b.villaId !== villaId || b.status === 'cancelled') continue;
+    if (b.status === 'hold' && b.holdExpiresAt) {
+      if (new Date(b.holdExpiresAt).getTime() < now) continue;
+    }
+    const ci = b.checkin.split('T')[0];
+    const co = b.checkout.split('T')[0];
+    const seg: BarSegment = {
+      bkId:      b.id,
+      status:    b.status,
+      customer:  (b.customer ?? '').split(' ').pop() ?? '',
+      fullName:  b.customer ?? '',
+      saleLabel: (b as any).createdByRole === 'sale' && (b as any).createdByName
+        ? `${(b as any).createdByName}${(b as any).createdByPhone ? ' • ' + (b as any).createdByPhone : ''}`
+        : undefined,
+      phone:     b.phone ?? '',
+      total:     b.total ?? 0,
+      checkin:   ci,
+      checkout:  co,
+      type:      'booking',
+    };
+    addPieces(seg, ci, co, `bk-${b.id}`);
+  }
+
+  // Locked
+  if (lockedDates.length) {
+    const sorted = [...lockedDates].map(d => d.split('T')[0]).sort();
+    let start = sorted[0], end = sorted[0];
+    let lockIdx = 0;
+    const flush = () => {
+      const co = addDays(end, 1);
+      const seg: BarSegment = {
+        bkId: `lock-${lockIdx}`, status: 'locked',
+        customer: '🔒', fullName: 'Ngày khóa',
+        total: 0, checkin: start, checkout: co, type: 'locked',
+      };
+      addPieces(seg, start, co, `lock-${lockIdx}`);
+      lockIdx++;
+    };
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === addDays(end, 1)) { end = sorted[i]; }
+      else { flush(); start = sorted[i]; end = sorted[i]; }
+    }
+    flush();
+  }
+
+  return pieces;
 }
 
-// ── Main Calendar Component ───────────────────────────────────────
+// ── Main component ────────────────────────────────────────────────
 
 export default function Calendar({
-  bookings,
-  villaId,
-  lockedDates = [],
-  month,
-  year,
-  onMonthChange,
-  onDayClick,
-  readonly = false,
+  bookings, villaId, lockedDates = [],
+  month, year, onMonthChange, onDayClick, readonly = false,
 }: CalendarProps) {
-  const today    = todayISO();
+  const today     = todayISO();
   const totalDays = daysInMonth(year, month);
   const startDay  = firstDayOfMonth(year, month);
   const monthPad  = String(month + 1).padStart(2, '0');
+  const rowCount  = Math.ceil((startDay + totalDays) / 7);
 
-  const dayMap = useMemo(
-    () => buildDayMap(bookings, villaId, lockedDates),
+  const clickMap = useMemo(
+    () => buildClickMap(bookings, villaId, lockedDates),
     [bookings, villaId, lockedDates],
+  );
+
+  const pieces = useMemo(
+    () => buildBarPieces(bookings, villaId, lockedDates, year, month, totalDays, startDay),
+    [bookings, villaId, lockedDates, year, month, totalDays, startDay],
   );
 
   const handlePrev = useCallback(() => {
@@ -752,82 +283,217 @@ export default function Calendar({
     onMonthChange(y, m);
   }, [year, month, onMonthChange]);
 
+  const handleDayClick = useCallback((ds: string) => {
+    if (readonly || ds < today) return;
+    const entry = clickMap[ds];
+    if (!entry) { onDayClick?.(ds, null); return; }
+    // Checkout day → nửa phải trống → tạo mới
+    if (entry.isCheckout) { onDayClick?.(ds, null); return; }
+    onDayClick?.(ds, entry.seg);
+  }, [readonly, today, clickMap, onDayClick]);
+
+  // ── Render bar pieces ────────────────────────────────────────────
+  const renderBars = () => pieces.map(p => {
+    const { key, row, colStart, colEnd, leftFrac, rightFrac, isFirst, isLast, seg } = p;
+    const c = col(seg.status);
+
+    // left  = (colStart + leftFrac)  / 7 * 100%
+    // right = (7 - colEnd - 1 + rightFrac) / 7 * 100%  →  (6 - colEnd + rightFrac) / 7 * 100%
+    const leftPct  = ((colStart + leftFrac)      / 7) * 100;
+    const rightPct = ((6 - colEnd + rightFrac)   / 7) * 100;
+    const topPx    = row * CELL_H + BAR_T;
+
+    const label = p.seg.saleLabel ?? p.seg.fullName ?? p.seg.customer;
+
+    return (
+      <div
+        key={key}
+        style={{
+          position:     'absolute',
+          top:          topPx,
+          height:       BAR_H,
+          left:         `${leftPct}%`,
+          right:        `${rightPct}%`,
+          background:   c.bar,
+          backgroundImage: 'repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0px,rgba(255,255,255,.07) 3px,transparent 3px,transparent 9px)',
+          borderRadius: `${isFirst ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isFirst ? BAR_R : 0}px`,
+          zIndex:       10,
+          pointerEvents:'none',
+          overflow:     'hidden',
+          display:      'flex',
+          alignItems:   'center',
+          minWidth:     0,
+        }}
+      >
+        {/* Tên khách: chỉ ở piece đầu tiên */}
+        {isFirst && label && (
+          <span style={{
+            paddingLeft:  6,
+            paddingRight: isLast ? 56 : 4,
+            fontSize:     '0.64rem',
+            fontWeight:   700,
+            color:        '#fff',
+            whiteSpace:   'nowrap',
+            overflow:     'hidden',
+            textOverflow: 'ellipsis',
+            flex:         1,
+            lineHeight:   1.15,
+          }}>
+            {label}
+            {seg.phone && (
+              <span style={{ opacity: .85, fontWeight: 400, marginLeft: 3 }}>
+                · {seg.phone}
+              </span>
+            )}
+          </span>
+        )}
+
+        {/* Total + tick: CHỈ ở piece cuối cùng, căn phải */}
+        {isLast && seg.total > 0 && (
+          <span style={{
+            position:    'absolute',
+            right:       5,
+            display:     'flex',
+            alignItems:  'center',
+            gap:         3,
+            flexShrink:  0,
+          }}>
+            <span style={{
+              fontSize:   '0.59rem',
+              fontWeight: 700,
+              color:      '#fff',
+              whiteSpace: 'nowrap',
+            }}>
+              {new Intl.NumberFormat('vi-VN', {
+                notation:             'compact',
+                maximumFractionDigits: 0,
+              }).format(seg.total)}đ
+            </span>
+            {seg.status === 'confirmed' && (
+              <span style={{
+                width:          15, height: 15,
+                borderRadius:   '50%',
+                background:     '#2e7d52',
+                border:         '1.5px solid rgba(255,255,255,.9)',
+                display:        'inline-flex',
+                alignItems:     'center',
+                justifyContent: 'center',
+                flexShrink:     0,
+              }}>
+                <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
+                  <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+    );
+  });
+
+  // ── Render background tints (nền nhẹ đằng sau bar) ───────────────
+  const renderBgTints = () => pieces
+    .filter(p => p.isFirst) // 1 tint per booking (across all rows)
+    .flatMap(p => {
+      // Render tint cho mỗi piece của booking này
+      const allPieces = pieces.filter(q => q.seg.bkId === p.seg.bkId);
+      return allPieces.map(q => {
+        const c = col(q.seg.status);
+        const leftPct  = ((q.colStart + q.leftFrac)  / 7) * 100;
+        const rightPct = ((6 - q.colEnd + q.rightFrac) / 7) * 100;
+        return (
+          <div key={`tint-${q.key}`} style={{
+            position:      'absolute',
+            top:           q.row * CELL_H,
+            height:        CELL_H,
+            left:          `${leftPct}%`,
+            right:         `${rightPct}%`,
+            background:    c.bg,
+            zIndex:        1,
+            pointerEvents: 'none',
+          }} />
+        );
+      });
+    });
+
   return (
-    <div className="cal-wrapper">
-      {/* Header */}
-      <div className="cal-header">
-        <button className="cal-nav-btn" onClick={handlePrev} aria-label="Tháng trước">
-          ‹
-        </button>
-        <span className="cal-month-title">
-          {formatMonthYear(year, month)}
-        </span>
-        <button className="cal-nav-btn" onClick={handleNext} aria-label="Tháng sau">
-          ›
-        </button>
+    <div className="cal-wrap">
+      {/* ── Header ── */}
+      <div className="cal-head">
+        <button className="cal-nav" onClick={handlePrev}>‹</button>
+        <span className="cal-title">{formatMonthYear(year, month)}</span>
+        <button className="cal-nav" onClick={handleNext}>›</button>
       </div>
 
-      {/* Day name headers */}
-      <div className="cal-grid">
-        {CONFIG.DAY_NAMES.map(dn => (
-          <div key={dn} className="cal-hdr">{dn}</div>
-        ))}
-
-        {/* Empty cells before first day */}
-        {Array.from({ length: startDay }).map((_, i) => (
-          <div key={`empty-${i}`} className="cal-day cal-empty" />
-        ))}
-
-        {/* Day cells */}
-        {Array.from({ length: totalDays }).map((_, i) => {
-          const day = i + 1;
-          const ds  = `${year}-${monthPad}-${String(day).padStart(2, '0')}`;
-          // colIndex: 0=CN,1=T2,...,6=T7 — ô cuối dòng = CN (index 0 trong grid CN-đầu)
-          // startDay: số ô trống đầu tháng (0=CN, 1=T2...)
-          const colIndex = (startDay + i) % 7; // 0=CN..6=T7
-          const isRowEnd = colIndex === 6; // T7 = cuối dòng
-          const isMonthEnd = day === totalDays;
-          return (
-            <DayCell
-              key={ds}
-              day={day}
-              ds={ds}
-              info={dayMap[ds]}
-              today={today}
-              onClick={onDayClick}
-              readonly={readonly}
-              isRowEnd={isRowEnd || isMonthEnd}
-            />
-          );
-        })}
+      {/* ── Day names ── */}
+      <div className="cal-dow">
+        {CONFIG.DAY_NAMES.map(d => <div key={d} className="cal-dow-cell">{d}</div>)}
       </div>
 
-      {/* Legend */}
+      {/* ── Grid: cells + absolute bars ── */}
+      <div
+        className="cal-grid"
+        style={{ height: rowCount * CELL_H, position: 'relative' }}
+      >
+        {/* Background tints (z:1) */}
+        {renderBgTints()}
+
+        {/* Day cells (z:5) — transparent background, số ngày on top */}
+        <div className="cal-cells">
+          {Array.from({ length: startDay }).map((_, i) => (
+            <div key={`e${i}`} className="cal-cell cal-cell-empty" />
+          ))}
+          {Array.from({ length: totalDays }).map((_, i) => {
+            const day = i + 1;
+            const ds  = `${year}-${monthPad}-${String(day).padStart(2,'0')}`;
+            const isPast    = ds < today;
+            const isToday   = ds === today;
+            const entry     = clickMap[ds];
+            const clickable = !readonly && !isPast && (!entry || entry.isCheckout);
+            return (
+              <div
+                key={ds}
+                className={[
+                  'cal-cell',
+                  isPast   ? 'cal-cell-past'  : '',
+                  !clickable && entry && !entry.isCheckout ? 'cal-cell-busy' : '',
+                ].filter(Boolean).join(' ')}
+                onClick={() => handleDayClick(ds)}
+                style={{ cursor: clickable ? 'pointer' : entry && !entry?.isCheckout ? 'default' : 'default' }}
+              >
+                <span className={`cal-dn${isToday ? ' cal-dn-today' : ''}`}>{day}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Bar overlays (z:10) — on top of everything */}
+        {renderBars()}
+      </div>
+
+      {/* ── Legend ── */}
       <div className="cal-legend">
-        <span className="cal-legend-item">
-          <span className="cal-legend-dot" style={{ background: '#fde8e8', border: '1.5px solid #e57373' }} />
-          Confirmed
-        </span>
-        <span className="cal-legend-item">
-          <span className="cal-legend-dot" style={{ background: '#fef6e4', border: '1.5px solid #f0b429' }} />
-          Hold
-        </span>
-        <span className="cal-legend-item">
-          <span className="cal-legend-dot" style={{ background: '#dde8e3', border: '1.5px solid #7aaba3' }} />
-          Khóa
-        </span>
+        {[
+          { label: 'Đã đặt',    bg: C.confirmed.bg, border: C.confirmed.bar },
+          { label: 'Đang giữ',  bg: C.hold.bg,      border: C.hold.bar },
+          { label: 'Ngày khóa', bg: C.locked.bg,    border: C.locked.bar },
+        ].map(({ label, bg, border }) => (
+          <span key={label} className="cal-legend-item">
+            <span className="cal-legend-dot" style={{ background: bg, border: `1.5px solid ${border}` }} />
+            {label}
+          </span>
+        ))}
       </div>
 
       <style>{`
-        .cal-wrapper {
+        .cal-wrap {
           background:    var(--white);
           border-radius: var(--radius-lg);
           border:        1px solid rgba(180,212,195,.3);
           overflow:      hidden;
           user-select:   none;
         }
-
-        .cal-header {
+        .cal-head {
           display:         flex;
           align-items:     center;
           justify-content: space-between;
@@ -835,44 +501,33 @@ export default function Calendar({
           border-bottom:   1px solid var(--sage-pale);
           background:      var(--parchment);
         }
-
-        .cal-month-title {
+        .cal-title {
           font-family: var(--font-display);
           font-size:   1rem;
           color:       var(--forest-deep);
           font-weight: 600;
         }
-
-        .cal-nav-btn {
-          background:    none;
-          border:        1.5px solid var(--stone);
-          border-radius: var(--radius-sm);
-          width:         32px;
-          height:        32px;
-          font-size:     1.2rem;
-          line-height:   1;
-          cursor:        pointer;
-          color:         var(--ink);
-          display:       flex;
-          align-items:   center;
+        .cal-nav {
+          background:      none;
+          border:          1.5px solid var(--stone);
+          border-radius:   var(--radius-sm);
+          width: 32px; height: 32px;
+          font-size:       1.2rem;
+          cursor:          pointer;
+          color:           var(--ink);
+          display:         flex;
+          align-items:     center;
           justify-content: center;
-          transition:    background .12s, border-color .12s;
+          transition:      background .12s, border-color .12s;
         }
+        .cal-nav:hover { background: var(--sage-pale); border-color: var(--sage); }
 
-        .cal-nav-btn:hover {
-          background:    var(--sage-pale);
-          border-color:  var(--sage);
-        }
-
-        .cal-grid {
+        .cal-dow {
           display:               grid;
           grid-template-columns: repeat(7, minmax(0, 1fr));
-          gap:                   0;
-          padding:               6px 2px;
-          background:            var(--white);
+          border-bottom:         1px solid var(--sage-pale);
         }
-
-        .cal-hdr {
+        .cal-dow-cell {
           text-align:     center;
           font-size:      0.68rem;
           font-weight:    700;
@@ -882,95 +537,70 @@ export default function Calendar({
           letter-spacing: 0.06em;
         }
 
-        .cal-day {
-          position:       relative;
-          min-height:     68px;
-          border-radius:  6px;
-          overflow:       visible;
-          display:        flex;
-          flex-direction: column;
-          align-items:    center;
-          justify-content: flex-start;
-          padding-top:    6px;
-          transition:     opacity .1s, background .1s;
-          border:         1px solid rgba(180,212,195,.18);
-          margin:         1px;
-          min-width:      0; /* prevent bar overflow on mobile */
+        /* Grid: position relative, chiều cao cố định = rowCount * CELL_H */
+        .cal-grid {
+          background: var(--white);
+          overflow:   hidden;
         }
 
-        .cal-day:hover:not(.cal-past):not(.cal-no-cursor) {
+        /* Cell layer */
+        .cal-cells {
+          position:              absolute;
+          inset:                 0;
+          display:               grid;
+          grid-template-columns: repeat(7, minmax(0, 1fr));
+          grid-auto-rows:        ${CELL_H}px;
+          z-index:               5;
+        }
+
+        .cal-cell {
+          position:        relative;
+          display:         flex;
+          flex-direction:  column;
+          align-items:     center;
+          justify-content: flex-start;
+          padding-top:     5px;
+          border:          1px solid rgba(180,212,195,.15);
+          background:      transparent;
+          transition:      background .1s;
+          overflow:        visible;
+        }
+        .cal-cell:hover:not(.cal-cell-past):not(.cal-cell-busy):not(.cal-cell-empty) {
           background: rgba(180,212,195,.12);
         }
-
-        .cal-day.cal-empty     { background: transparent; pointer-events: none; }
-        .cal-day.cal-past      { opacity: .42; }
-        .cal-day.cal-no-cursor { cursor: default !important; }
-
-        .cal-bg {
-          position:       absolute;
-          inset:          4px 0;
-          z-index:        1;
-          pointer-events: none;
-        }
-
-        .cal-split {
-          position:       absolute;
-          inset:          4px 0;
-          z-index:        1;
-          display:        flex;
-          pointer-events: none;
-          overflow:       hidden;
-        }
-
-        .cal-split > div {
-          flex: 1;
-          height: 100%;
-        }
+        .cal-cell-empty { pointer-events: none; border-color: transparent; }
+        .cal-cell-past  { opacity: .45; pointer-events: none; }
+        .cal-cell-busy  { cursor: default; }
 
         .cal-dn {
-          font-size:   0.8rem;
-          font-weight: 600;
-          color:       var(--ink);
-          position:    relative;
-          z-index:     2;
-          line-height: 22px;
-          min-width:   22px;
-          text-align:  center;
+          font-size:     0.78rem;
+          font-weight:   600;
+          color:         var(--ink);
+          line-height:   22px;
+          min-width:     22px;
+          text-align:    center;
           border-radius: 50%;
+          position:      relative;
+          z-index:       8;        /* trên bar */
+          background:    transparent;
         }
-
         .cal-dn-today {
           background: var(--forest);
           color:      var(--white);
-          width:      22px;
-          height:     22px;
-          display:    flex;
-          align-items: center;
-          justify-content: center;
+          width:  22px; height: 22px;
+          display:        flex;
+          align-items:    center;
+          justify-content:center;
         }
-
-        .cal-name {
-          font-size:    0.65rem;
-          font-weight:  600;
-          position:     relative;
-          z-index:      2;
-          margin-top:   2px;
-          max-width:    90%;
-          overflow:     hidden;
-          text-overflow: ellipsis;
-          white-space:  nowrap;
-        }
-
-        .cal-name-right { align-self: flex-end; padding-right: 4px; }
 
         .cal-legend {
-          display:     flex;
-          gap:         16px;
-          padding:     10px 16px;
-          border-top:  1px solid var(--sage-pale);
-          background:  var(--parchment);
+          display:    flex;
+          gap:        16px;
+          padding:    10px 16px;
+          border-top: 1px solid var(--sage-pale);
+          background: var(--parchment);
+          flex-wrap:  wrap;
         }
-
         .cal-legend-item {
           display:     flex;
           align-items: center;
@@ -978,12 +608,14 @@ export default function Calendar({
           font-size:   0.75rem;
           color:       var(--ink-muted);
         }
-
         .cal-legend-dot {
-          width:         12px;
-          height:        12px;
+          width: 12px; height: 12px;
           border-radius: 3px;
           flex-shrink:   0;
+        }
+
+        @media (max-width: 600px) {
+          .cal-dn { font-size: 0.68rem; }
         }
       `}</style>
     </div>
