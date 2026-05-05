@@ -779,7 +779,7 @@ export default function Calendar({
         {/* Day cells */}
         {Array.from({ length: totalDays }).map((_, i) => {
           const day = i + 1;
-          const ds  = `${year}-${monthPad}-${String(day).padStart(2, '0')}`;\
+          const ds  = `${year}-${monthPad}-${String(day).padStart(2, '0')}`;
           // colIndex: 0=CN,1=T2,...,6=T7 — ô cuối dòng = CN (index 0 trong grid CN-đầu)
           // startDay: số ô trống đầu tháng (0=CN, 1=T2...)
           const colIndex = (startDay + i) % 7; // 0=CN..6=T7
