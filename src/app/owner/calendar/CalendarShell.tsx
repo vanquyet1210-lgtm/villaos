@@ -5,6 +5,7 @@
 // ╚══════════════════════════════════════════════════════════════╝
 
 import { useState, useTransition, useEffect } from 'react';
+import { createPortal }           from 'react-dom';
 import { useRouter }           from 'next/navigation';
 import Calendar, { type BarSegment } from '@/components/Calendar';
 import { useBookingsRealtime } from '@/hooks/useBookingsRealtime';
@@ -420,7 +421,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
       />
 
       {/* ── VILLA DETAIL MODAL ───────────────────────────────── */}
-      {showDetail && (
+      {showDetail && createPortal(
         <div className="modal-overlay" onClick={() => setShowDetail(false)}>
           <div className="modal modal-detail" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -505,7 +506,8 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── MODAL ─────────────────────────────────────────────── */}
