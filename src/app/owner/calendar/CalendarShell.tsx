@@ -718,6 +718,15 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                   <button className="btn-secondary" onClick={closeModal}>Hủy</button>
                   {(userRole === 'owner' || userRole === 'admin') && modal?.checkin && (() => {
                     const isLocked = (localLockedDates ?? villa.lockedDates).includes(modal.checkin!);
+                    // Kiểm tra ngày checkin có booking confirmed/hold hợp lệ không
+                    const hasBooking = bookings.some(b => {
+                      if (b.status === 'cancelled') return false;
+                      if (b.status === 'hold' && b.holdExpiresAt &&
+                          new Date(b.holdExpiresAt).getTime() < Date.now()) return false;
+                      return b.checkin <= modal.checkin! && b.checkout > modal.checkin!;
+                    });
+                    // Nếu đã có booking → chỉ hiển thị thông báo, không cho khóa
+                    if (hasBooking && !isLocked) return null;
                     return (
                       <button
                         className="btn-secondary"
