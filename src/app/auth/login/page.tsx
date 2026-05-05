@@ -38,7 +38,7 @@ function LoginContent() {
       const role = result.code;
       const destination = redirectParam ??
         (role === 'admin'    ? '/admin/dashboard'  :
-         role === 'owner'    ? '/owner/dashboard'  :
+         role === 'owner'    ? '/owner/calendar'   :
          role === 'sale'     ? '/sale/calendar'    :
                                '/customer/villas');
 

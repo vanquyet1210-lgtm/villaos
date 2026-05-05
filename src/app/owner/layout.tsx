@@ -24,14 +24,14 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
         </div>
 
         <nav className="sidebar-nav">
-          <Link href="/owner/dashboard" className="nav-item">
-            <span className="nav-icon">📊</span> Dashboard
+          <Link href="/owner/calendar" className="nav-item">
+            <span className="nav-icon">📅</span> Lịch đặt phòng
           </Link>
           <Link href="/owner/villas" className="nav-item">
             <span className="nav-icon">🏠</span> Villa của tôi
           </Link>
-          <Link href="/owner/calendar" className="nav-item">
-            <span className="nav-icon">📅</span> Lịch đặt phòng
+          <Link href="/owner/dashboard" className="nav-item">
+            <span className="nav-icon">📊</span> Dashboard
           </Link>
 
           {isAdmin && (
