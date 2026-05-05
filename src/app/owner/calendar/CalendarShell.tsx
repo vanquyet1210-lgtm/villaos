@@ -107,7 +107,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
 
   const villa = villas.find(v => v.id === selectedVillaId) ?? filteredVillas[0] ?? villas[0];
 
-  // Reset detail view khi đổi villa
   useEffect(() => { setShowDetail(false); }, [selectedVillaId]);
 
   // Realtime bookings (merge server + realtime)
@@ -395,6 +394,12 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                     <span>·</span>
                     <span className="villa-card-price">{fmtMoney(v.price)}/đêm</span>
                   </div>
+                  <button
+                    className="villa-card-view-btn"
+                    onClick={e => { e.stopPropagation(); setSelectedVillaId(v.id); setShowDetail(true); }}
+                  >
+                    🏠 Xem
+                  </button>
                 </div>
               </button>
             ))}
@@ -402,29 +407,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
         </div>
       )}
 
-      {/* Villa info bar */}
-      <div className="villa-info-bar">
-        <span className="villa-info-name">{villa.emoji} {villa.name}</span>
-        <span className="villa-info-meta">
-          🛏 {villa.bedrooms} phòng · 👥 {villa.adults} người · 💰 {fmtMoney(villa.price)}/đêm
-          {villa.phone && (
-            <span className="villa-hotline">
-              &nbsp;·&nbsp;📞 <a href={`tel:${villa.phone}`} className="hotline-link">{villa.phone}</a>
-            </span>
-          )}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="booking-count">
-            {bookings.filter(b => b.status !== 'cancelled').length} booking
-          </span>
-          <button
-            className="btn-detail"
-            onClick={() => setShowDetail(true)}
-          >
-            🏠 Xem villa
-          </button>
-        </div>
-      </div>
 
       {/* Calendar */}
       <Calendar
@@ -447,125 +429,75 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
               <button className="modal-close" onClick={() => setShowDetail(false)}>×</button>
             </div>
             <div className="modal-body" style={{ padding: 0 }}>
-
-              {/* ── Album ảnh grid ── */}
               {villa.images && villa.images.length > 0 && (
                 <div className="detail-gallery">
                   {villa.images.map((src, i) => (
                     <div key={i} className="detail-gallery-cell">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={src} alt={`${villa.name} ${i + 1}`} />
-                      <a
-                        className="detail-img-dl"
-                        href={src}
-                        download={`${villa.name}-${i + 1}.jpg`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Tải ảnh"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        ⬇
-                      </a>
+                      <a className="detail-img-dl" href={src} download={`${villa.name}-${i+1}.jpg`}
+                        target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>⬇</a>
                     </div>
                   ))}
                 </div>
               )}
-
               <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-                {/* ── Trạng thái + Thông tin cơ bản ── */}
                 <div className="detail-section">
                   <div className="detail-status-row">
-                    <span className="detail-status-badge">
-                      <span className="detail-status-dot" /> Đang hoạt động
-                    </span>
-                    <span className="detail-price">{fmtMoney(villa.price)}<span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--ink-muted)' }}>/đêm</span></span>
+                    <span className="detail-status-badge"><span className="detail-status-dot" /> Đang hoạt động</span>
+                    <span className="detail-price">{fmtMoney(villa.price)}<span style={{ fontSize:'0.8rem', fontWeight:400, color:'var(--ink-muted)' }}>/đêm</span></span>
                   </div>
                   <div className="detail-meta-grid">
                     <div className="detail-meta-item">
                       <span className="detail-meta-icon">📍</span>
                       <div>
                         <div className="detail-meta-label">Địa chỉ</div>
-                        <div className="detail-meta-val">
-                          {[villa.street, villa.ward, villa.district, villa.province].filter(Boolean).join(', ')}
-                        </div>
+                        <div className="detail-meta-val">{[villa.street, villa.ward, villa.district, villa.province].filter(Boolean).join(', ')}</div>
                       </div>
                     </div>
                     <div className="detail-meta-item">
                       <span className="detail-meta-icon">🛏</span>
-                      <div>
-                        <div className="detail-meta-label">Phòng ngủ</div>
-                        <div className="detail-meta-val">{villa.bedrooms} phòng</div>
-                      </div>
+                      <div><div className="detail-meta-label">Phòng ngủ</div><div className="detail-meta-val">{villa.bedrooms} phòng</div></div>
                     </div>
                     <div className="detail-meta-item">
                       <span className="detail-meta-icon">👥</span>
-                      <div>
-                        <div className="detail-meta-label">Sức chứa</div>
-                        <div className="detail-meta-val">
-                          {villa.adults} người lớn{villa.children > 0 ? ` · ${villa.children} trẻ em` : ''}
-                        </div>
-                      </div>
+                      <div><div className="detail-meta-label">Sức chứa</div><div className="detail-meta-val">{villa.adults} người lớn{villa.children > 0 ? ` · ${villa.children} trẻ em` : ''}</div></div>
                     </div>
                     {villa.phone && (
                       <div className="detail-meta-item">
                         <span className="detail-meta-icon">📞</span>
-                        <div>
-                          <div className="detail-meta-label">Hotline</div>
-                          <div className="detail-meta-val">
-                            <a href={`tel:${villa.phone}`} style={{ color: 'var(--forest)', fontWeight: 600 }}>{villa.phone}</a>
-                          </div>
+                        <div><div className="detail-meta-label">Hotline</div>
+                          <div className="detail-meta-val"><a href={`tel:${villa.phone}`} style={{ color:'var(--forest)', fontWeight:600 }}>{villa.phone}</a></div>
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
-
-                {/* ── Tiện ích ── */}
                 {villa.amenities && villa.amenities.length > 0 && (
                   <div className="detail-section">
                     <div className="detail-section-title">✨ Tiện ích</div>
                     <div className="detail-amenities">
                       {villa.amenities.map(a => {
-                        const icons: Record<string, string> = {
-                          pool: '🏊', bbq: '🔥', garden: '🌿', gym: '💪',
-                          jacuzzi: '🛁', karaoke: '🎤', parking: '🅿️',
-                          billiard: '🎱', 'xe đạp': '🚲', wifi: '📶',
-                        };
-                        return (
-                          <div key={a} className="detail-amenity-chip">
-                            <span>{icons[a] ?? '✅'}</span>
-                            <span>{a}</span>
-                          </div>
-                        );
+                        const icons: Record<string,string> = { pool:'🏊', bbq:'🔥', garden:'🌿', gym:'💪', jacuzzi:'🛁', karaoke:'🎤', parking:'🅿️', billiard:'🎱', 'xe đạp':'🚲', wifi:'📶' };
+                        return <div key={a} className="detail-amenity-chip"><span>{icons[a]??'✅'}</span><span>{a}</span></div>;
                       })}
                     </div>
                   </div>
                 )}
-
-                {/* ── Mô tả / bài viết giới thiệu ── */}
                 {villa.description && (
                   <div className="detail-section">
                     <div className="detail-section-title">📝 Giới thiệu villa</div>
                     <p className="detail-description">{villa.description}</p>
                   </div>
                 )}
-
-                {/* ── Nút tải toàn bộ ảnh ── */}
                 {villa.images && villa.images.length > 0 && (
                   <div className="detail-section">
                     <div className="detail-section-title">📸 Tải ảnh gửi khách</div>
-                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                       {villa.images.map((src, i) => (
-                        <a
-                          key={i}
-                          href={src}
-                          download={`${villa.name}-anh-${i + 1}.jpg`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-download"
-                        >
-                          ⬇ Ảnh {i + 1}
+                        <a key={i} href={src} download={`${villa.name}-anh-${i+1}.jpg`}
+                          target="_blank" rel="noopener noreferrer" className="btn-download">
+                          ⬇ Ảnh {i+1}
                         </a>
                       ))}
                     </div>
@@ -577,7 +509,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
         </div>
       )}
 
-      {/* ── BOOKING MODAL ─────────────────────────────────────── */}
+      {/* ── MODAL ─────────────────────────────────────────────── */}
       {modal && (
         <div className="modal-overlay" onClick={closeModal}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -939,6 +871,23 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
           font-weight: 700;
           font-size:   0.75rem;
         }
+        .villa-card-view-btn {
+          margin-top:    4px;
+          align-self:    flex-end;
+          padding:       4px 10px;
+          border:        1.5px solid var(--sage);
+          border-radius: var(--radius-md);
+          background:    var(--sage-pale);
+          color:         var(--forest);
+          font-family:   var(--font-body);
+          font-size:     0.72rem;
+          font-weight:   600;
+          cursor:        pointer;
+          transition:    all .15s;
+        }
+        .villa-card-view-btn:hover { background: var(--sage); color: white; }
+        .villa-card.active .villa-card-view-btn { background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.5); color: white; }
+        .villa-card.active .villa-card-view-btn:hover { background: rgba(255,255,255,.35); }
 
                 .villa-filter-bar {
           display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
@@ -991,22 +940,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
         }
         .amenity-chip:hover { border-color: var(--sage); background: var(--sage-pale); }
         .amenity-chip.active { background: var(--forest); border-color: var(--forest); color: white; font-weight: 600; }
-        /* ── Detail button ── */
-        .btn-detail {
-          padding:       6px 12px;
-          border:        1.5px solid var(--sage);
-          border-radius: var(--radius-md);
-          background:    var(--sage-pale);
-          color:         var(--forest);
-          font-family:   var(--font-body);
-          font-size:     0.78rem;
-          font-weight:   600;
-          cursor:        pointer;
-          transition:    all .15s;
-          white-space:   nowrap;
-        }
-        .btn-detail:hover { background: var(--sage); color: white; }
-
         /* ── Detail modal ── */
         .modal-detail {
           max-width:  820px;
@@ -1014,8 +947,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
           overflow-y: auto;
           width:      95vw;
         }
-
-        /* Album ảnh grid */
         .detail-gallery {
           display:               grid;
           grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -1029,148 +960,51 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
           overflow:      hidden;
           background:    var(--sage-pale);
         }
-        .detail-gallery-cell img {
-          width:      100%;
-          height:     100%;
-          object-fit: cover;
-          display:    block;
-          transition: transform .25s;
-        }
+        .detail-gallery-cell img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .25s; }
         .detail-gallery-cell:hover img { transform: scale(1.04); }
         .detail-img-dl {
-          position:        absolute;
-          bottom:          6px;
-          right:           6px;
-          background:      rgba(0,0,0,.55);
-          color:           white;
-          border-radius:   99px;
-          width:           28px;
-          height:          28px;
-          display:         flex;
-          align-items:     center;
-          justify-content: center;
-          font-size:       0.8rem;
-          text-decoration: none;
-          opacity:         0;
-          transition:      opacity .15s;
+          position:absolute; bottom:6px; right:6px;
+          background:rgba(0,0,0,.55); color:white;
+          border-radius:99px; width:28px; height:28px;
+          display:flex; align-items:center; justify-content:center;
+          font-size:0.8rem; text-decoration:none;
+          opacity:0; transition:opacity .15s;
         }
-        .detail-gallery-cell:hover .detail-img-dl { opacity: 1; }
-
-        /* Sections */
-        .detail-section {
-          display:        flex;
-          flex-direction: column;
-          gap:            12px;
-        }
+        .detail-gallery-cell:hover .detail-img-dl { opacity:1; }
+        .detail-section { display:flex; flex-direction:column; gap:12px; }
         .detail-section-title {
-          font-size:      0.78rem;
-          font-weight:    700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color:          var(--ink-muted);
-          padding-bottom: 8px;
-          border-bottom:  1px solid var(--sage-pale);
+          font-size:0.78rem; font-weight:700; text-transform:uppercase;
+          letter-spacing:0.05em; color:var(--ink-muted);
+          padding-bottom:8px; border-bottom:1px solid var(--sage-pale);
         }
-
-        /* Status + price row */
-        .detail-status-row {
-          display:         flex;
-          align-items:     center;
-          justify-content: space-between;
-          gap:             12px;
-        }
+        .detail-status-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
         .detail-status-badge {
-          display:     flex;
-          align-items: center;
-          gap:         6px;
-          font-size:   0.82rem;
-          font-weight: 600;
-          color:       #2e7d52;
-          background:  #e8f5ee;
-          padding:     5px 12px;
-          border-radius: 99px;
+          display:flex; align-items:center; gap:6px;
+          font-size:0.82rem; font-weight:600; color:#2e7d52;
+          background:#e8f5ee; padding:5px 12px; border-radius:99px;
         }
-        .detail-status-dot {
-          width: 8px; height: 8px;
-          border-radius: 50%;
-          background: #4caf7d;
-        }
-        .detail-price {
-          font-size:   1.3rem;
-          font-weight: 700;
-          color:       var(--forest);
-          font-family: var(--font-display);
-        }
-
-        /* Meta grid */
-        .detail-meta-grid {
-          display:               grid;
-          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-          gap:                   12px;
-        }
-        .detail-meta-item {
-          display:     flex;
-          align-items: flex-start;
-          gap:         10px;
-        }
-        .detail-meta-icon { font-size: 1.2rem; margin-top: 1px; flex-shrink: 0; }
-        .detail-meta-label {
-          font-size:  0.7rem;
-          color:      var(--ink-muted);
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-        }
-        .detail-meta-val {
-          font-size:   0.88rem;
-          color:       var(--ink);
-          font-weight: 500;
-          margin-top:  2px;
-        }
-
-        /* Amenities */
-        .detail-amenities {
-          display:   flex;
-          flex-wrap: wrap;
-          gap:       8px;
-        }
+        .detail-status-dot { width:8px; height:8px; border-radius:50%; background:#4caf7d; }
+        .detail-price { font-size:1.3rem; font-weight:700; color:var(--forest); font-family:var(--font-display); }
+        .detail-meta-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; }
+        .detail-meta-item { display:flex; align-items:flex-start; gap:10px; }
+        .detail-meta-icon { font-size:1.2rem; margin-top:1px; flex-shrink:0; }
+        .detail-meta-label { font-size:0.7rem; color:var(--ink-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+        .detail-meta-val { font-size:0.88rem; color:var(--ink); font-weight:500; margin-top:2px; }
+        .detail-amenities { display:flex; flex-wrap:wrap; gap:8px; }
         .detail-amenity-chip {
-          display:       flex;
-          align-items:   center;
-          gap:           6px;
-          padding:       7px 14px;
-          background:    var(--sage-pale);
-          border:        1px solid rgba(180,212,195,.4);
-          border-radius: var(--radius-md);
-          font-size:     0.82rem;
-          color:         var(--forest-deep);
-          font-weight:   500;
+          display:flex; align-items:center; gap:6px;
+          padding:7px 14px; background:var(--sage-pale);
+          border:1px solid rgba(180,212,195,.4); border-radius:var(--radius-md);
+          font-size:0.82rem; color:var(--forest-deep); font-weight:500;
         }
-
-        /* Description */
-        .detail-description {
-          font-size:   0.9rem;
-          color:       var(--ink);
-          line-height: 1.7;
-          white-space: pre-wrap;
-        }
-
-        /* Download buttons */
+        .detail-description { font-size:0.9rem; color:var(--ink); line-height:1.7; white-space:pre-wrap; }
         .btn-download {
-          padding:         7px 14px;
-          background:      var(--forest);
-          color:           white;
-          border-radius:   var(--radius-md);
-          font-size:       0.8rem;
-          font-weight:     600;
-          text-decoration: none;
-          transition:      background .15s;
-          display:         inline-flex;
-          align-items:     center;
-          gap:             5px;
+          padding:7px 14px; background:var(--forest); color:white;
+          border-radius:var(--radius-md); font-size:0.8rem; font-weight:600;
+          text-decoration:none; transition:background .15s;
+          display:inline-flex; align-items:center; gap:5px;
         }
-        .btn-download:hover { background: var(--forest-deep); }
-
+        .btn-download:hover { background:var(--forest-deep); }
       `}</style>
     </div>
   );
