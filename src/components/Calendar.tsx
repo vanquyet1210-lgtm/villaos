@@ -396,11 +396,11 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               }}>
                 <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{info.fullName ?? barLabel}</span>
-                  {info.total > 0 && (
+                  {(info.total ?? 0) > 0 && (
                     <span style={{ flexShrink: 0, fontSize: '0.6rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                      {info.total >= 1000000
-                        ? (info.total % 1000000 === 0 ? `${info.total/1000000}tr` : `${(info.total/1000000).toFixed(1)}tr`)
-                        : `${info.total/1000}k`}
+                      {(info.total ?? 0) >= 1000000
+                        ? ((info.total ?? 0) % 1000000 === 0 ? `${(info.total ?? 0)/1000000}tr` : `${((info.total ?? 0)/1000000).toFixed(1)}tr`)
+                        : `${(info.total ?? 0)/1000}k`}
                       {status === 'confirmed' && <span style={{fontSize:'0.7rem'}}>✅</span>}
                     </span>
                   )}
@@ -436,7 +436,7 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
               backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.08) 0px, rgba(255,255,255,.08) 3px, transparent 3px, transparent 9px)',
               zIndex: 2, pointerEvents: 'none',
             }} />
-            {info.total > 0 && (
+            {(info.total ?? 0) > 0 && (
               <span style={{
                 position: 'absolute',
                 top: BAR_TOP, height: BAR_HEIGHT,
@@ -445,9 +445,9 @@ function DayCell({ day, ds, info, today, onClick, readonly }: DayCellProps) {
                 fontSize: '0.6rem', fontWeight: 700, color: '#fff',
                 pointerEvents: 'none',
               }}>
-                {info.total >= 1000000
-                  ? (info.total % 1000000 === 0 ? `${info.total/1000000}tr` : `${(info.total/1000000).toFixed(1)}tr`)
-                  : `${info.total/1000}k`}
+                {(info.total ?? 0) >= 1000000
+                  ? ((info.total ?? 0) % 1000000 === 0 ? `${(info.total ?? 0)/1000000}tr` : `${((info.total ?? 0)/1000000).toFixed(1)}tr`)
+                  : `${(info.total ?? 0)/1000}k`}
                 {status === 'confirmed' && <span style={{fontSize:'0.7rem'}}>✅</span>}
               </span>
             )}
