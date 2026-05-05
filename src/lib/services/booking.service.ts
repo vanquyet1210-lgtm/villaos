@@ -5,7 +5,6 @@
 'use server';
 
 import { revalidatePath }             from 'next/cache';
-import { invalidateBookingCache }     from '@/lib/cache/cache-invalidation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapBooking }                 from '@/types/database';
 import { logAudit, getCurrentActor }  from './audit.service';
@@ -113,9 +112,7 @@ export async function createBooking(
     ownerId:    booking.ownerId,
   });
 
-  invalidateBookingCache(booking.villaId, booking.ownerId);
   revalidatePath('/owner/villas');
-  revalidatePath('/owner/calendar');
   revalidatePath('/sale/calendar');
   return { data: booking };
 }
@@ -155,10 +152,7 @@ export async function confirmHold(id: string): Promise<ServiceResult<Booking>> {
     ownerId:    booking.ownerId,
   });
 
-  invalidateBookingCache(booking.villaId, booking.ownerId);
   revalidatePath('/owner/villas');
-  revalidatePath('/owner/calendar');
-  revalidatePath('/sale/calendar');
   return { data: booking };
 }
 
@@ -199,10 +193,7 @@ export async function cancelBooking(id: string): Promise<ServiceResult<Booking>>
     ownerId:    booking.ownerId,
   });
 
-  invalidateBookingCache(booking.villaId, booking.ownerId);
   revalidatePath('/owner/villas');
-  revalidatePath('/owner/calendar');
-  revalidatePath('/sale/calendar');
   return { data: booking };
 }
 
@@ -271,10 +262,7 @@ export async function updateBooking(
     ownerId:    booking.ownerId,
   });
 
-  invalidateBookingCache(booking.villaId, booking.ownerId);
   revalidatePath('/owner/villas');
-  revalidatePath('/owner/calendar');
-  revalidatePath('/sale/calendar');
   return { data: booking };
 }
 
@@ -290,13 +278,15 @@ async function _checkConflict(
   checkout:   string,
   excludeId?: string,
 ): Promise<ServiceError | null> {
+  // Lọc: bỏ hold đã hết hạn (hold_expires_at < NOW()) — chúng không chiếm ngày nữa
   let query = q(sb)
     .from('bookings')
-    .select('id, checkin, checkout, customer')
+    .select('id, checkin, checkout, customer, status, hold_expires_at')
     .eq('villa_id', villaId)
     .neq('status', 'cancelled')
     .lt('checkin', checkout)
-    .gt('checkout', checkin);
+    .gt('checkout', checkin)
+    .or('status.neq.hold,hold_expires_at.gt.' + new Date().toISOString());
 
   if (excludeId) query = query.neq('id', excludeId);
 

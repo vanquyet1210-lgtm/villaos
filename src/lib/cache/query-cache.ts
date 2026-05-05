@@ -141,6 +141,8 @@ export function getCachedVillaBookings(villaId: string) {
         .select('*, creator:profiles!created_by(name, phone)')
         .eq('villa_id', villaId)
         .neq('status', 'cancelled')
+        // Bỏ hold đã hết hạn khỏi danh sách trả về calendar
+        .or('status.neq.hold,hold_expires_at.gt.' + new Date().toISOString())
         .order('checkin', { ascending: true });
 
       if (error) throw new Error(error.message);
