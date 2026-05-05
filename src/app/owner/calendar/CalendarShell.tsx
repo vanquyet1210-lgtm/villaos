@@ -371,7 +371,10 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
               <button
                 key={v.id}
                 className={`villa-card${v.id === selectedVillaId ? ' active' : ''}`}
-                onClick={() => setSelectedVillaId(v.id)}
+                onClick={() => {
+                  setSelectedVillaId(v.id);
+                  if (userRole === 'sale') setShowDetail(true);
+                }}
               >
                 {/* Ảnh */}
                 <div className="villa-card-img">
@@ -396,12 +399,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
                     <span>·</span>
                     <span className="villa-card-price">{fmtMoney(v.price)}/đêm</span>
                   </div>
-                  <button
-                    className="villa-card-view-btn"
-                    onClick={e => { e.stopPropagation(); setSelectedVillaId(v.id); setShowDetail(true); }}
-                  >
-                    🏠 Xem
-                  </button>
                 </div>
               </button>
             ))}
