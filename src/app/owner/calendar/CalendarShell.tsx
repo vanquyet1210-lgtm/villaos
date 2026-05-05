@@ -360,19 +360,38 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
             </div>
           )}
 
-          {/* Villa tab selector */}
+          {/* Villa card selector */}
           <div className="villa-selector">
             {filteredVillas.map(v => (
               <button
                 key={v.id}
-                className={`villa-tab${v.id === selectedVillaId ? ' active' : ''}`}
+                className={`villa-card${v.id === selectedVillaId ? ' active' : ''}`}
                 onClick={() => setSelectedVillaId(v.id)}
               >
-                <span style={{ fontSize: '1.2rem' }}>{v.emoji}</span>
-                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
-                  <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{v.name}</span>
-                  <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>🛏 {v.bedrooms} phòng · 👥 {v.adults} người</span>
-                </span>
+                {/* Ảnh */}
+                <div className="villa-card-img">
+                  {v.images?.[0]
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={v.images[0]} alt={v.name} />
+                    : <div className="villa-card-img-fallback">{v.emoji}</div>
+                  }
+                  <div className="villa-card-badge">
+                    <span className="villa-card-dot" />
+                    Đang hoạt động
+                  </div>
+                </div>
+                {/* Info */}
+                <div className="villa-card-body">
+                  <div className="villa-card-name">{v.emoji} {v.name}</div>
+                  <div className="villa-card-addr">📍 {v.district}, {v.province}</div>
+                  <div className="villa-card-stats">
+                    <span>🛏 {v.bedrooms} phòng</span>
+                    <span>·</span>
+                    <span>👥 {v.adults} người</span>
+                    <span>·</span>
+                    <span className="villa-card-price">{fmtMoney(v.price)}/đêm</span>
+                  </div>
+                </div>
               </button>
             ))}
           </div>
@@ -645,47 +664,129 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
       <style>{`
         .cal-shell { display: flex; flex-direction: column; gap: 16px; }
 
-        /* ── Villa Selector: horizontal scroll cards ── */
         .villa-selector {
-          display:     flex;
-          gap:         10px;
-          overflow-x:  auto;
-          padding:     4px 2px 10px;
-          scrollbar-width: none;
-          -ms-overflow-style: none;
+          display:    flex;
+          gap:        12px;
+          overflow-x: auto;
+          padding:    4px 2px 12px;
+          scrollbar-width: thin;
+          scrollbar-color: var(--sage) var(--sage-pale);
         }
-        .villa-selector::-webkit-scrollbar { display: none; }
+        .villa-selector::-webkit-scrollbar { height: 4px; }
+        .villa-selector::-webkit-scrollbar-track { background: var(--sage-pale); border-radius: 99px; }
+        .villa-selector::-webkit-scrollbar-thumb { background: var(--sage); border-radius: 99px; }
 
-        .villa-tab {
-          flex:           0 0 auto;
+        .villa-card {
+          flex:          0 0 220px;
+          display:       flex;
+          flex-direction: column;
+          border:        2px solid var(--stone);
+          border-radius: var(--radius-lg);
+          background:    var(--white);
+          cursor:        pointer;
+          text-align:    left;
+          font-family:   var(--font-body);
+          overflow:      hidden;
+          transition:    all .18s;
+          box-shadow:    0 1px 4px rgba(0,0,0,.05);
+          padding:       0;
+        }
+        .villa-card:hover {
+          border-color: var(--sage);
+          box-shadow:   0 4px 14px rgba(0,0,0,.1);
+          transform:    translateY(-2px);
+        }
+        .villa-card.active {
+          border-color: var(--forest);
+          box-shadow:   0 4px 14px rgba(45,90,45,.2);
+        }
+
+        .villa-card-img {
+          position:   relative;
+          height:     110px;
+          overflow:   hidden;
+          background: var(--sage-pale);
+          flex-shrink: 0;
+        }
+        .villa-card-img img {
+          width:      100%;
+          height:     100%;
+          object-fit: cover;
+          display:    block;
+          transition: transform .25s;
+        }
+        .villa-card:hover .villa-card-img img { transform: scale(1.05); }
+        .villa-card-img-fallback {
+          width:           100%;
+          height:          100%;
+          display:         flex;
+          align-items:     center;
+          justify-content: center;
+          font-size:       2.2rem;
+        }
+        .villa-card-badge {
+          position:       absolute;
+          top:            7px;
+          left:           7px;
+          background:     rgba(255,255,255,.92);
+          backdrop-filter: blur(4px);
+          border-radius:  99px;
+          padding:        3px 8px;
+          font-size:      0.65rem;
+          font-weight:    600;
+          color:          #2e7d52;
           display:        flex;
           align-items:    center;
-          gap:            8px;
-          padding:        10px 14px;
-          border:         1.5px solid var(--stone);
-          border-radius:  14px;
-          background:     var(--white);
-          font-family:    var(--font-body);
-          font-size:      0.875rem;
-          cursor:         pointer;
-          color:          var(--ink-muted);
-          transition:     all .15s;
-          white-space:    nowrap;
-          box-shadow:     0 1px 4px rgba(0,0,0,.04);
-          min-width:      120px;
+          gap:            4px;
         }
-        .villa-tab:hover {
-          border-color: var(--sage);
-          background:   var(--sage-pale);
-          color:        var(--forest);
-          box-shadow:   0 2px 8px rgba(0,0,0,.08);
+        .villa-card-dot {
+          width:         6px;
+          height:        6px;
+          border-radius: 50%;
+          background:    #4caf7d;
+          flex-shrink:   0;
         }
-        .villa-tab.active {
-          background:   var(--forest);
-          border-color: var(--forest);
-          color:        #fff;
-          font-weight:  600;
-          box-shadow:   0 3px 10px rgba(45,90,45,.25);
+        .villa-card.active .villa-card-badge {
+          background: var(--forest);
+          color:      white;
+        }
+        .villa-card.active .villa-card-dot { background: #a8e6c3; }
+
+        .villa-card-body {
+          padding: 10px 12px 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .villa-card-name {
+          font-size:     0.84rem;
+          font-weight:   700;
+          color:         var(--forest-deep);
+          white-space:   nowrap;
+          overflow:      hidden;
+          text-overflow: ellipsis;
+        }
+        .villa-card.active .villa-card-name { color: var(--forest); }
+        .villa-card-addr {
+          font-size:     0.7rem;
+          color:         var(--ink-muted);
+          white-space:   nowrap;
+          overflow:      hidden;
+          text-overflow: ellipsis;
+        }
+        .villa-card-stats {
+          display:     flex;
+          align-items: center;
+          gap:         4px;
+          flex-wrap:   wrap;
+          font-size:   0.72rem;
+          color:       var(--ink-light);
+          margin-top:  2px;
+        }
+        .villa-card-price {
+          color:       var(--forest);
+          font-weight: 700;
+          font-size:   0.75rem;
         }
 
                 .villa-filter-bar {
