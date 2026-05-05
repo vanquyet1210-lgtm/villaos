@@ -6,7 +6,7 @@
 
 import { useState, useTransition, useEffect } from 'react';
 import { useRouter }           from 'next/navigation';
-import Calendar                from '@/components/Calendar';
+import Calendar, { type BarSegment } from '@/components/Calendar';
 import { useBookingsRealtime } from '@/hooks/useBookingsRealtime';
 import { useToast }            from '@/components/Toast';
 import {
