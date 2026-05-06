@@ -62,12 +62,10 @@ export async function createBooking(
   const actor = await getCurrentActor();
   if (!actor) return { error: 'Chưa đăng nhập.' };
 
-  // Dùng adminSb để bypass RLS — đảm bảo thấy TẤT CẢ booking khi check conflict
-  const adminSb = createSupabaseAdminClient();
-  const conflictErr = await _checkConflict(adminSb, input.villaId, input.checkin, input.checkout);
+  const conflictErr = await _checkConflict(input.villaId, input.checkin, input.checkout);
   if (conflictErr) return conflictErr;
 
-  const lockedErr = await _checkLockedDates(adminSb, input.villaId, input.checkin, input.checkout);
+  const lockedErr = await _checkLockedDates(input.villaId, input.checkin, input.checkout);
   if (lockedErr) return lockedErr;
 
   const holdExpiresAt = input.status === 'hold'
@@ -226,13 +224,7 @@ export async function updateBooking(
     const newCheckin  = patch.checkin  ?? before?.checkin;
     const newCheckout = patch.checkout ?? before?.checkout;
     if (before && newCheckin && newCheckout) {
-  // Dùng adminSb để bypass RLS — đảm bảo thấy TẤT CẢ booking khi check conflict
-  const adminSb = createSupabaseAdminClient() as unknown as SB;
-  const conflictErr = await _checkConflict(adminSb, input.villaId, input.checkin, input.checkout);
-  if (conflictErr) return conflictErr;
-
-  const lockedErr = await _checkLockedDates(adminSb, input.villaId, input.checkin, input.checkout);
-  if (lockedErr) return lockedErr;
+      const conflictErr = await _checkConflict(before.villa_id, newCheckin, newCheckout, id);
       if (conflictErr) return conflictErr;
     }
   }
@@ -292,15 +284,16 @@ export async function updateBooking(
 type SB = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 async function _checkConflict(
-  sb: SB,
   villaId:    string,
   checkin:    string,
   checkout:   string,
   excludeId?: string,
 ): Promise<ServiceError | null> {
+  // Dùng adminClient để bypass RLS — thấy TẤT CẢ booking
+  const adminSb = createSupabaseAdminClient() as any;
   const nowIso = new Date().toISOString();
   // Bỏ qua: cancelled + hold đã hết hạn (hold_expires_at < now)
-  let query = q(sb)
+  let query = adminSb
     .from('bookings')
     .select('id, checkin, checkout, customer, status, hold_expires_at')
     .eq('villa_id', villaId)
@@ -320,12 +313,12 @@ async function _checkConflict(
 }
 
 async function _checkLockedDates(
-  sb: SB,
   villaId: string,
   checkin:  string,
   checkout: string,
 ): Promise<ServiceError | null> {
-  const { data: _villa } = await q(sb)
+  const adminSb2 = createSupabaseAdminClient() as any;
+  const { data: _villa } = await adminSb2
     .from('villas')
     .select('locked_dates')
     .eq('id', villaId)
