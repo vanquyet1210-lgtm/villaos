@@ -86,6 +86,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   const [month, setMonth] = useState(new Date().getMonth());
   const [modal, setModal] = useState<BookingModal | null>(null);
   const [serverBookings, setServerBookings] = useState<Booking[]>(initialBookings);
+  const [bookingsLoaded, setBookingsLoaded] = useState(initialBookings.length > 0);
   // Optimistic locked dates: update instantly without F5 (FIX 5)
   const [localLockedDates, setLocalLockedDates] = useState<string[] | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -151,8 +152,12 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   // Load bookings khi đổi villa
   useEffect(() => {
     if (!selectedVillaId) return;
+    setBookingsLoaded(false);
     // Load ngay lần đầu
-    fetchVillaBookingsAction(selectedVillaId).then(data => setServerBookings(data));
+    fetchVillaBookingsAction(selectedVillaId).then(data => {
+      setServerBookings(data);
+      setBookingsLoaded(true);
+    });
     // Poll mỗi 15 giây để cập nhật realtime (server bypass RLS)
     const interval = setInterval(() => {
       fetchVillaBookingsAction(selectedVillaId).then(data => setServerBookings(data));
@@ -189,6 +194,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
 
   // ── Day click handler ──────────────────────────────────────────
   function handleDayClick(ds: string, info: BarSegment | null) {
+    if (!bookingsLoaded) return; // chờ data load xong
     // info = null → ngày trống hoặc checkout day → tạo booking mới
     if (!info) {
       if (ds >= todayISO()) openCreateModal(ds);
