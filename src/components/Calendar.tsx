@@ -320,10 +320,11 @@ export default function Calendar({
   const handleDayClick = useCallback((ds: string) => {
     if (readonly || ds < today) return;
     const entry = clickMap[ds];
+    // Ngày trống → tạo booking mới
     if (!entry) { onDayClick?.(ds, null); return; }
-    // Checkout day → nửa phải trống → tạo mới
-    if (entry.isCheckout) { onDayClick?.(ds, null); return; }
-    onDayClick?.(ds, entry.seg);
+    // Checkout day → gửi seg để xem booking cũ (CalendarShell sẽ quyết định)
+    // CalendarShell sẽ mở viewModal cho booking đó
+    onDayClick?.(ds, { ...entry.seg, isCheckoutDay: true } as any);
   }, [readonly, today, clickMap, onDayClick]);
 
   // ── Render bar pieces ────────────────────────────────────────────
@@ -483,7 +484,7 @@ export default function Calendar({
             const isPast    = ds < today;
             const isToday   = ds === today;
             const entry     = clickMap[ds];
-            const clickable = !readonly && !isPast && (!entry || entry.isCheckout);
+            const clickable = !readonly && !isPast;
             return (
               <div
                 key={ds}

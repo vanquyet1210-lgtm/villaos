@@ -189,11 +189,13 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
 
   // ── Day click handler ──────────────────────────────────────────
   function handleDayClick(ds: string, info: BarSegment | null) {
-    // info = null → ngày trống hoặc checkout day → tạo booking mới
+    // info = null → ngày thực sự trống → tạo booking mới
     if (!info) {
       if (ds >= todayISO()) openCreateModal(ds);
       return;
     }
+
+    const infoAny = info as any;
 
     // Ngày bị khóa → hiển thị thông tin khóa
     if (info.type === 'locked') {
@@ -201,16 +203,27 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
       return;
     }
 
-    // Ngày có booking → mở view modal
-    if (info.bkId) {
+    // Checkout day → xem booking đang checkout (không cho tạo mới nhầm)
+    // Nếu muốn tạo booking mới checkin cùng ngày → dùng nút tạo thủ công
+    if (infoAny.isCheckoutDay) {
       const found = bookings.find(b => b.id === info.bkId);
       if (found) { openViewModal(found); return; }
-      // Không thấy trong state → fetch lại rồi mở
       fetchVillaBookingsAction(selectedVillaId).then(data => {
         setServerBookings(data);
         const refetched = data.find(b => b.id === info.bkId);
         if (refetched) { openViewModal(refetched); return; }
-        // Vẫn không thấy → tìm theo ngày
+      });
+      return;
+    }
+
+    // Ngày có booking → mở view modal
+    if (info.bkId) {
+      const found = bookings.find(b => b.id === info.bkId);
+      if (found) { openViewModal(found); return; }
+      fetchVillaBookingsAction(selectedVillaId).then(data => {
+        setServerBookings(data);
+        const refetched = data.find(b => b.id === info.bkId);
+        if (refetched) { openViewModal(refetched); return; }
         const byDate = data.find(b => b.checkin <= ds && b.checkout > ds && b.status !== 'cancelled');
         if (byDate) openViewModal(byDate);
       });
