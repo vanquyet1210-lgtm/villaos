@@ -6,7 +6,7 @@
 
 import { revalidatePath }             from 'next/cache';
 import { invalidateBookingCache }     from '@/lib/cache/cache-invalidation';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase/server';
 import { mapBooking }                 from '@/types/database';
 import { logAudit, getCurrentActor }  from './audit.service';
 import type { Booking, BookingRow, BookingStatus, VillaRow } from '@/types/database';
@@ -62,10 +62,12 @@ export async function createBooking(
   const actor = await getCurrentActor();
   if (!actor) return { error: 'Chưa đăng nhập.' };
 
-  const conflictErr = await _checkConflict(sb, input.villaId, input.checkin, input.checkout);
+  // Dùng adminSb để bypass RLS — đảm bảo thấy TẤT CẢ booking khi check conflict
+  const adminSb = createSupabaseAdminClient();
+  const conflictErr = await _checkConflict(adminSb, input.villaId, input.checkin, input.checkout);
   if (conflictErr) return conflictErr;
 
-  const lockedErr = await _checkLockedDates(sb, input.villaId, input.checkin, input.checkout);
+  const lockedErr = await _checkLockedDates(adminSb, input.villaId, input.checkin, input.checkout);
   if (lockedErr) return lockedErr;
 
   const holdExpiresAt = input.status === 'hold'
@@ -224,7 +226,8 @@ export async function updateBooking(
     const newCheckin  = patch.checkin  ?? before?.checkin;
     const newCheckout = patch.checkout ?? before?.checkout;
     if (before && newCheckin && newCheckout) {
-      const conflictErr = await _checkConflict(sb, before.villa_id, newCheckin, newCheckout, id);
+      const adminSb2 = createSupabaseAdminClient();
+      const conflictErr = await _checkConflict(adminSb2, before.villa_id, newCheckin, newCheckout, id);
       if (conflictErr) return conflictErr;
     }
   }
