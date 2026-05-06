@@ -31,13 +31,14 @@ interface CalendarShellProps {
   initialBookings?: Booking[];
 }
 
-type ModalMode = 'create' | 'view';
+type ModalMode = 'create' | 'view' | 'locked';
 
 interface BookingModal {
-  mode:      ModalMode;
-  checkin?:  string;
-  checkout?: string;
-  booking?:  Booking;
+  mode:        ModalMode;
+  checkin?:    string;
+  checkout?:   string;
+  booking?:    Booking;
+  lockedDate?: string;   // ngày khóa khi mode='locked'
 }
 
 // ── Component ─────────────────────────────────────────────────────
@@ -188,13 +189,9 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
       return;
     }
 
-    // Ngày bị khóa
+    // Ngày bị khóa → hiển thị thông tin khóa
     if (info.type === 'locked') {
-      if (userRole === 'owner' || userRole === 'admin') {
-        if (ds >= todayISO()) openCreateModal(ds);
-      } else {
-        show('warning', '🔒 Ngày bị khóa', 'Chủ nhà đã khóa ngày này. Không thể đặt phòng.');
-      }
+      setModal({ mode: 'locked', lockedDate: ds });
       return;
     }
 
@@ -755,6 +752,45 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
             )}
 
             {/* VIEW BOOKING */}
+            {modal.mode === 'locked' && (
+              <>
+                <div className="modal-header">
+                  <h3>🔒 Ngày bị khóa</h3>
+                  <button className="modal-close" onClick={closeModal}>×</button>
+                </div>
+                <div className="modal-body">
+                  <div className="booking-detail-grid">
+                    <div className="booking-detail-item">
+                      <span className="booking-detail-label">Ngày khóa</span>
+                      <span className="booking-detail-value">📅 {modal.lockedDate ? formatDate(modal.lockedDate) : '—'}</span>
+                    </div>
+                    <div className="booking-detail-item">
+                      <span className="booking-detail-label">Trạng thái</span>
+                      <span className="booking-detail-value" style={{ color: 'var(--forest)', fontWeight: 600 }}>🔒 Đã khóa</span>
+                    </div>
+                    <div className="booking-detail-item" style={{ gridColumn: '1 / -1' }}>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+                        Chủ nhà đã khóa đêm này. Không thể nhận booking trong thời gian này.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  {(userRole === 'owner' || userRole === 'admin') && modal.lockedDate && (
+                    <button
+                      className="btn-secondary"
+                      style={{ background: '#fff3e0', borderColor: '#f0b429', color: '#b8860b' }}
+                      onClick={() => { handleLockDate(modal.lockedDate!); }}
+                      disabled={isPending}
+                    >
+                      🔓 Mở khóa ngày này
+                    </button>
+                  )}
+                  <button className="btn-secondary" onClick={closeModal}>Đóng</button>
+                </div>
+              </>
+            )}
+
             {modal.mode === 'view' && modal.booking && (() => {
               const b = modal.booking;
               const canSeePrivate = userRole !== 'sale' || b.createdByRole === 'sale';
