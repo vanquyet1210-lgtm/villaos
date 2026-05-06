@@ -86,7 +86,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   const [month, setMonth] = useState(new Date().getMonth());
   const [modal, setModal] = useState<BookingModal | null>(null);
   const [serverBookings, setServerBookings] = useState<Booking[]>(initialBookings);
-  const [bookingsLoaded, setBookingsLoaded] = useState(initialBookings.length > 0);
   // Optimistic locked dates: update instantly without F5 (FIX 5)
   const [localLockedDates, setLocalLockedDates] = useState<string[] | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -152,12 +151,8 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   // Load bookings khi đổi villa
   useEffect(() => {
     if (!selectedVillaId) return;
-    setBookingsLoaded(false);
     // Load ngay lần đầu
-    fetchVillaBookingsAction(selectedVillaId).then(data => {
-      setServerBookings(data);
-      setBookingsLoaded(true);
-    });
+    fetchVillaBookingsAction(selectedVillaId).then(data => setServerBookings(data));
     // Poll mỗi 15 giây để cập nhật realtime (server bypass RLS)
     const interval = setInterval(() => {
       fetchVillaBookingsAction(selectedVillaId).then(data => setServerBookings(data));
@@ -194,7 +189,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
 
   // ── Day click handler ──────────────────────────────────────────
   function handleDayClick(ds: string, info: BarSegment | null) {
-    if (!bookingsLoaded) return; // chờ data load xong
     // info = null → ngày trống hoặc checkout day → tạo booking mới
     if (!info) {
       if (ds >= todayISO()) openCreateModal(ds);
@@ -211,6 +205,16 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
     if (info.bkId) {
       const found = bookings.find(b => b.id === info.bkId);
       if (found) { openViewModal(found); return; }
+      // Không thấy trong state → fetch lại rồi mở
+      fetchVillaBookingsAction(selectedVillaId).then(data => {
+        setServerBookings(data);
+        const refetched = data.find(b => b.id === info.bkId);
+        if (refetched) { openViewModal(refetched); return; }
+        // Vẫn không thấy → tìm theo ngày
+        const byDate = data.find(b => b.checkin <= ds && b.checkout > ds && b.status !== 'cancelled');
+        if (byDate) openViewModal(byDate);
+      });
+      return;
     }
 
     if (ds >= todayISO()) openCreateModal(ds);
