@@ -350,12 +350,7 @@ async function _checkLockedDates(
   });
   if (!res.ok) return null;
   const rows: any[] = await res.json();
-  const _villa = rows[0];
-    .from('villas')
-    .select('locked_dates')
-    .eq('id', villaId)
-    .single();
-  const villa = _villa as Pick<VillaRow, 'locked_dates'> | null;
+  const villa = rows[0] as Pick<VillaRow, 'locked_dates'> | null;
   if (!villa?.locked_dates?.length) return null;
 
   // Check locked dates: dùng plain YYYY-MM-DD (KHÔNG dùng toDateOnly vì
