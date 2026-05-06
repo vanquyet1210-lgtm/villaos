@@ -290,11 +290,14 @@ async function _checkConflict(
   checkout:   string,
   excludeId?: string,
 ): Promise<ServiceError | null> {
+  const nowIso = new Date().toISOString();
+  // Bỏ qua: cancelled + hold đã hết hạn (hold_expires_at < now)
   let query = q(sb)
     .from('bookings')
-    .select('id, checkin, checkout, customer')
+    .select('id, checkin, checkout, customer, status, hold_expires_at')
     .eq('villa_id', villaId)
     .neq('status', 'cancelled')
+    .or(`status.neq.hold,hold_expires_at.gt.${nowIso}`)
     .lt('checkin', checkout)
     .gt('checkout', checkin);
 
