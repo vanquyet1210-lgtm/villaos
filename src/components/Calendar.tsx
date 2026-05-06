@@ -491,8 +491,9 @@ export default function Calendar({
                 className={[
                   'cal-cell',
                   isPast   ? 'cal-cell-past'  : '',
-                  !clickable && entry && !entry.isCheckout && entry.seg.status !== 'locked' ? 'cal-cell-busy' : '',
-                  !clickable && entry && !entry.isCheckout && entry.seg.status === 'locked' ? 'cal-cell-locked' : '',
+                  entry && !entry.isCheckout && entry.seg.status !== 'locked' ? 'cal-cell-busy' : '',
+                  entry && !entry.isCheckout && entry.seg.status === 'locked' ? 'cal-cell-locked' : '',
+                  entry && entry.isCheckout   ? 'cal-cell-checkout' : '',
                 ].filter(Boolean).join(' ')}
                 onClick={() => handleDayClick(ds)}
                 style={{ cursor: clickable || (entry && !entry.isCheckout) ? 'pointer' : 'default' }}
@@ -602,7 +603,7 @@ export default function Calendar({
           overflow:        visible;
         }
         /* Chỉ hover trên ô trống — không hover ô có booking/khóa */
-        .cal-cell:hover:not(.cal-cell-past):not(.cal-cell-busy):not(.cal-cell-empty):not(.cal-cell-locked) {
+        .cal-cell:hover:not(.cal-cell-past):not(.cal-cell-busy):not(.cal-cell-empty):not(.cal-cell-locked):not(.cal-cell-checkout) {
           background: rgba(180,212,195,.12);
         }
         .cal-cell-empty { pointer-events: none; border-color: transparent; }
