@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/supabase/server';
 import { getVillas }        from '@/lib/services/villa.service';
 import { redirect }         from 'next/navigation';
 import CalendarShell        from './CalendarShell';
+import { getCachedVillaBookings } from '@/lib/cache/query-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,10 @@ export default async function OwnerCalendarPage({
   const { villa: selectedVillaId } = await searchParams;
   const { data: _villas } = await getVillas();
   const villas = _villas ?? [];
+  const firstVillaId = selectedVillaId ?? villas[0]?.id;
+  const initialBookings = firstVillaId
+    ? await getCachedVillaBookings(firstVillaId)
+    : [];
 
   if (villas.length === 0) {
     return (
@@ -41,6 +46,7 @@ export default async function OwnerCalendarPage({
         villas={villas}
         initialVillaId={selectedVillaId ?? villas[0].id}
         userRole={session.profile.role}
+        initialBookings={initialBookings}
       />
     </>
   );

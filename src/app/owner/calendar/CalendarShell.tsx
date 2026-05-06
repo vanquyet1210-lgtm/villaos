@@ -28,6 +28,7 @@ interface CalendarShellProps {
   villas:          Villa[];
   initialVillaId:  string;
   userRole:        UserRole;
+  initialBookings?: Booking[];
 }
 
 type ModalMode = 'create' | 'view';
@@ -74,7 +75,7 @@ const AMENITY_ICONS: Record<string, string> = {
   'bar':          '🍹',
 };
 
-export default function CalendarShell({ villas, initialVillaId, userRole }: CalendarShellProps) {
+export default function CalendarShell({ villas, initialVillaId, userRole, initialBookings = [] }: CalendarShellProps) {
   const router = useRouter();
   const { show } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -83,7 +84,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole }: Cale
   const [year,  setYear]  = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth());
   const [modal, setModal] = useState<BookingModal | null>(null);
-  const [serverBookings, setServerBookings] = useState<Booking[]>([]);
+  const [serverBookings, setServerBookings] = useState<Booking[]>(initialBookings);
   // Optimistic locked dates: update instantly without F5 (FIX 5)
   const [localLockedDates, setLocalLockedDates] = useState<string[] | null>(null);
   const [showDetail, setShowDetail] = useState(false);
