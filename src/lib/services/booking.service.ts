@@ -226,8 +226,13 @@ export async function updateBooking(
     const newCheckin  = patch.checkin  ?? before?.checkin;
     const newCheckout = patch.checkout ?? before?.checkout;
     if (before && newCheckin && newCheckout) {
-      const adminSb2 = createSupabaseAdminClient();
-      const conflictErr = await _checkConflict(adminSb2, before.villa_id, newCheckin, newCheckout, id);
+  // Dùng adminSb để bypass RLS — đảm bảo thấy TẤT CẢ booking khi check conflict
+  const adminSb = createSupabaseAdminClient() as unknown as SB;
+  const conflictErr = await _checkConflict(adminSb, input.villaId, input.checkin, input.checkout);
+  if (conflictErr) return conflictErr;
+
+  const lockedErr = await _checkLockedDates(adminSb, input.villaId, input.checkin, input.checkout);
+  if (lockedErr) return lockedErr;
       if (conflictErr) return conflictErr;
     }
   }
