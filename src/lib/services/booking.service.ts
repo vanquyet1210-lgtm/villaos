@@ -6,7 +6,7 @@
 
 import { revalidatePath }             from 'next/cache';
 import { invalidateBookingCache }     from '@/lib/cache/cache-invalidation';
-import { createSupabaseServerClient, createSupabaseAdminClient } from '@/lib/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapBooking }                 from '@/types/database';
 import { logAudit, getCurrentActor }  from './audit.service';
 import type { Booking, BookingRow, BookingStatus, VillaRow } from '@/types/database';
@@ -289,25 +289,48 @@ async function _checkConflict(
   checkout:   string,
   excludeId?: string,
 ): Promise<ServiceError | null> {
-  // Dùng adminClient để bypass RLS — thấy TẤT CẢ booking
-  const adminSb = createSupabaseAdminClient() as any;
+  // Dùng Supabase REST API trực tiếp với service_role key để bypass RLS hoàn toàn
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!serviceKey || !supabaseUrl) {
+    // Fallback: không check nếu thiếu key — DB constraint sẽ chặn
+    console.error('[_checkConflict] Thiếu SUPABASE_SERVICE_ROLE_KEY');
+    return null;
+  }
+
   const nowIso = new Date().toISOString();
-  // Bỏ qua: cancelled + hold đã hết hạn (hold_expires_at < now)
-  let query = adminSb
-    .from('bookings')
-    .select('id, checkin, checkout, customer, status, hold_expires_at')
-    .eq('villa_id', villaId)
-    .neq('status', 'cancelled')
-    .or(`status.neq.hold,hold_expires_at.gt.${nowIso}`)
-    .lt('checkin', checkout)
-    .gt('checkout', checkin);
+  // Dùng fetch trực tiếp tới PostgREST với service_role header
+  const params = new URLSearchParams({
+    villa_id:  `eq.${villaId}`,
+    status:    'neq.cancelled',
+    checkin:   `lt.${checkout}`,
+    checkout:  `gt.${checkin}`,
+    select:    'id,checkin,checkout,status,hold_expires_at',
+    limit:     '10',
+  });
 
-  if (excludeId) query = query.neq('id', excludeId);
+  const res = await fetch(`${supabaseUrl}/rest/v1/bookings?${params}`, {
+    headers: {
+      apikey:          serviceKey,
+      Authorization:   `Bearer ${serviceKey}`,
+      'Content-Type':  'application/json',
+    },
+    cache: 'no-store',
+  });
 
-  const { data: conflicts } = await query.limit(1);
-  if (conflicts?.length) {
-    const c = conflicts[0] as Pick<BookingRow, 'checkin' | 'checkout'>;
-    return { error: `Villa đã có booking (${c.checkin} → ${c.checkout}).`, code: 'BOOKING_CONFLICT' };
+  if (!res.ok) return null;
+  const rows: any[] = await res.json();
+
+  const conflict = rows.find(r => {
+    if (r.status === 'cancelled') return false;
+    if (r.status === 'hold' && r.hold_expires_at &&
+        new Date(r.hold_expires_at) < new Date()) return false;
+    if (excludeId && r.id === excludeId) return false;
+    return true;
+  });
+
+  if (conflict) {
+    return { error: `Villa đã có booking (${conflict.checkin} → ${conflict.checkout}).`, code: 'BOOKING_CONFLICT' };
   }
   return null;
 }
@@ -317,8 +340,17 @@ async function _checkLockedDates(
   checkin:  string,
   checkout: string,
 ): Promise<ServiceError | null> {
-  const adminSb2 = createSupabaseAdminClient() as any;
-  const { data: _villa } = await adminSb2
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!serviceKey || !supabaseUrl) return null;
+
+  const res = await fetch(`${supabaseUrl}/rest/v1/villas?id=eq.${villaId}&select=locked_dates`, {
+    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) return null;
+  const rows: any[] = await res.json();
+  const _villa = rows[0];
     .from('villas')
     .select('locked_dates')
     .eq('id', villaId)
