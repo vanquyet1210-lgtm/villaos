@@ -186,11 +186,10 @@ function buildBarPieces(
       const isFirstSeg = cur === startGI;
       const isLastSeg  = segEnd === endGI;
 
-      // Checkin bắt đầu tại 5/8 ô (62.5% từ trái)
-      // Checkout kết thúc tại 2/8 ô (25% từ trái → rightFrac = 1 - 2/8 = 6/8 = 0.75)
-      // → khoảng trống rõ ràng giữa các bar liền nhau
-      const leftFrac  = isFirstSeg && visStart === ci ? (5/8) : 0;
-      const rightFrac = isLastSeg  && visEnd   === co ? (6/8) : 0;
+      // Checkin: bar bắt đầu từ 30% ô ngày checkin (leftFrac = 0.30)
+      // Checkout: bar kết thúc tại 25% từ trái ô ngày checkout (rightFrac = 0.75)
+      const leftFrac  = isFirstSeg && visStart === ci ? 0.30 : 0;
+      const rightFrac = isLastSeg  && visEnd   === co ? 0.75 : 0;
 
       pieces.push({
         key:      `${keyPrefix}-${pieceIdx}`,
@@ -271,10 +270,10 @@ function buildBarPieces(
     let found = false;
     while (!found) {
       // Hai bar tiếp giáp kiểu Agoda: bar A kết thúc ở cột N+0.5, bar B bắt đầu ở cột N+0.5
-      // Bar A kết thúc tại cột N + 2/8, bar B bắt đầu tại cột N + 5/8
-      // → không overlap (5/8 > 2/8) → dùng ngưỡng 0.3 để không tính là overlap
+      // Bar A kết thúc tại cột N+0.25, bar B bắt đầu tại cột N+0.30
+      // → khoảng trống 0.05 → dùng ngưỡng 0.1 để không tính là overlap
       const conflicts = existing.filter(e => e.slot === assigned &&
-        pStart < e.end - 0.3 && pEnd > e.start + 0.3
+        pStart < e.end - 0.1 && pEnd > e.start + 0.1
       );
       if (conflicts.length === 0) found = true;
       else assigned++;
