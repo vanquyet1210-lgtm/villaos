@@ -8,7 +8,7 @@ import { useState, useTransition, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter }           from 'next/navigation';
 import Calendar, { type BarSegment } from '@/components/Calendar';
-import { useBookingsRealtime } from '@/hooks/useBookingsRealtime';
+// useBookingsRealtime replaced by server polling (RLS bypass)
 import { useToast }            from '@/components/Toast';
 import {
   createBooking, cancelBooking, confirmHold,
@@ -146,12 +146,18 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   const detailVilla = villas.find(v => v.id === detailVillaId) ?? villa;
 
   // Realtime bookings (merge server + realtime)
-  const bookings = useBookingsRealtime(selectedVillaId, serverBookings);
+  const bookings = serverBookings;
 
   // Load bookings khi đổi villa
   useEffect(() => {
     if (!selectedVillaId) return;
+    // Load ngay lần đầu
     fetchVillaBookingsAction(selectedVillaId).then(data => setServerBookings(data));
+    // Poll mỗi 15 giây để cập nhật realtime (server bypass RLS)
+    const interval = setInterval(() => {
+      fetchVillaBookingsAction(selectedVillaId).then(data => setServerBookings(data));
+    }, 15000);
+    return () => clearInterval(interval);
   }, [selectedVillaId]);
 
   // ── Form state (create booking) ────────────────────────────────
