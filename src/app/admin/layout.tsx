@@ -19,6 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <nav className="sidebar-nav">
           <Link href="/admin/dashboard" className="nav-item"><span className="nav-icon">📊</span> Dashboard</Link>
           <Link href="/admin/users"     className="nav-item"><span className="nav-icon">👥</span> Quản lý Users</Link>
+          <Link href="/admin/kyc"       className="nav-item"><span className="nav-icon">🪪</span> Duyệt KYC</Link>
           <Link href="/owner/dashboard" className="nav-item"><span className="nav-icon">👑</span> Chế độ Owner</Link>
         </nav>
         <div className="sidebar-footer">
