@@ -9,6 +9,7 @@ import {
   addDays, dateRange,
   prevMonth, nextMonth, formatMonthYear,
   daysInMonth, firstDayOfMonth, todayISO,
+  fmtMoney,
 } from '@/lib/utils';
 import { CONFIG }          from '@/lib/config';
 import type { Booking }    from '@/types/database';
@@ -431,15 +432,13 @@ export default function Calendar({
             flexShrink:  0,
           }}>
             <span style={{
-              fontSize:   '0.59rem',
+              fontSize:   '0.62rem',
               fontWeight: 700,
               color:      '#fff',
               whiteSpace: 'nowrap',
+              letterSpacing: '-0.01em',
             }}>
-              {new Intl.NumberFormat('vi-VN', {
-                notation:             'compact',
-                maximumFractionDigits: 0,
-              }).format(seg.total)}đ
+              {seg.total.toLocaleString('vi-VN')}đ
             </span>
             {seg.status === 'confirmed' && (
               <span style={{
