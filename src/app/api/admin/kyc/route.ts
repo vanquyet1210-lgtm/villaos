@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   }
 
   const adminSb = createSupabaseAdminClient();
-  const { error } = await adminSb
+  const { error } = await (adminSb as any)
     .from('profiles')
     .update({
       kyc_status:      status,
