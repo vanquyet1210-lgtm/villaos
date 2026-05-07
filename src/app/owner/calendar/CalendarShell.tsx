@@ -8,7 +8,7 @@ import { useState, useTransition, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter }           from 'next/navigation';
 import Calendar, { type BarSegment } from '@/components/Calendar';
-// useBookingsRealtime replaced by server polling (RLS bypass)
+import { useBookingsRealtime } from '@/hooks/useBookingsRealtime';
 import { useToast }            from '@/components/Toast';
 import {
   createBooking, cancelBooking, confirmHold,
@@ -145,19 +145,13 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   const villa = villas.find(v => v.id === selectedVillaId) ?? filteredVillas[0] ?? villas[0];
   const detailVilla = villas.find(v => v.id === detailVillaId) ?? villa;
 
-  // Realtime bookings (merge server + realtime)
-  const bookings = serverBookings;
+  // Realtime bookings: Supabase subscription tức thì
+  const bookings = useBookingsRealtime(selectedVillaId, serverBookings);
 
-  // Load bookings khi đổi villa
+  // Load bookings khi đổi villa (initial fetch)
   useEffect(() => {
     if (!selectedVillaId) return;
-    // Load ngay lần đầu
     fetchVillaBookingsAction(selectedVillaId).then(data => setServerBookings(data));
-    // Poll mỗi 15 giây để cập nhật realtime (server bypass RLS)
-    const interval = setInterval(() => {
-      fetchVillaBookingsAction(selectedVillaId).then(data => setServerBookings(data));
-    }, 15000);
-    return () => clearInterval(interval);
   }, [selectedVillaId]);
 
   // ── Form state (create booking) ────────────────────────────────
@@ -189,13 +183,11 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
 
   // ── Day click handler ──────────────────────────────────────────
   function handleDayClick(ds: string, info: BarSegment | null) {
-    // info = null → ngày thực sự trống → tạo booking mới
+    // info = null → ngày trống hoặc checkout day → tạo booking mới
     if (!info) {
       if (ds >= todayISO()) openCreateModal(ds);
       return;
     }
-
-    const infoAny = info as any;
 
     // Ngày bị khóa → hiển thị thông tin khóa
     if (info.type === 'locked') {
@@ -203,27 +195,16 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
       return;
     }
 
-    // Checkout day → xem booking đang checkout (không cho tạo mới nhầm)
-    // Nếu muốn tạo booking mới checkin cùng ngày → dùng nút tạo thủ công
-    if (infoAny.isCheckoutDay) {
-      const found = bookings.find(b => b.id === info.bkId);
-      if (found) { openViewModal(found); return; }
-      fetchVillaBookingsAction(selectedVillaId).then(data => {
-        setServerBookings(data);
-        const refetched = data.find(b => b.id === info.bkId);
-        if (refetched) { openViewModal(refetched); return; }
-      });
-      return;
-    }
-
     // Ngày có booking → mở view modal
     if (info.bkId) {
       const found = bookings.find(b => b.id === info.bkId);
       if (found) { openViewModal(found); return; }
+      // Không thấy trong state → fetch lại rồi mở
       fetchVillaBookingsAction(selectedVillaId).then(data => {
         setServerBookings(data);
         const refetched = data.find(b => b.id === info.bkId);
         if (refetched) { openViewModal(refetched); return; }
+        // Vẫn không thấy → tìm theo ngày
         const byDate = data.find(b => b.checkin <= ds && b.checkout > ds && b.status !== 'cancelled');
         if (byDate) openViewModal(byDate);
       });
