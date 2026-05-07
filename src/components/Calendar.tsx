@@ -210,7 +210,7 @@ function buildBarPieces(
       // rightFrac: 0.65 nếu là ô checkout thật (booking có half)
       // locked (noCheckoutHalf=true): rightFrac=0 → kéo đến hết ô
       const hasCheckoutHalf = isLastSeg && visEnd === co && !seg.noCheckoutHalf;
-      const rightFrac = hasCheckoutHalf ? 0.65 : 0;
+      const rightFrac = hasCheckoutHalf ? 0.70 : 0; // bar kết thúc tại 30% từ trái (1 - 0.70 = 0.30)
 
       // Guard: nếu cùng 1 ô mà leftFrac + rightFrac >= 1 → bar âm → bỏ qua
       // Trường hợp này xảy ra khi ci === co (1 ô vừa checkin vừa checkout)
