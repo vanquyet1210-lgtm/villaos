@@ -1,6 +1,6 @@
 'use client';
 // VillaOS v7 — app/owner/villas/VillaActions.tsx
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect, useCallback, useRef } from 'react';
 import { createPortal }  from 'react-dom';
 import { useRouter }     from 'next/navigation';
 import { useToast }      from '@/components/Toast';
@@ -17,7 +17,8 @@ const AMENITY_ICONS: Record<string, string> = {
 
 export default function VillaActions({ villa }: { villa: Villa }) {
   const [isPending, startTransition] = useTransition();
-  const [showDetail, setShowDetail]  = useState(false);
+  const [showDetail, setShowDetail]   = useState(false);
+  const [lightbox,   setLightbox]    = useState<number | null>(null);
   const { show } = useToast();
   const router   = useRouter();
 
@@ -33,6 +34,41 @@ export default function VillaActions({ villa }: { villa: Villa }) {
       }
     });
   }
+
+  // Lightbox navigation
+  const lightboxNext = useCallback(() => {
+    if (lightbox === null) return;
+    setLightbox(i => i !== null ? (i + 1) % villa.images.length : null);
+  }, [lightbox, villa.images.length]);
+
+  const lightboxPrev = useCallback(() => {
+    if (lightbox === null) return;
+    setLightbox(i => i !== null ? (i - 1 + villa.images.length) % villa.images.length : null);
+  }, [lightbox, villa.images.length]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (lightbox === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') lightboxNext();
+      if (e.key === 'ArrowLeft')  lightboxPrev();
+      if (e.key === 'Escape')     setLightbox(null);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [lightbox, lightboxNext, lightboxPrev]);
+
+  // Touch swipe
+  const touchStartX = useRef<number>(0);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) lightboxNext(); else lightboxPrev();
+    }
+  };
 
   return (
     <>
@@ -86,18 +122,15 @@ export default function VillaActions({ villa }: { villa: Villa }) {
               {villa.images && villa.images.length > 0 && (
                 <div className="vd-gallery">
                   {villa.images.map((src, i) => (
-                    <div key={i} className="vd-gallery-cell">
+                    <div
+                      key={i}
+                      className="vd-gallery-cell"
+                      onClick={() => setLightbox(i)}
+                      style={{ cursor: 'zoom-in' }}
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={src} alt={`${villa.name} ${i + 1}`} />
-                      <a
-                        className="vd-img-dl"
-                        href={src}
-                        download={`${villa.name}-${i + 1}.jpg`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        title="Tải ảnh"
-                      >⬇</a>
+                      <div className="vd-img-zoom-hint">🔍</div>
                     </div>
                   ))}
                 </div>
@@ -204,6 +237,69 @@ export default function VillaActions({ villa }: { villa: Villa }) {
               </div>
             </div>
           </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── LIGHTBOX ── */}
+      {lightbox !== null && villa.images.length > 0 && createPortal(
+        <div
+          className="lb-overlay"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onClick={() => setLightbox(null)}
+        >
+          {/* Close */}
+          <button className="lb-close" onClick={() => setLightbox(null)}>×</button>
+
+          {/* Counter */}
+          <div className="lb-counter">{lightbox + 1} / {villa.images.length}</div>
+
+          {/* Prev */}
+          {villa.images.length > 1 && (
+            <button className="lb-nav lb-prev" onClick={e => { e.stopPropagation(); lightboxPrev(); }}>‹</button>
+          )}
+
+          {/* Image */}
+          <div className="lb-img-wrap" onClick={e => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              key={lightbox}
+              src={villa.images[lightbox]}
+              alt={`${villa.name} ${lightbox + 1}`}
+              className="lb-img"
+            />
+          </div>
+
+          {/* Next */}
+          {villa.images.length > 1 && (
+            <button className="lb-nav lb-next" onClick={e => { e.stopPropagation(); lightboxNext(); }}>›</button>
+          )}
+
+          {/* Dots */}
+          {villa.images.length > 1 && (
+            <div className="lb-dots">
+              {villa.images.map((_, i) => (
+                <button
+                  key={i}
+                  className={`lb-dot${i === lightbox ? ' lb-dot--active' : ''}`}
+                  onClick={e => { e.stopPropagation(); setLightbox(i); }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Download */}
+          <a
+            className="lb-download"
+            href={villa.images[lightbox]}
+            download={`${villa.name}-${lightbox + 1}.jpg`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+          >
+            ⬇ Tải ảnh
+          </a>
         </div>,
         document.body
       )}
@@ -322,6 +418,132 @@ export default function VillaActions({ villa }: { villa: Villa }) {
           transition:background .15s;
         }
         .vd-dl-btn:hover { background:var(--forest-deep); }
+
+        /* ── Zoom hint ── */
+        .vd-img-zoom-hint {
+          position:absolute; bottom:6px; right:6px;
+          background:rgba(0,0,0,.45); color:white;
+          border-radius:99px; width:26px; height:26px;
+          display:flex; align-items:center; justify-content:center;
+          font-size:0.78rem; opacity:0; transition:opacity .15s;
+        }
+        .vd-gallery-cell:hover .vd-img-zoom-hint { opacity:1; }
+
+        /* ── Lightbox ── */
+        .lb-overlay {
+          position:   fixed;
+          inset:      0;
+          background: rgba(0,0,0,.92);
+          z-index:    99999;
+          display:    flex;
+          align-items:center;
+          justify-content:center;
+          animation: fadeIn .15s ease;
+          touch-action: pan-x;
+        }
+        .lb-img-wrap {
+          max-width:  92vw;
+          max-height: 80vh;
+          display:    flex;
+          align-items:center;
+          justify-content:center;
+        }
+        .lb-img {
+          max-width:    92vw;
+          max-height:   80vh;
+          object-fit:   contain;
+          border-radius:8px;
+          animation:    lbIn .2s ease;
+          user-select:  none;
+          -webkit-user-drag: none;
+        }
+        @keyframes lbIn {
+          from { opacity:0; transform:scale(.95); }
+          to   { opacity:1; transform:scale(1); }
+        }
+        .lb-close {
+          position:   absolute;
+          top:        16px; right:16px;
+          background: rgba(255,255,255,.15);
+          border:     none;
+          color:      white;
+          font-size:  2rem;
+          line-height:1;
+          width:      44px; height:44px;
+          border-radius:50%;
+          cursor:     pointer;
+          display:    flex; align-items:center; justify-content:center;
+          transition: background .12s;
+          z-index:    2;
+        }
+        .lb-close:hover { background: rgba(255,255,255,.3); }
+        .lb-counter {
+          position:   absolute;
+          top:        20px; left:50%; transform:translateX(-50%);
+          color:      rgba(255,255,255,.8);
+          font-size:  0.82rem;
+          font-weight:600;
+          background: rgba(0,0,0,.4);
+          padding:    4px 12px;
+          border-radius:99px;
+        }
+        .lb-nav {
+          position:   absolute;
+          top:        50%; transform:translateY(-50%);
+          background: rgba(255,255,255,.15);
+          border:     none;
+          color:      white;
+          font-size:  2.5rem;
+          line-height:1;
+          width:      48px; height:48px;
+          border-radius:50%;
+          cursor:     pointer;
+          display:    flex; align-items:center; justify-content:center;
+          transition: background .12s;
+          z-index:    2;
+        }
+        .lb-nav:hover { background: rgba(255,255,255,.3); }
+        .lb-prev { left:  12px; }
+        .lb-next { right: 12px; }
+        .lb-dots {
+          position:   absolute;
+          bottom:     60px; left:50%; transform:translateX(-50%);
+          display:    flex; gap:6px;
+        }
+        .lb-dot {
+          width:8px; height:8px;
+          border-radius:50%;
+          background:rgba(255,255,255,.35);
+          border:none; cursor:pointer;
+          transition: background .15s, transform .15s;
+          padding:0;
+        }
+        .lb-dot--active {
+          background:white;
+          transform:scale(1.3);
+        }
+        .lb-download {
+          position:   absolute;
+          bottom:     16px; right:16px;
+          background: rgba(255,255,255,.15);
+          color:      white;
+          padding:    8px 16px;
+          border-radius:99px;
+          font-size:  0.78rem;
+          font-weight:600;
+          text-decoration:none;
+          transition: background .12s;
+        }
+        .lb-download:hover { background:rgba(255,255,255,.3); }
+
+        /* Mobile swipe hint */
+        @media (max-width: 768px) {
+          .lb-prev { left:  6px; width:40px; height:40px; font-size:2rem; }
+          .lb-next { right: 6px; width:40px; height:40px; font-size:2rem; }
+          .lb-img-wrap { max-width:100vw; }
+          .lb-img { max-width:100vw; border-radius:0; }
+        }
+
       `}</style>
     </>
   );
