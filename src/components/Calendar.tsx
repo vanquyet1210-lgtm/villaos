@@ -26,6 +26,7 @@ export interface BarSegment {
   checkin:    string;
   checkout:   string;
   type:       'booking' | 'locked';
+  noCheckoutHalf?: boolean; // locked bar: kéo full đến hết ô cuối
 }
 
 export interface CalendarProps {
@@ -72,15 +73,9 @@ function buildClickMap(
   const now = Date.now();
   const map: Record<string, ClickEntry> = {};
 
-  const addRange = (seg: BarSegment, ci: string, co: string) => {
-    let d = ci;
-    while (d <= co) {
-      map[d] = { seg, isCheckout: d === co };
-      d = addDays(d, 1);
-    }
-  };
-
-  // Bookings
+  // ── PASS 1: Bookings ──────────────────────────────────────────
+  // Chỉ mark các ngày từ checkin đến checkout-1 (middle nights)
+  // checkout day KHÔNG mark ở đây → để trống cho booking mới có thể checkin
   for (const b of bookings) {
     if (b.villaId !== villaId || b.status === 'cancelled') continue;
     if (b.status === 'hold' && b.holdExpiresAt) {
@@ -102,23 +97,47 @@ function buildClickMap(
       checkout:  co,
       type:      'booking',
     };
-    addRange(seg, ci, co);
+
+    // Mark checkin day — ghi đè kể cả locked
+    map[ci] = { seg, isCheckout: false };
+
+    // Mark middle days (fully occupied)
+    let d = addDays(ci, 1);
+    while (d < co) {
+      map[d] = { seg, isCheckout: false };
+      d = addDays(d, 1);
+    }
+
+    // Checkout day KHÔNG mark vào clickMap
+    // → ngày đó hoàn toàn tự do, click sẽ mở create modal
+    // Bar nửa trái chỉ là visual, không block action
   }
 
-  // Locked dates — gộp các đêm liên tiếp thành 1 range để hiển thị gọn
-  // Range [start, end] = đêm start đến đêm end đều bị khóa
-  // → thanh từ nửa phải ngày start đến nửa trái ngày (end+1)
+  // ── PASS 2: Locked dates ──────────────────────────────────────
+  // Locked dates CHỈ mark ngày nếu ngày đó CHƯA có booking
+  // → không ghi đè booking lên locked
   if (lockedDates.length) {
     const sorted = [...lockedDates].map(d => d.split('T')[0]).sort();
     let start = sorted[0], end = sorted[0];
     const flush = () => {
-      const co = addDays(end, 1);
+      const co = addDays(end, 1); // checkout ngày của lock = end+1
       const seg: BarSegment = {
         bkId: `lock-${start}`, status: 'locked',
         customer: '🔒', fullName: 'Ngày khóa',
         total: 0, checkin: start, checkout: co, type: 'locked',
       };
-      addRange(seg, start, co);
+      // Chỉ mark các đêm bị khóa (start..end)
+      // co = end+1 là ngày tự do → KHÔNG mark (tránh nhầm với booking checkin cùng ngày)
+      let d = start;
+      while (d <= end) {
+        // Locked ghi đè booking checkout, nhưng KHÔNG ghi đè booking checkin/middle
+        const existing = map[d];
+        if (!existing || existing.isCheckout) {
+          map[d] = { seg, isCheckout: false };
+        }
+        d = addDays(d, 1);
+      }
+      // KHÔNG mark map[co] — ngày co hoàn toàn tự do
     };
     for (let i = 1; i < sorted.length; i++) {
       if (sorted[i] === addDays(end, 1)) { end = sorted[i]; }
@@ -186,15 +205,24 @@ function buildBarPieces(
       const isFirstSeg = cur === startGI;
       const isLastSeg  = segEnd === endGI;
 
-      // Checkin: bar bắt đầu từ 30% ô ngày checkin (leftFrac = 0.30)
-      // Checkout: bar kết thúc tại 25% từ trái ô ngày checkout (rightFrac = 0.75)
-      const leftFrac  = isFirstSeg && visStart === ci ? 0.30 : 0;
-      const rightFrac = isLastSeg  && visEnd   === co ? 0.75 : 0;
+      // leftFrac: 0.35 nếu là ô checkin thật
+      const leftFrac  = isFirstSeg && visStart === ci ? 0.35 : 0;
+      // rightFrac: 0.65 nếu là ô checkout thật (booking có half)
+      // locked (noCheckoutHalf=true): rightFrac=0 → kéo đến hết ô
+      const hasCheckoutHalf = isLastSeg && visEnd === co && !seg.noCheckoutHalf;
+      const rightFrac = hasCheckoutHalf ? 0.65 : 0;
+
+      // Guard: nếu cùng 1 ô mà leftFrac + rightFrac >= 1 → bar âm → bỏ qua
+      // Trường hợp này xảy ra khi ci === co (1 ô vừa checkin vừa checkout)
+      // → render như 1 ô full không có half
+      const effectiveLeft  = leftFrac;
+      const effectiveRight = (colStart === colEnd && leftFrac + rightFrac >= 1) ? 0 : rightFrac;
 
       pieces.push({
         key:      `${keyPrefix}-${pieceIdx}`,
         row, colStart, colEnd,
-        leftFrac, rightFrac,
+        leftFrac:  effectiveLeft,
+        rightFrac: effectiveRight,
         isFirst:  isFirstSeg && visStart === ci,
         isLast:   isLastSeg  && visEnd   === co,
         seg,
@@ -237,13 +265,19 @@ function buildBarPieces(
     let start = sorted[0], end = sorted[0];
     let lockIdx = 0;
     const flush = () => {
-      const co = addDays(end, 1);
+      // Locked bar: từ nửa phải start đến HẾT end (không sang ngày end+1)
+      // Dùng co = addDays(end, 1) nhưng rightFrac sẽ = 0 (full right)
+      // Trick: set checkout = addDays(end,1) nhưng addPieces sẽ clamp đúng
+      // Thực ra: locked bar KHÔNG có checkout-half → checkin=start, checkout=end+1
+      // nhưng addPieces phải biết không vẽ half cho ngày end+1
+      // Fix đơn giản: checkout = end (ngày cuối bị khóa), rightFrac=0 (kéo full)
       const seg: BarSegment = {
         bkId: `lock-${lockIdx}`, status: 'locked',
         customer: '🔒', fullName: 'Ngày khóa',
-        total: 0, checkin: start, checkout: co, type: 'locked',
+        total: 0, checkin: start, checkout: end, type: 'locked',
+        noCheckoutHalf: true,  // kéo full đến hết ô cuối, không có half
       };
-      addPieces(seg, start, co, `lock-${lockIdx}`);
+      addPieces(seg, start, end, `lock-${lockIdx}`);
       lockIdx++;
     };
     for (let i = 1; i < sorted.length; i++) {
@@ -320,11 +354,10 @@ export default function Calendar({
   const handleDayClick = useCallback((ds: string) => {
     if (readonly || ds < today) return;
     const entry = clickMap[ds];
-    // Ngày trống → tạo booking mới
     if (!entry) { onDayClick?.(ds, null); return; }
-    // Checkout day → gửi seg để xem booking cũ (CalendarShell sẽ quyết định)
-    // CalendarShell sẽ mở viewModal cho booking đó
-    onDayClick?.(ds, { ...entry.seg, isCheckoutDay: true } as any);
+    // Checkout day → nửa phải trống → tạo mới
+    if (entry.isCheckout) { onDayClick?.(ds, null); return; }
+    onDayClick?.(ds, entry.seg);
   }, [readonly, today, clickMap, onDayClick]);
 
   // ── Render bar pieces ────────────────────────────────────────────
@@ -484,7 +517,7 @@ export default function Calendar({
             const isPast    = ds < today;
             const isToday   = ds === today;
             const entry     = clickMap[ds];
-            const clickable = !readonly && !isPast;
+            const clickable = !readonly && !isPast && (!entry || entry.isCheckout);
             return (
               <div
                 key={ds}
