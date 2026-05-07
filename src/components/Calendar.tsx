@@ -211,7 +211,7 @@ function buildBarPieces(
       // - locked:  kết thúc tại 25% từ trái → rightFrac = 0.75
       const isCheckoutCell = isLastSeg && visEnd === co;
       const rightFrac = isCheckoutCell
-        ? (seg.type === 'locked' ? 0.75 : 0.70)
+        ? 0.75 // tất cả đều kết thúc tại 25% (1 - 0.75)
         : 0;
 
       // Guard: nếu cùng 1 ô mà leftFrac + rightFrac >= 1 → bar âm → bỏ qua
