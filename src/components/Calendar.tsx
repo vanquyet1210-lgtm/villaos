@@ -205,7 +205,7 @@ function buildBarPieces(
       const isLastSeg  = segEnd === endGI;
 
       // leftFrac: 0.35 nếu là ô checkin thật
-      const leftFrac = isFirstSeg && visStart === ci ? 0.35 : 0;
+      const leftFrac = isFirstSeg && visStart === ci ? 0.30 : 0;
       // rightFrac: checkout half
       // - booking: kết thúc tại 30% từ trái → rightFrac = 0.70
       // - locked:  kết thúc tại 25% từ trái → rightFrac = 0.75
