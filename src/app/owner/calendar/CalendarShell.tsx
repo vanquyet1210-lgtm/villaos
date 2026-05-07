@@ -4,7 +4,7 @@
 // ║  Client shell: villa selector, calendar, booking modal      ║
 // ╚══════════════════════════════════════════════════════════════╝
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter }           from 'next/navigation';
 import Calendar, { type BarSegment } from '@/components/Calendar';
@@ -14,7 +14,7 @@ import {
   createBooking, cancelBooking, confirmHold,
 } from '@/lib/services/booking.service';
 import { toggleLockDate } from '@/lib/services/villa.service';
-import { fetchVillaBookingsAction } from '@/lib/cache/booking-cache-actions';
+import { fetchVillaBookingsAction, fetchSaleHoldsAction } from '@/lib/cache/booking-cache-actions';
 import {
   fmtMoney, formatDate, calcNights, calcTotal,
   todayISO, addDays,
@@ -86,8 +86,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   const [month, setMonth] = useState(new Date().getMonth());
   const [modal, setModal] = useState<BookingModal | null>(null);
   const [serverBookings, setServerBookings] = useState<Booking[]>(initialBookings);
-  // Tất cả bookings của mọi villa — dùng cho holds panel
-  const [allBookings, setAllBookings] = useState<Booking[]>([]);
+  const [allSaleHolds,   setAllSaleHolds]   = useState<Booking[]>([]);
   // Optimistic locked dates: update instantly without F5 (FIX 5)
   const [localLockedDates, setLocalLockedDates] = useState<string[] | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -146,6 +145,22 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
 
   const villa = villas.find(v => v.id === selectedVillaId) ?? filteredVillas[0] ?? villas[0];
   const detailVilla = villas.find(v => v.id === detailVillaId) ?? villa;
+  const [lbIndex, setLbIndex] = useState<number | null>(null);
+  const lbImages = detailVilla.images ?? [];
+  const lbNext = useCallback(() => setLbIndex(i => i !== null ? (i + 1) % lbImages.length : null), [lbImages.length]);
+  const lbPrev = useCallback(() => setLbIndex(i => i !== null ? (i - 1 + lbImages.length) % lbImages.length : null), [lbImages.length]);
+  const lbTouchX = useRef(0);
+
+  useEffect(() => {
+    if (lbIndex === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') lbNext();
+      if (e.key === 'ArrowLeft')  lbPrev();
+      if (e.key === 'Escape')     setLbIndex(null);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [lbIndex, lbNext, lbPrev]);
 
   // Realtime bookings: Supabase subscription tức thì
   const bookings = useBookingsRealtime(selectedVillaId, serverBookings);
@@ -156,11 +171,27 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
     fetchVillaBookingsAction(selectedVillaId).then(data => setServerBookings(data));
   }, [selectedVillaId]);
 
-  // Load tất cả bookings của mọi villa khi mount (cho holds panel)
+  // Load tất cả hold của sale này (kể cả khi đổi villa)
   useEffect(() => {
-    Promise.all(villas.map(v => fetchVillaBookingsAction(v.id)))
-      .then(results => setAllBookings(results.flat()));
-  }, [villas.length]);
+    if (userRole !== 'sale') return;
+    const fetchHolds = () => {
+      // Lấy userId từ booking đã có hoặc dùng createdBy từ profile
+      // Fetch tất cả villa holds cho sale này
+      Promise.all(villas.map(v => fetchVillaBookingsAction(v.id)))
+        .then(results => {
+          const allHolds = results.flat().filter(b =>
+            b.status === 'hold' &&
+            b.holdExpiresAt &&
+            new Date(b.holdExpiresAt).getTime() > Date.now()
+          );
+          setAllSaleHolds(allHolds);
+        });
+    };
+    fetchHolds();
+    // Refresh mỗi 30 giây
+    const interval = setInterval(fetchHolds, 30000);
+    return () => clearInterval(interval);
+  }, [userRole, villas]);
 
   // ── Form state (create booking) ────────────────────────────────
   const [customer,  setCustomer]  = useState('');
@@ -478,14 +509,14 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
 
       {/* ── HOLD ĐANG CHỜ DUYỆT — chỉ sale ────────────────────── */}
       {userRole === 'sale' && (() => {
-        const myPendingHolds = bookings.filter(b =>
-          b.status === 'hold' &&
-          b.createdBy === (bookings[0] as any)?.createdBy && // filter by current user handled below
-          b.holdExpiresAt &&
-          new Date(b.holdExpiresAt).getTime() > Date.now()
-        );
-        // Lọc tất cả hold đang chờ chủ nhà xác nhận — từ MỌI villa
-        const saleHolds = allBookings.filter(b => b.status === 'hold');
+        // Dùng allSaleHolds — hiện tất cả hold kể cả khi đổi villa
+        const saleHolds = allSaleHolds.length > 0
+          ? allSaleHolds
+          : bookings.filter(b =>
+              b.status === 'hold' &&
+              b.holdExpiresAt &&
+              new Date(b.holdExpiresAt).getTime() > Date.now()
+            );
         if (!saleHolds.length) return null;
         return (
           <div className="hold-requests" style={{ marginTop: 16 }}>
@@ -627,11 +658,15 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
               {detailVilla.images && detailVilla.images.length > 0 && (
                 <div className="detail-gallery">
                   {detailVilla.images.map((src, i) => (
-                    <div key={i} className="detail-gallery-cell">
+                    <div
+                      key={i}
+                      className="detail-gallery-cell"
+                      onClick={() => setLbIndex(i)}
+                      style={{ cursor: 'zoom-in' }}
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={src} alt={`${detailVilla.name} ${i + 1}`} />
-                      <a className="detail-img-dl" href={src} download={`${detailVilla.name}-${i+1}.jpg`}
-                        target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>⬇</a>
+                      <div className="detail-img-zoom">🔍</div>
                     </div>
                   ))}
                 </div>
@@ -987,6 +1022,44 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         </div>
       )}
 
+      {/* ── LIGHTBOX ── */}
+      {lbIndex !== null && lbImages.length > 0 && (
+        <div
+          className="lb-overlay"
+          onClick={() => setLbIndex(null)}
+          onTouchStart={e => { lbTouchX.current = e.touches[0].clientX; }}
+          onTouchEnd={e => {
+            const diff = lbTouchX.current - e.changedTouches[0].clientX;
+            if (Math.abs(diff) > 50) { if (diff > 0) lbNext(); else lbPrev(); }
+          }}
+        >
+          <button className="lb-close" onClick={() => setLbIndex(null)}>×</button>
+          <div className="lb-counter">{lbIndex + 1} / {lbImages.length}</div>
+          {lbImages.length > 1 && (
+            <button className="lb-nav lb-prev" onClick={e => { e.stopPropagation(); lbPrev(); }}>‹</button>
+          )}
+          <div className="lb-img-wrap" onClick={e => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img key={lbIndex} src={lbImages[lbIndex]} alt={`${detailVilla.name} ${lbIndex + 1}`} className="lb-img" />
+          </div>
+          {lbImages.length > 1 && (
+            <button className="lb-nav lb-next" onClick={e => { e.stopPropagation(); lbNext(); }}>›</button>
+          )}
+          {lbImages.length > 1 && (
+            <div className="lb-dots">
+              {lbImages.map((_, i) => (
+                <button key={i} className={`lb-dot${i === lbIndex ? ' lb-dot--active' : ''}`}
+                  onClick={e => { e.stopPropagation(); setLbIndex(i); }} />
+              ))}
+            </div>
+          )}
+          <a className="lb-download" href={lbImages[lbIndex]}
+            download={`${detailVilla.name}-${lbIndex + 1}.jpg`}
+            target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}>⬇ Tải ảnh</a>
+        </div>
+      )}
+
       <style>{`
         .cal-shell { display: flex; flex-direction: column; gap: 16px; }
 
@@ -1257,6 +1330,65 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           display:inline-flex; align-items:center; gap:5px;
         }
         .btn-download:hover { background:var(--forest-deep); }
+
+        /* ── Zoom hint on gallery ── */
+        .detail-img-zoom {
+          position:absolute; bottom:6px; right:6px;
+          background:rgba(0,0,0,.45); color:white;
+          border-radius:99px; width:26px; height:26px;
+          display:flex; align-items:center; justify-content:center;
+          font-size:0.75rem; opacity:0; transition:opacity .15s;
+        }
+        .detail-gallery-cell:hover .detail-img-zoom { opacity:1; }
+
+        /* ── Lightbox ── */
+        .lb-overlay {
+          position:fixed; inset:0; background:rgba(0,0,0,.92);
+          z-index:99999; display:flex; align-items:center; justify-content:center;
+          animation:fadeIn .15s ease;
+        }
+        .lb-img-wrap { max-width:92vw; max-height:80vh; display:flex; align-items:center; justify-content:center; }
+        .lb-img { max-width:92vw; max-height:80vh; object-fit:contain; border-radius:8px; animation:lbIn .2s ease; user-select:none; }
+        @keyframes lbIn { from{opacity:0;transform:scale(.95);} to{opacity:1;transform:scale(1);} }
+        .lb-close {
+          position:absolute; top:16px; right:16px;
+          background:rgba(255,255,255,.15); border:none; color:white;
+          font-size:2rem; width:44px; height:44px; border-radius:50%;
+          cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:2;
+          transition:background .12s;
+        }
+        .lb-close:hover { background:rgba(255,255,255,.3); }
+        .lb-counter {
+          position:absolute; top:20px; left:50%; transform:translateX(-50%);
+          color:rgba(255,255,255,.85); font-size:0.82rem; font-weight:600;
+          background:rgba(0,0,0,.4); padding:4px 12px; border-radius:99px;
+        }
+        .lb-nav {
+          position:absolute; top:50%; transform:translateY(-50%);
+          background:rgba(255,255,255,.15); border:none; color:white;
+          font-size:2.5rem; width:48px; height:48px; border-radius:50%;
+          cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:2;
+          transition:background .12s;
+        }
+        .lb-nav:hover { background:rgba(255,255,255,.3); }
+        .lb-prev { left:12px; } .lb-next { right:12px; }
+        .lb-dots { position:absolute; bottom:60px; left:50%; transform:translateX(-50%); display:flex; gap:6px; }
+        .lb-dot { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.35); border:none; cursor:pointer; padding:0; transition:background .15s,transform .15s; }
+        .lb-dot--active { background:white; transform:scale(1.3); }
+        .lb-download {
+          position:absolute; bottom:16px; right:16px;
+          background:rgba(255,255,255,.15); color:white;
+          padding:8px 16px; border-radius:99px; font-size:0.78rem; font-weight:600; text-decoration:none;
+          transition:background .12s;
+        }
+        .lb-download:hover { background:rgba(255,255,255,.3); }
+        @media (max-width:768px) {
+          .lb-prev{left:6px;width:40px;height:40px;font-size:2rem;}
+          .lb-next{right:6px;width:40px;height:40px;font-size:2rem;}
+          .lb-img-wrap{max-width:100vw;}
+          .lb-img{max-width:100vw;border-radius:0;}
+        }
+
       `}</style>
     </div>
   );
