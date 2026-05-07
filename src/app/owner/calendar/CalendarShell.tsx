@@ -468,6 +468,70 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         role={userRole}
       />
 
+      {/* ── HOLD ĐANG CHỜ DUYỆT — chỉ sale ────────────────────── */}
+      {userRole === 'sale' && (() => {
+        const myPendingHolds = bookings.filter(b =>
+          b.status === 'hold' &&
+          b.createdBy === (bookings[0] as any)?.createdBy && // filter by current user handled below
+          b.holdExpiresAt &&
+          new Date(b.holdExpiresAt).getTime() > Date.now()
+        );
+        // Lọc hold do chính sale này tạo (createdByRole === 'sale')
+        const saleHolds = bookings.filter(b =>
+          b.status === 'hold' &&
+          b.holdExpiresAt &&
+          new Date(b.holdExpiresAt).getTime() > Date.now()
+        );
+        if (!saleHolds.length) return null;
+        return (
+          <div className="hold-requests" style={{ marginTop: 16 }}>
+            <div className="hold-requests__header">
+              <span className="hold-requests__title">⏳ Hold đang chờ duyệt</span>
+              <span className="hold-requests__badge">{saleHolds.length}</span>
+            </div>
+            <div className="hold-requests__list">
+              {saleHolds.map(b => {
+                const nights  = calcNights(b.checkin, b.checkout);
+                const villa   = villas.find(v => v.id === b.villaId);
+                const exp     = new Date(b.holdExpiresAt!);
+                const minLeft = Math.max(0, Math.round((exp.getTime() - Date.now()) / 60000));
+                return (
+                  <div key={b.id} className="hold-card">
+                    <div className="hold-card__info">
+                      <div className="hold-card__meta">
+                        {villa && <span>{villa.emoji} <strong>{villa.name}</strong></span>}
+                        <span className="hold-card__dot">·</span>
+                        <span>📅 {formatDate(b.checkin)} → {formatDate(b.checkout)}</span>
+                        <span className="hold-card__dot">·</span>
+                        <span>🌙 {nights} đêm</span>
+                        <span className="hold-card__dot">·</span>
+                        <span>💰 {fmtMoney(b.total)}</span>
+                      </div>
+                      <div className="hold-card__guest">
+                        👤 {b.customer}
+                        {b.phone && <span> · 📞 {b.phone}</span>}
+                      </div>
+                      <div className="hold-card__timer" style={{ color: minLeft <= 5 ? 'var(--red)' : 'var(--amber)' }}>
+                        ⏱ Còn {minLeft} phút · Đang chờ chủ nhà duyệt
+                      </div>
+                    </div>
+                    <div className="hold-card__actions">
+                      <button
+                        className="hold-btn hold-btn--reject"
+                        disabled={isPending}
+                        onClick={() => handleCancel(b.id)}
+                      >
+                        ✕ Hủy hold
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── YÊU CẦU GIỮ PHÒNG — chỉ owner ─────────────────────── */}
       {userRole === 'owner' && (() => {
         const pendingHolds = bookings.filter(b =>
