@@ -86,6 +86,8 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   const [month, setMonth] = useState(new Date().getMonth());
   const [modal, setModal] = useState<BookingModal | null>(null);
   const [serverBookings, setServerBookings] = useState<Booking[]>(initialBookings);
+  // Tất cả bookings của mọi villa — dùng cho holds panel
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
   // Optimistic locked dates: update instantly without F5 (FIX 5)
   const [localLockedDates, setLocalLockedDates] = useState<string[] | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -153,6 +155,12 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
     if (!selectedVillaId) return;
     fetchVillaBookingsAction(selectedVillaId).then(data => setServerBookings(data));
   }, [selectedVillaId]);
+
+  // Load tất cả bookings của mọi villa khi mount (cho holds panel)
+  useEffect(() => {
+    Promise.all(villas.map(v => fetchVillaBookingsAction(v.id)))
+      .then(results => setAllBookings(results.flat()));
+  }, [villas.length]);
 
   // ── Form state (create booking) ────────────────────────────────
   const [customer,  setCustomer]  = useState('');
@@ -476,12 +484,8 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           b.holdExpiresAt &&
           new Date(b.holdExpiresAt).getTime() > Date.now()
         );
-        // Lọc hold do chính sale này tạo (createdByRole === 'sale')
-        const saleHolds = bookings.filter(b =>
-          b.status === 'hold' &&
-          b.holdExpiresAt &&
-          new Date(b.holdExpiresAt).getTime() > Date.now()
-        );
+        // Lọc tất cả hold đang chờ chủ nhà xác nhận — từ MỌI villa
+        const saleHolds = allBookings.filter(b => b.status === 'hold');
         if (!saleHolds.length) return null;
         return (
           <div className="hold-requests" style={{ marginTop: 16 }}>
