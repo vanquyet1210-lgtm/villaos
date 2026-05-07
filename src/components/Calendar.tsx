@@ -26,7 +26,6 @@ export interface BarSegment {
   checkin:    string;
   checkout:   string;
   type:       'booking' | 'locked';
-  noCheckoutHalf?: boolean; // locked bar: kéo full đến hết ô cuối
 }
 
 export interface CalendarProps {
@@ -206,11 +205,14 @@ function buildBarPieces(
       const isLastSeg  = segEnd === endGI;
 
       // leftFrac: 0.35 nếu là ô checkin thật
-      const leftFrac  = isFirstSeg && visStart === ci ? 0.35 : 0;
-      // rightFrac: 0.65 nếu là ô checkout thật (booking có half)
-      // locked (noCheckoutHalf=true): rightFrac=0 → kéo đến hết ô
-      const hasCheckoutHalf = isLastSeg && visEnd === co && !seg.noCheckoutHalf;
-      const rightFrac = hasCheckoutHalf ? 0.70 : 0; // bar kết thúc tại 30% từ trái (1 - 0.70 = 0.30)
+      const leftFrac = isFirstSeg && visStart === ci ? 0.35 : 0;
+      // rightFrac: checkout half
+      // - booking: kết thúc tại 30% từ trái → rightFrac = 0.70
+      // - locked:  kết thúc tại 25% từ trái → rightFrac = 0.75
+      const isCheckoutCell = isLastSeg && visEnd === co;
+      const rightFrac = isCheckoutCell
+        ? (seg.type === 'locked' ? 0.75 : 0.70)
+        : 0;
 
       // Guard: nếu cùng 1 ô mà leftFrac + rightFrac >= 1 → bar âm → bỏ qua
       // Trường hợp này xảy ra khi ci === co (1 ô vừa checkin vừa checkout)
@@ -271,13 +273,13 @@ function buildBarPieces(
       // Thực ra: locked bar KHÔNG có checkout-half → checkin=start, checkout=end+1
       // nhưng addPieces phải biết không vẽ half cho ngày end+1
       // Fix đơn giản: checkout = end (ngày cuối bị khóa), rightFrac=0 (kéo full)
+      const co = addDays(end, 1); // bar kết thúc tại 25% ngày end+1
       const seg: BarSegment = {
         bkId: `lock-${lockIdx}`, status: 'locked',
         customer: '🔒', fullName: 'Ngày khóa',
-        total: 0, checkin: start, checkout: end, type: 'locked',
-        noCheckoutHalf: true,  // kéo full đến hết ô cuối, không có half
+        total: 0, checkin: start, checkout: co, type: 'locked',
       };
-      addPieces(seg, start, end, `lock-${lockIdx}`);
+      addPieces(seg, start, co, `lock-${lockIdx}`);
       lockIdx++;
     };
     for (let i = 1; i < sorted.length; i++) {
