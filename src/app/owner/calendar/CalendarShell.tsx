@@ -464,6 +464,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         year={year}
         onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
         onDayClick={handleDayClick}
+        hotline={(villa as any).phone ?? ''}
         role={userRole}
       />
 

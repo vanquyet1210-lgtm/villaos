@@ -38,6 +38,7 @@ export interface CalendarProps {
   onDayClick?:   (dateStr: string, info: BarSegment | null) => void;
   role?:         'owner' | 'sale' | 'customer' | 'admin';
   readonly?:     boolean;
+  hotline?:      string; // số hotline chủ nhà
 }
 
 // ── Colors ────────────────────────────────────────────────────────
@@ -326,6 +327,7 @@ function buildBarPieces(
 export default function Calendar({
   bookings, villaId, lockedDates = [],
   month, year, onMonthChange, onDayClick, readonly = false,
+  hotline,
 }: CalendarProps) {
   const today     = todayISO();
   const totalDays = daysInMonth(year, month);
@@ -543,8 +545,18 @@ export default function Calendar({
         {renderBars()}
       </div>
 
-      {/* ── Legend ── */}
+      {/* ── Legend + Hotline ── */}
       <div className="cal-legend">
+        {/* Hotline bên trái */}
+        {hotline && (
+          <a href={`tel:${hotline}`} className="cal-hotline">
+            <span className="cal-hotline-icon">📞</span>
+            <span>{hotline}</span>
+          </a>
+        )}
+        {/* Spacer */}
+        <span style={{ flex: 1 }} />
+        {/* Legend bên phải */}
         {[
           { label: 'Đã đặt',    bg: C.confirmed.bg, border: C.confirmed.bar },
           { label: 'Đang giữ',  bg: C.hold.bg,      border: C.hold.bar },
@@ -667,13 +679,30 @@ export default function Calendar({
         }
 
         .cal-legend {
-          display:    flex;
-          gap:        16px;
-          padding:    10px 16px;
-          border-top: 1px solid var(--sage-pale);
-          background: var(--parchment);
-          flex-wrap:  wrap;
+          display:     flex;
+          align-items: center;
+          gap:         12px;
+          padding:     10px 16px;
+          border-top:  1px solid var(--sage-pale);
+          background:  var(--parchment);
+          flex-wrap:   wrap;
         }
+        .cal-hotline {
+          display:     flex;
+          align-items: center;
+          gap:         5px;
+          font-size:   0.78rem;
+          font-weight: 600;
+          color:       var(--forest);
+          text-decoration: none;
+          background:  rgba(180,212,195,.2);
+          border:      1px solid rgba(180,212,195,.5);
+          border-radius: 20px;
+          padding:     3px 10px;
+          transition:  background .12s;
+        }
+        .cal-hotline:hover { background: rgba(180,212,195,.4); }
+        .cal-hotline-icon { font-size: 0.85rem; }
         .cal-legend-item {
           display:     flex;
           align-items: center;
