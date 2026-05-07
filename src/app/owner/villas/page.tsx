@@ -37,31 +37,38 @@ export default async function OwnerVillasPage() {
         <div className="villa-list">
           {villas.map((villa, i) => (
             <div key={villa.id} className="villa-row" style={{animationDelay:`${i*60}ms`}}>
-              <div className="villa-row-thumb">
-                {villa.images[0]
-                  ? <img src={villa.images[0]} alt={villa.name} />
-                  : <span className="villa-row-emoji">{villa.emoji}</span>}
-              </div>
-              <div className="villa-row-info">
-                <div className="villa-row-name">
-                  {villa.name}
-                  <span className={`badge badge-${villa.status}`} style={{marginLeft:8}}>
-                    {villa.status === 'active' ? 'Hoạt động' : 'Tạm dừng'}
-                  </span>
+              {/* Image + Info — wrapped for mobile */}
+              <div className="villa-row-top">
+                <div className="villa-row-thumb">
+                  {villa.images[0]
+                    ? <img src={villa.images[0]} alt={villa.name} />
+                    : <span className="villa-row-emoji">{villa.emoji}</span>}
                 </div>
-                <div className="villa-row-meta">
-                  📍 {villa.district}, {villa.province} · 🛏 {villa.bedrooms} phòng · 👥 {villa.adults} người · 💰 {fmtMoney(villa.price)}/đêm
-                </div>
-                {villa.amenities.length > 0 && (
-                  <div className="villa-row-amenities">
-                    {villa.amenities.slice(0,4).map(a => (
-                      <span key={a} className="villa-amenity-chip">{amenityLabel(a)}</span>
-                    ))}
-                    {villa.amenities.length > 4 && <span className="villa-amenity-chip">+{villa.amenities.length-4}</span>}
+                <div className="villa-row-info">
+                  <div className="villa-row-name">
+                    {villa.name}
+                    <span className={`badge badge-${villa.status}`} style={{marginLeft:8}}>
+                      {villa.status === 'active' ? 'Hoạt động' : 'Tạm dừng'}
+                    </span>
                   </div>
-                )}
+                  <div className="villa-row-meta">
+                    📍 {villa.district}, {villa.province}<br/>
+                    🛏 {villa.bedrooms} phòng · 👥 {villa.adults} người · 💰 {fmtMoney(villa.price)}/đêm
+                  </div>
+                  {villa.amenities.length > 0 && (
+                    <div className="villa-row-amenities">
+                      {villa.amenities.slice(0,4).map(a => (
+                        <span key={a} className="villa-amenity-chip">{amenityLabel(a)}</span>
+                      ))}
+                      {villa.amenities.length > 4 && <span className="villa-amenity-chip">+{villa.amenities.length-4}</span>}
+                    </div>
+                  )}
+                </div>
               </div>
-              <VillaActions villa={villa} />
+              {/* Actions */}
+              <div className="villa-row-actions-wrap">
+                <VillaActions villa={villa} />
+              </div>
             </div>
           ))}
         </div>
@@ -69,6 +76,8 @@ export default async function OwnerVillasPage() {
 
       <style>{`
         .villa-list { display:flex; flex-direction:column; gap:12px; }
+
+        /* ── Desktop layout ── */
         .villa-row {
           display:flex; align-items:center; gap:16px;
           background:var(--white); border-radius:var(--radius-lg);
@@ -78,17 +87,56 @@ export default async function OwnerVillasPage() {
         }
         .villa-row:hover { box-shadow:var(--shadow-md); transform:translateY(-1px); }
         .villa-row-thumb {
-          width:72px; height:72px; border-radius:var(--radius-md);
+          width:80px; height:80px; border-radius:var(--radius-md);
           overflow:hidden; flex-shrink:0; background:var(--sage-pale);
           display:flex; align-items:center; justify-content:center;
         }
         .villa-row-thumb img { width:100%; height:100%; object-fit:cover; }
         .villa-row-emoji { font-size:2.2rem; }
         .villa-row-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
-        .villa-row-name { font-family:var(--font-display); font-size:1.05rem; color:var(--forest-deep); display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
-        .villa-row-meta { font-size:0.82rem; color:var(--ink-light); }
+        .villa-row-name {
+          font-family:var(--font-display); font-size:1.05rem;
+          color:var(--forest-deep); display:flex; align-items:center;
+          flex-wrap:wrap; gap:6px;
+        }
+        .villa-row-meta { font-size:0.82rem; color:var(--ink-light); line-height:1.5; }
         .villa-row-amenities { display:flex; flex-wrap:wrap; gap:4px; margin-top:2px; }
-        .villa-amenity-chip { font-size:0.72rem; padding:2px 8px; background:var(--sage-pale); border:1px solid var(--sage-light); border-radius:99px; color:var(--forest); }
+        .villa-amenity-chip {
+          font-size:0.72rem; padding:2px 8px;
+          background:var(--sage-pale); border:1px solid var(--sage-light);
+          border-radius:99px; color:var(--forest);
+        }
+
+        /* ── Mobile layout ── */
+        @media (max-width: 768px) {
+          .villa-row {
+            flex-direction: column;
+            align-items:    stretch;
+            gap:            12px;
+            padding:        14px;
+          }
+          .villa-row-top {
+            display:     flex;
+            align-items: flex-start;
+            gap:         12px;
+          }
+          .villa-row-thumb {
+            width:  80px;
+            height: 80px;
+            flex-shrink: 0;
+          }
+          .villa-row-info { gap: 4px; }
+          .villa-row-name { font-size: 0.95rem; }
+          .villa-row-meta { font-size: 0.78rem; }
+          .villa-row-amenities { margin-top: 4px; }
+          /* Actions row full width at bottom */
+          .villa-row-actions-wrap {
+            width:          100%;
+            border-top:     1px solid rgba(180,212,195,.2);
+            padding-top:    10px;
+            margin-top:     2px;
+          }
+        }
       `}</style>
     </>
   );
