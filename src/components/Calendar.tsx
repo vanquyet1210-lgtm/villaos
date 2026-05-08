@@ -739,16 +739,17 @@ export default function Calendar({
         .cal-hotline {
           display:     flex;
           align-items: center;
-          gap:         5px;
-          font-size:   0.78rem;
+          gap:         4px;
+          font-size:   0.72rem;
           font-weight: 600;
           color:       var(--forest);
           text-decoration: none;
           background:  rgba(180,212,195,.2);
           border:      1px solid rgba(180,212,195,.5);
           border-radius: 20px;
-          padding:     3px 10px;
+          padding:     3px 8px;
           transition:  background .12s;
+          white-space: nowrap;
         }
         .cal-hotline:hover { background: rgba(180,212,195,.4); }
         .cal-hotline-icon { font-size: 0.85rem; }
@@ -772,6 +773,7 @@ export default function Calendar({
           font-size:   0.75rem;
           font-weight: 600;
           color:       var(--ink-muted);
+          white-space: nowrap;
         }
         .cal-toggle {
           position:        relative;
