@@ -53,8 +53,8 @@ const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : 
 
 // ── Constants ─────────────────────────────────────────────────────
 
-const CELL_H   = 72;   // px — height của 1 ô ngày
-const BAR_T    = 26;   // px từ top ô đến top bar đầu tiên
+const CELL_H   = 56;   // px — height của 1 ô ngày
+const BAR_T    = 22;   // px từ top ô đến top bar đầu tiên
 const BAR_H    = 20;   // px chiều cao bar
 const BAR_GAP  = 3;    // px khoảng cách giữa 2 bar chồng nhau
 const BAR_R    = 7;    // px border-radius đầu/cuối bar

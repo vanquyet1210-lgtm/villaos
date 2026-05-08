@@ -329,25 +329,36 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
       {/* Villa filter + selector */}
       {villas.length > 1 && (
         <div>
-          {/* Filter bar */}
-          <div className="villa-filter-bar">
-            <input
-              className="villa-filter-search"
-              placeholder="🔍 Tìm nhanh theo tên, đường, địa chỉ..."
-              value={filterSearch}
-              onChange={e => setFilterSearch(e.target.value)}
-            />
-            {userRole !== 'owner' && (
-            <button
-              className={`villa-filter-toggle${showFilter ? ' active' : ''}`}
-              onClick={() => setShowFilter(v => !v)}
-            >
-              {showFilter ? '▲ Ẩn bộ lọc' : '▼ Bộ lọc'}
-              {hasFilter && <span className="filter-badge"> ●</span>}
-            </button>
-            )}
+          {/* Search + Filter — tích hợp gọn */}
+          <div className="villa-search-wrap">
+            <div className="villa-search-inner">
+              <svg className="villa-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                className="villa-search-input"
+                placeholder="Tìm villa..."
+                value={filterSearch}
+                onChange={e => setFilterSearch(e.target.value)}
+              />
+              {filterSearch && (
+                <button className="villa-search-clear" onClick={() => setFilterSearch('')}>×</button>
+              )}
+              {userRole !== 'owner' && (
+                <button
+                  className={`villa-search-filter-btn${showFilter ? ' active' : ''}`}
+                  onClick={() => setShowFilter(v => !v)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
+                  </svg>
+                  Lọc
+                  {hasFilter && <span className="villa-filter-dot" />}
+                </button>
+              )}
+            </div>
             {hasFilter && (
-              <button className="villa-filter-clear" onClick={clearFilter}>✕ Xóa bộ lọc</button>
+              <button className="villa-filter-clear-small" onClick={clearFilter}>✕ Xóa lọc</button>
             )}
           </div>
 
@@ -481,7 +492,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
                     <span>·</span>
                     <span>👥 {v.adults} người</span>
                     <span>·</span>
-                    <span className="villa-card-price">{fmtMoney(v.price)}/đêm</span>
+                    <span className="villa-card-price">{v.price.toLocaleString('vi-VN')}đ/đêm</span>
                   </div>
                   {userRole === 'sale' && (
                     <div className="villa-card-hint">Nhấn đúp để xem chi tiết</div>
@@ -1087,17 +1098,17 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           font-family:   var(--font-body);
           overflow:      hidden;
           transition:    all .18s;
-          box-shadow:    0 1px 4px rgba(0,0,0,.05);
+          box-shadow:    none;
           padding:       0;
         }
         .villa-card:hover {
           border-color: var(--sage);
-          box-shadow:   0 4px 14px rgba(0,0,0,.1);
+          box-shadow:   none;
           transform:    translateY(-2px);
         }
         .villa-card.active {
           border-color: var(--forest);
-          box-shadow:   0 4px 14px rgba(45,90,45,.2);
+          box-shadow:   none;
         }
 
         .villa-card-img {
@@ -1183,9 +1194,11 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           margin-top:  2px;
         }
         .villa-card-price {
-          color:       var(--forest);
-          font-weight: 700;
-          font-size:   0.75rem;
+          font-size:      0.95rem;
+          font-weight:    800;
+          color:          #e53e3e;
+          font-family:    var(--font-display);
+          letter-spacing: -0.01em;
         }
         .villa-card-hint {
           font-size:  0.65rem;
@@ -1214,7 +1227,78 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         .villa-card.active .villa-card-view-btn { background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.5); color: white; }
         .villa-card.active .villa-card-view-btn:hover { background: rgba(255,255,255,.35); }
 
-                .villa-filter-bar {
+                /* ── Search + Filter integrated ── */
+        .villa-search-wrap {
+          display:       flex;
+          align-items:   center;
+          gap:           8px;
+          margin-bottom: 12px;
+        }
+        .villa-search-inner {
+          display:       flex;
+          align-items:   center;
+          flex:          1;
+          background:    var(--white);
+          border:        1.5px solid var(--stone);
+          border-radius: 99px;
+          padding:       0 14px;
+          height:        42px;
+          gap:           8px;
+          transition:    border-color .15s, box-shadow .15s;
+        }
+        .villa-search-inner:focus-within {
+          border-color: var(--forest);
+          box-shadow:   0 0 0 3px rgba(46,125,82,.1);
+        }
+        .villa-search-icon  { color: var(--ink-muted); flex-shrink: 0; }
+        .villa-search-input {
+          flex: 1; border: none; outline: none;
+          background: transparent; font-size: 0.875rem;
+          color: var(--ink); font-family: var(--font-body);
+        }
+        .villa-search-input::placeholder { color: var(--ink-muted); }
+        .villa-search-clear {
+          background: none; border: none; cursor: pointer;
+          color: var(--ink-muted); font-size: 1.2rem;
+          padding: 0 2px; line-height: 1; transition: color .12s;
+        }
+        .villa-search-clear:hover { color: var(--ink); }
+        .villa-search-filter-btn {
+          display:       flex;
+          align-items:   center;
+          gap:           5px;
+          height:        42px;
+          padding:       0 16px;
+          background:    var(--white);
+          border:        1.5px solid var(--stone);
+          border-radius: 99px;
+          font-size:     0.82rem;
+          font-weight:   600;
+          color:         var(--ink);
+          cursor:        pointer;
+          white-space:   nowrap;
+          flex-shrink:   0;
+          transition:    border-color .15s, background .15s, color .15s;
+        }
+        .villa-search-filter-btn:hover { border-color: var(--forest); }
+        .villa-search-filter-btn.active {
+          border-color: var(--forest);
+          background:   rgba(46,125,82,.06);
+          color:        var(--forest);
+        }
+        .villa-filter-dot {
+          width: 7px; height: 7px; border-radius: 50%;
+          background: var(--forest); flex-shrink: 0;
+        }
+        .villa-filter-clear-small {
+          background: none; border: none; cursor: pointer;
+          font-size: 0.75rem; color: var(--ink-muted);
+          padding: 4px 0; white-space: nowrap;
+          transition: color .12s; flex-shrink: 0;
+        }
+        .villa-filter-clear-small:hover { color: var(--red); }
+
+        .villa-filter-bar {
           display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
         }
         .villa-filter-search {
