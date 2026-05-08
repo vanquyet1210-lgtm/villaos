@@ -37,9 +37,10 @@ export interface CalendarProps {
   year:          number;
   onMonthChange: (year: number, month: number) => void;
   onDayClick?:   (dateStr: string, info: BarSegment | null) => void;
-  role?:         'owner' | 'sale' | 'customer' | 'admin';
-  readonly?:     boolean;
-  hotline?:      string; // số hotline chủ nhà
+  role?:           'owner' | 'sale' | 'customer' | 'admin';
+  readonly?:       boolean;
+  hotline?:        string; // số hotline chủ nhà
+  highlightEmpty?: boolean; // chế độ "xem ngày trống": mờ occupied, sáng empty
 }
 
 // ── Colors ────────────────────────────────────────────────────────
@@ -328,7 +329,7 @@ function buildBarPieces(
 export default function Calendar({
   bookings, villaId, lockedDates = [],
   month, year, onMonthChange, onDayClick, readonly = false,
-  hotline, role,
+  hotline, role, highlightEmpty = false,
 }: CalendarProps) {
   const today     = todayISO();
   const totalDays = daysInMonth(year, month);
@@ -395,6 +396,9 @@ export default function Calendar({
           alignItems:     'center',
           justifyContent: isSaleView ? 'center' : 'flex-start',
           minWidth:       0,
+          opacity:        highlightEmpty ? 0.25 : 1,
+          filter:         highlightEmpty ? 'grayscale(40%)' : 'none',
+          transition:     'opacity .25s, filter .25s',
         }}
       >
         {/* SALE VIEW: chỉ icon ở giữa — không label, không giá */}
@@ -514,6 +518,10 @@ export default function Calendar({
             const isToday   = ds === today;
             const entry     = clickMap[ds];
             const clickable = !readonly && !isPast && (!entry || entry.isCheckout);
+            // highlightEmpty: ô trống (tương lai) sáng lên, ô bận mờ đi
+            const isEmpty   = !isPast && (!entry || entry.isCheckout);
+            const dimCell   = highlightEmpty && !isEmpty;
+            const glowCell  = highlightEmpty && isEmpty && !isPast;
             return (
               <div
                 key={ds}
@@ -525,7 +533,13 @@ export default function Calendar({
                   entry && entry.isCheckout   ? 'cal-cell-checkout' : '',
                 ].filter(Boolean).join(' ')}
                 onClick={() => handleDayClick(ds)}
-                style={{ cursor: clickable || (entry && !entry.isCheckout) ? 'pointer' : 'default' }}
+                style={{
+                  cursor:     clickable || (entry && !entry.isCheckout) ? 'pointer' : 'default',
+                  opacity:    dimCell ? 0.35 : 1,
+                  background: glowCell ? 'rgba(180,212,195,.18)' : undefined,
+                  boxShadow:  glowCell ? 'inset 0 0 0 1.5px rgba(45,90,45,.25)' : undefined,
+                  transition: 'opacity .2s, background .2s',
+                }}
               >
                 <span className={`cal-dn${isToday ? ' cal-dn-today' : ''}`}>{day}</span>
               </div>

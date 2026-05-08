@@ -94,6 +94,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
 
   // ── Villa filter state ─────────────────────────────────────────
   const [showFilter,    setShowFilter]    = useState(false);
+  const [highlightEmpty, setHighlightEmpty] = useState(false); // chế độ xem ngày trống
   const [filterSearch,  setFilterSearch]  = useState('');
   const [filterProvince,setFilterProvince] = useState('');
   const [filterBedrooms,setFilterBedrooms] = useState('');
@@ -356,6 +357,16 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
                   {hasFilter && <span className="villa-filter-dot" />}
                 </button>
               )}
+              {userRole === 'sale' && (
+                <button
+                  className={`villa-search-filter-btn${highlightEmpty ? ' active' : ''}`}
+                  onClick={() => setHighlightEmpty(v => !v)}
+                  title="Hiển thị ngày trống"
+                  style={highlightEmpty ? { background: 'var(--forest)', color: '#fff', borderColor: 'var(--forest)' } : {}}
+                >
+                  🟢 Ngày trống
+                </button>
+              )}
             </div>
             {hasFilter && (
               <button className="villa-filter-clear-small" onClick={clearFilter}>✕ Xóa lọc</button>
@@ -516,6 +527,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         onDayClick={handleDayClick}
         hotline={(villa as any).phone ?? ''}
         role={userRole}
+        highlightEmpty={highlightEmpty}
       />
 
       {/* ── HOLD ĐANG CHỜ DUYỆT — chỉ sale ────────────────────── */}
