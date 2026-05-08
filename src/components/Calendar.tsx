@@ -56,8 +56,8 @@ const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : 
 // ── Constants ─────────────────────────────────────────────────────
 
 const CELL_H   = 56;   // px — height của 1 ô ngày
-const BAR_T    = 22;   // px từ top ô đến top bar đầu tiên
-const BAR_H    = 20;   // px chiều cao bar
+const BAR_T    = 20;   // px từ top ô đến top bar đầu tiên
+const BAR_H    = 15;   // px chiều cao bar
 const BAR_GAP  = 3;    // px khoảng cách giữa 2 bar chồng nhau
 const BAR_R    = 7;    // px border-radius đầu/cuối bar
 
@@ -489,10 +489,33 @@ export default function Calendar({
     <div className="cal-wrap">
       {/* ── Header ── */}
       <div className="cal-head">
+        {/* Trái: hotline */}
+        <div className="cal-head-side cal-head-left">
+          {hotline && (
+            <a href={`tel:${hotline}`} className="cal-hotline">
+              <span className="cal-hotline-icon">📞</span>
+              <span>{hotline}</span>
+            </a>
+          )}
+        </div>
+
+        {/* Giữa: nút chuyển tháng */}
         <div className="cal-head-center">
           <button className="cal-nav" onClick={handlePrev}>‹</button>
           <span className="cal-title">{formatMonthYear(year, month)}</span>
           <button className="cal-nav" onClick={handleNext}>›</button>
+        </div>
+
+        {/* Phải: toggle ngày trống */}
+        <div className="cal-head-side cal-head-right">
+          {role === 'sale' && onToggleEmpty && (
+            <label className="cal-toggle-wrap" onClick={() => onToggleEmpty(!highlightEmpty)}>
+              <span className="cal-toggle-label">Ngày trống</span>
+              <span className={`cal-toggle${highlightEmpty ? ' cal-toggle--on' : ''}`}>
+                <span className="cal-toggle-knob" />
+              </span>
+            </label>
+          )}
         </div>
       </div>
 
@@ -559,24 +582,8 @@ export default function Calendar({
         {renderBars()}
       </div>
 
-      {/* ── Legend + Hotline ── */}
+      {/* ── Legend ── */}
       <div className="cal-legend">
-        {/* Nút gạt "Ngày trống" — chỉ sale */}
-        {role === 'sale' && onToggleEmpty && (
-          <label className="cal-toggle-wrap" onClick={() => onToggleEmpty(!highlightEmpty)}>
-            <span className="cal-toggle-label">Ngày trống</span>
-            <span className={`cal-toggle${highlightEmpty ? ' cal-toggle--on' : ''}`}>
-              <span className="cal-toggle-knob" />
-            </span>
-          </label>
-        )}
-        {/* Hotline bên trái */}
-        {hotline && (
-          <a href={`tel:${hotline}`} className="cal-hotline">
-            <span className="cal-hotline-icon">📞</span>
-            <span>{hotline}</span>
-          </a>
-        )}
         {/* Spacer */}
         <span style={{ flex: 1 }} />
         {/* Legend bên phải */}
@@ -603,28 +610,38 @@ export default function Calendar({
         .cal-head {
           display:         flex;
           align-items:     center;
-          justify-content: center;
-          padding:         14px 16px;
+          justify-content: space-between;
+          padding:         10px 16px;
           border-bottom:   1px solid var(--sage-pale);
           background:      var(--parchment);
         }
+        .cal-head-side {
+          display:     flex;
+          align-items: center;
+          flex:        1;
+        }
+        .cal-head-left  { justify-content: flex-start; }
+        .cal-head-right { justify-content: flex-end; }
         .cal-head-center {
           display:     flex;
           align-items: center;
-          gap:         12px;
+          gap:         8px;
+          flex-shrink: 0;
         }
         .cal-title {
           font-family: var(--font-display);
-          font-size:   1rem;
+          font-size:   0.85rem;
           color:       var(--forest-deep);
           font-weight: 600;
+          min-width:   110px;
+          text-align:  center;
         }
         .cal-nav {
           background:      none;
           border:          1.5px solid var(--stone);
           border-radius:   var(--radius-sm);
-          width: 32px; height: 32px;
-          font-size:       1.2rem;
+          width: 24px; height: 24px;
+          font-size:       0.95rem;
           cursor:          pointer;
           color:           var(--ink);
           display:         flex;
