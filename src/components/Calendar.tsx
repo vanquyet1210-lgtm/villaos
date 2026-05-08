@@ -37,11 +37,9 @@ export interface CalendarProps {
   year:          number;
   onMonthChange: (year: number, month: number) => void;
   onDayClick?:   (dateStr: string, info: BarSegment | null) => void;
-  role?:             'owner' | 'sale' | 'customer' | 'admin';
-  readonly?:         boolean;
-  hotline?:          string; // số hotline chủ nhà
-  highlightEmpty?:   boolean; // chế độ "xem ngày trống": mờ occupied, sáng empty
-  onToggleEmpty?:    (val: boolean) => void;
+  role?:         'owner' | 'sale' | 'customer' | 'admin';
+  readonly?:     boolean;
+  hotline?:      string; // số hotline chủ nhà
 }
 
 // ── Colors ────────────────────────────────────────────────────────
@@ -55,9 +53,9 @@ const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : 
 
 // ── Constants ─────────────────────────────────────────────────────
 
-const CELL_H   = 56;   // px — height của 1 ô ngày
-const BAR_T    = 30;   // px từ top ô đến top bar đầu tiên
-const BAR_H    = 15;   // px chiều cao bar
+const CELL_H   = 72;   // px — height của 1 ô ngày
+const BAR_T    = 26;   // px từ top ô đến top bar đầu tiên
+const BAR_H    = 20;   // px chiều cao bar
 const BAR_GAP  = 3;    // px khoảng cách giữa 2 bar chồng nhau
 const BAR_R    = 7;    // px border-radius đầu/cuối bar
 
@@ -330,7 +328,7 @@ function buildBarPieces(
 export default function Calendar({
   bookings, villaId, lockedDates = [],
   month, year, onMonthChange, onDayClick, readonly = false,
-  hotline, role, highlightEmpty = false, onToggleEmpty,
+  hotline,
 }: CalendarProps) {
   const today     = todayISO();
   const totalDays = daysInMonth(year, month);
@@ -371,48 +369,37 @@ export default function Calendar({
   const renderBars = () => pieces.map(p => {
     const { key, row, colStart, colEnd, leftFrac, rightFrac, isFirst, isLast, seg } = p;
     const c = col(seg.status);
-    const isSaleView = role === 'sale';
 
-    const leftPct  = ((colStart + leftFrac)    / 7) * 100;
-    const rightPct = ((6 - colEnd + rightFrac) / 7) * 100;
+    // left  = (colStart + leftFrac)  / 7 * 100%
+    // right = (7 - colEnd - 1 + rightFrac) / 7 * 100%  →  (6 - colEnd + rightFrac) / 7 * 100%
+    const leftPct  = ((colStart + leftFrac)      / 7) * 100;
+    const rightPct = ((6 - colEnd + rightFrac)   / 7) * 100;
     const topPx    = row * CELL_H + BAR_T + p.slot * (BAR_H + BAR_GAP);
+
     const label = p.seg.saleLabel ?? p.seg.fullName ?? p.seg.customer;
 
     return (
       <div
         key={key}
         style={{
-          position:       'absolute',
-          top:            topPx,
-          height:         BAR_H,
-          left:           `${leftPct}%`,
-          right:          `${rightPct}%`,
-          background:     c.bar,
-          backgroundImage:'repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0px,rgba(255,255,255,.07) 3px,transparent 3px,transparent 9px)',
-          borderRadius:   `${isFirst ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isFirst ? BAR_R : 0}px`,
-          zIndex:         10,
-          pointerEvents:  'none',
-          overflow:       'hidden',
-          display:        'flex',
-          alignItems:     'center',
-          justifyContent: isSaleView ? 'center' : 'flex-start',
-          minWidth:       0,
-          opacity:        highlightEmpty ? 0.25 : 1,
-          filter:         highlightEmpty ? 'grayscale(40%)' : 'none',
-          transition:     'opacity .25s, filter .25s',
+          position:     'absolute',
+          top:          topPx,
+          height:       BAR_H,
+          left:         `${leftPct}%`,
+          right:        `${rightPct}%`,
+          background:   c.bar,
+          backgroundImage: 'repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0px,rgba(255,255,255,.07) 3px,transparent 3px,transparent 9px)',
+          borderRadius: `${isFirst ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isFirst ? BAR_R : 0}px`,
+          zIndex:       10,
+          pointerEvents:'none',
+          overflow:     'hidden',
+          display:      'flex',
+          alignItems:   'center',
+          minWidth:     0,
         }}
       >
-        {/* SALE VIEW: chỉ icon ở giữa — không label, không giá */}
-        {isSaleView && isFirst && (
-          <span style={{ fontSize:'0.72rem', lineHeight:1, userSelect:'none' }}>
-            {seg.type === 'locked'   ? '🔒'
-             : seg.status === 'hold' ? '⏳'
-             : '✓'}
-          </span>
-        )}
-
-        {/* OWNER/ADMIN VIEW: tên khách ở đầu bar */}
-        {!isSaleView && isFirst && label && (
+        {/* Tên khách: chỉ ở piece đầu tiên */}
+        {isFirst && label && (
           <span style={{
             paddingLeft:  6,
             paddingRight: isLast ? 56 : 4,
@@ -427,27 +414,42 @@ export default function Calendar({
           }}>
             {label}
             {seg.phone && (
-              <span style={{ opacity:.85, fontWeight:400, marginLeft:3 }}>
+              <span style={{ opacity: .85, fontWeight: 400, marginLeft: 3 }}>
                 · {seg.phone}
               </span>
             )}
           </span>
         )}
 
-        {/* OWNER/ADMIN VIEW: total + tick ở cuối bar */}
-        {!isSaleView && isLast && seg.total > 0 && (
+        {/* Total + tick: CHỈ ở piece cuối cùng, căn phải */}
+        {isLast && seg.total > 0 && (
           <span style={{
-            position:'absolute', right:5,
-            display:'flex', alignItems:'center', gap:3, flexShrink:0,
+            position:    'absolute',
+            right:       5,
+            display:     'flex',
+            alignItems:  'center',
+            gap:         3,
+            flexShrink:  0,
           }}>
-            <span style={{ fontSize:'0.62rem', fontWeight:700, color:'#fff', whiteSpace:'nowrap', letterSpacing:'-0.01em' }}>
+            <span style={{
+              fontSize:   '0.62rem',
+              fontWeight: 700,
+              color:      '#fff',
+              whiteSpace: 'nowrap',
+              letterSpacing: '-0.01em',
+            }}>
               {seg.total.toLocaleString('vi-VN')}đ
             </span>
             {seg.status === 'confirmed' && (
               <span style={{
-                width:15, height:15, borderRadius:'50%',
-                background:'#2e7d52', border:'1.5px solid rgba(255,255,255,.9)',
-                display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+                width:          15, height: 15,
+                borderRadius:   '50%',
+                background:     '#2e7d52',
+                border:         '1.5px solid rgba(255,255,255,.9)',
+                display:        'inline-flex',
+                alignItems:     'center',
+                justifyContent: 'center',
+                flexShrink:     0,
               }}>
                 <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
                   <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -473,8 +475,8 @@ export default function Calendar({
         return (
           <div key={`tint-${q.key}`} style={{
             position:      'absolute',
-            top:           q.row * CELL_H + BAR_T + q.slot * (BAR_H + BAR_GAP),
-            height:        BAR_H,
+            top:           q.row * CELL_H + BAR_T + q.slot * (BAR_H + BAR_GAP) - 2,
+            height:        BAR_H + 4,
             left:          `${leftPct}%`,
             right:         `${rightPct}%`,
             background:    c.bg,
@@ -489,34 +491,9 @@ export default function Calendar({
     <div className="cal-wrap">
       {/* ── Header ── */}
       <div className="cal-head">
-        {/* Trái: hotline */}
-        <div className="cal-head-side cal-head-left">
-          {hotline && (
-            <a href={`tel:${hotline}`} className="cal-hotline">
-              <span className="cal-hotline-icon">📞</span>
-              <span>{hotline}</span>
-            </a>
-          )}
-        </div>
-
-        {/* Giữa: nút chuyển tháng */}
-        <div className="cal-head-center">
-          <button className="cal-nav" onClick={handlePrev}>‹</button>
-          <span className="cal-title">{formatMonthYear(year, month)}</span>
-          <button className="cal-nav" onClick={handleNext}>›</button>
-        </div>
-
-        {/* Phải: toggle ngày trống */}
-        <div className="cal-head-side cal-head-right">
-          {role === 'sale' && onToggleEmpty && (
-            <label className="cal-toggle-wrap" onClick={() => onToggleEmpty(!highlightEmpty)}>
-              <span className="cal-toggle-label">Ngày trống</span>
-              <span className={`cal-toggle${highlightEmpty ? ' cal-toggle--on' : ''}`}>
-                <span className="cal-toggle-knob" />
-              </span>
-            </label>
-          )}
-        </div>
+        <button className="cal-nav" onClick={handlePrev}>‹</button>
+        <span className="cal-title">{formatMonthYear(year, month)}</span>
+        <button className="cal-nav" onClick={handleNext}>›</button>
       </div>
 
       {/* ── Day names ── */}
@@ -544,10 +521,6 @@ export default function Calendar({
             const isToday   = ds === today;
             const entry     = clickMap[ds];
             const clickable = !readonly && !isPast && (!entry || entry.isCheckout);
-            // highlightEmpty: ô trống (tương lai) sáng lên, ô bận mờ đi
-            const isEmpty   = !isPast && (!entry || entry.isCheckout);
-            const dimCell   = highlightEmpty && !isEmpty;
-            const glowCell  = highlightEmpty && isEmpty && !isPast;
             return (
               <div
                 key={ds}
@@ -559,20 +532,9 @@ export default function Calendar({
                   entry && entry.isCheckout   ? 'cal-cell-checkout' : '',
                 ].filter(Boolean).join(' ')}
                 onClick={() => handleDayClick(ds)}
-                style={{
-                  cursor:     clickable || (entry && !entry.isCheckout) ? 'pointer' : 'default',
-                  opacity:    dimCell ? 0.22 : 1,
-                  background: glowCell ? 'rgba(72,187,120,.18)' : undefined,
-                  boxShadow:  glowCell ? 'inset 0 0 0 2px rgba(34,139,70,.55)' : undefined,
-                  transition: 'opacity .2s, background .2s, box-shadow .2s',
-                  filter:     dimCell ? 'grayscale(60%)' : 'none',
-                }}
+                style={{ cursor: clickable || (entry && !entry.isCheckout) ? 'pointer' : 'default' }}
               >
-                <span className={[
-                  'cal-dn',
-                  isToday  ? 'cal-dn-today' : '',
-                  glowCell ? 'cal-dn-empty' : '',
-                ].filter(Boolean).join(' ')}>{day}</span>
+                <span className={`cal-dn${isToday ? ' cal-dn-today' : ''}`}>{day}</span>
               </div>
             );
           })}
@@ -582,11 +544,23 @@ export default function Calendar({
         {renderBars()}
       </div>
 
-      {/* ── Legend ── */}
+      {/* ── Legend + Hotline ── */}
       <div className="cal-legend">
+        {/* Góc trái: pill toggle Ngày trống (chỉ sale) */}
+        {role === 'sale' && onToggleEmpty && (
+          <button
+            className={`cal-empty-pill${highlightEmpty ? ' cal-empty-pill--on' : ''}`}
+            onClick={() => onToggleEmpty(!highlightEmpty)}
+          >
+            <span>Ngày trống</span>
+            <span className={`cal-toggle-mini${highlightEmpty ? ' cal-toggle-mini--on' : ''}`}>
+              <span className="cal-toggle-mini-knob" />
+            </span>
+          </button>
+        )}
         {/* Spacer */}
         <span style={{ flex: 1 }} />
-        {/* Legend bên phải */}
+        {/* Góc phải: legend màu */}
         {[
           { label: 'Đã đặt',    bg: C.confirmed.bg, border: C.confirmed.bar },
           { label: 'Đang giữ',  bg: C.hold.bg,      border: C.hold.bar },
@@ -611,49 +585,30 @@ export default function Calendar({
           display:         flex;
           align-items:     center;
           justify-content: space-between;
-          padding:         10px 16px;
+          padding:         14px 16px;
           border-bottom:   1px solid var(--sage-pale);
           background:      var(--parchment);
         }
-        .cal-head-side {
-          display:     flex;
-          align-items: center;
-          flex:        1;
-        }
-        .cal-head-left  { justify-content: flex-start; }
-        .cal-head-right { justify-content: flex-end; }
-        .cal-head-center {
-          display:     flex;
-          align-items: center;
-          gap:         0;
-          flex-shrink: 0;
-          background:  var(--sage-pale);
-          border-radius: var(--radius-sm);
-          overflow:    hidden;
-        }
         .cal-title {
           font-family: var(--font-display);
-          font-size:   0.85rem;
+          font-size:   1rem;
           color:       var(--forest-deep);
           font-weight: 600;
-          min-width:   110px;
-          text-align:  center;
-          padding:     0 6px;
         }
         .cal-nav {
-          background:      transparent;
-          border:          none;
-          border-radius:   0;
-          width: 28px; height: 28px;
-          font-size:       1rem;
+          background:      none;
+          border:          1.5px solid var(--stone);
+          border-radius:   var(--radius-sm);
+          width: 32px; height: 32px;
+          font-size:       1.2rem;
           cursor:          pointer;
           color:           var(--ink);
           display:         flex;
           align-items:     center;
           justify-content: center;
-          transition:      background .12s;
+          transition:      background .12s, border-color .12s;
         }
-        .cal-nav:hover { background: rgba(180,212,195,.4); }
+        .cal-nav:hover { background: var(--sage-pale); border-color: var(--sage); }
 
         .cal-dow {
           display:               grid;
@@ -726,10 +681,6 @@ export default function Calendar({
           align-items:    center;
           justify-content:center;
         }
-        .cal-dn-empty {
-          color:       #166534;
-          font-weight: 800;
-        }
 
         .cal-legend {
           display:     flex;
@@ -740,23 +691,53 @@ export default function Calendar({
           background:  var(--parchment);
           flex-wrap:   wrap;
         }
-        .cal-hotline {
-          display:     flex;
-          align-items: center;
-          gap:         4px;
-          font-size:   0.72rem;
-          font-weight: 600;
-          color:       var(--forest);
-          text-decoration: none;
-          background:  rgba(180,212,195,.2);
-          border:      1px solid rgba(180,212,195,.5);
-          border-radius: 20px;
-          padding:     3px 8px;
-          transition:  background .12s;
-          white-space: nowrap;
+        .cal-hotline { display: none; } /* hotline ẩn trong legend */
+        .cal-hotline-icon { display: none; }
+
+        /* ── Pill toggle "Ngày trống" — cùng style pill tháng ── */
+        .cal-empty-pill {
+          display:       flex;
+          align-items:   center;
+          gap:           7px;
+          background:    var(--sage-pale);
+          border:        none;
+          border-radius: var(--radius-sm);
+          padding:       3px 10px;
+          cursor:        pointer;
+          font-size:     0.72rem;
+          font-weight:   600;
+          color:         var(--ink-muted);
+          transition:    color .15s;
+          white-space:   nowrap;
+          flex-shrink:   0;
+          user-select:   none;
+          height:        26px;
         }
-        .cal-hotline:hover { background: rgba(180,212,195,.4); }
-        .cal-hotline-icon { font-size: 0.85rem; }
+        .cal-empty-pill--on { color: var(--forest); }
+        .cal-empty-pill:hover { background: rgba(180,212,195,.45); }
+        .cal-toggle-mini {
+          position:      relative;
+          display:       inline-flex;
+          align-items:   center;
+          width:         28px;
+          height:        15px;
+          border-radius: 8px;
+          background:    rgba(0,0,0,.18);
+          transition:    background .2s;
+          flex-shrink:   0;
+        }
+        .cal-toggle-mini--on { background: var(--forest); }
+        .cal-toggle-mini-knob {
+          position:      absolute;
+          left:          2px;
+          width:         11px;
+          height:        11px;
+          border-radius: 50%;
+          background:    white;
+          box-shadow:    0 1px 2px rgba(0,0,0,.18);
+          transition:    left .18s;
+        }
+        .cal-toggle-mini--on .cal-toggle-mini-knob { left: 15px; }
         .cal-legend-item {
           display:     flex;
           align-items: center;
@@ -764,49 +745,6 @@ export default function Calendar({
           font-size:   0.75rem;
           color:       var(--ink-muted);
         }
-        /* Toggle "Ngày trống" */
-        .cal-toggle-wrap {
-          display:     flex;
-          align-items: center;
-          gap:         7px;
-          cursor:      pointer;
-          user-select: none;
-          padding:     2px 0;
-        }
-        .cal-toggle-label {
-          font-size:   0.75rem;
-          font-weight: 600;
-          color:       var(--ink-muted);
-          white-space: nowrap;
-        }
-        .cal-toggle {
-          position:        relative;
-          display:         inline-flex;
-          align-items:     center;
-          width:           36px;
-          height:          20px;
-          border-radius:   10px;
-          background:      var(--stone);
-          transition:      background .2s;
-          flex-shrink:     0;
-        }
-        .cal-toggle--on {
-          background: var(--forest);
-        }
-        .cal-toggle-knob {
-          position:      absolute;
-          left:          2px;
-          width:         16px;
-          height:        16px;
-          border-radius: 50%;
-          background:    white;
-          box-shadow:    0 1px 3px rgba(0,0,0,.2);
-          transition:    left .2s;
-        }
-        .cal-toggle--on .cal-toggle-knob {
-          left: 18px;
-        }
-
         .cal-legend-dot {
           width: 12px; height: 12px;
           border-radius: 3px;
