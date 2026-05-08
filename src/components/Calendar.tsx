@@ -369,37 +369,45 @@ export default function Calendar({
   const renderBars = () => pieces.map(p => {
     const { key, row, colStart, colEnd, leftFrac, rightFrac, isFirst, isLast, seg } = p;
     const c = col(seg.status);
+    const isSaleView = role === 'sale';
 
-    // left  = (colStart + leftFrac)  / 7 * 100%
-    // right = (7 - colEnd - 1 + rightFrac) / 7 * 100%  →  (6 - colEnd + rightFrac) / 7 * 100%
-    const leftPct  = ((colStart + leftFrac)      / 7) * 100;
-    const rightPct = ((6 - colEnd + rightFrac)   / 7) * 100;
+    const leftPct  = ((colStart + leftFrac)    / 7) * 100;
+    const rightPct = ((6 - colEnd + rightFrac) / 7) * 100;
     const topPx    = row * CELL_H + BAR_T + p.slot * (BAR_H + BAR_GAP);
-
     const label = p.seg.saleLabel ?? p.seg.fullName ?? p.seg.customer;
 
     return (
       <div
         key={key}
         style={{
-          position:     'absolute',
-          top:          topPx,
-          height:       BAR_H,
-          left:         `${leftPct}%`,
-          right:        `${rightPct}%`,
-          background:   c.bar,
-          backgroundImage: 'repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0px,rgba(255,255,255,.07) 3px,transparent 3px,transparent 9px)',
-          borderRadius: `${isFirst ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isFirst ? BAR_R : 0}px`,
-          zIndex:       10,
-          pointerEvents:'none',
-          overflow:     'hidden',
-          display:      'flex',
-          alignItems:   'center',
-          minWidth:     0,
+          position:       'absolute',
+          top:            topPx,
+          height:         BAR_H,
+          left:           `${leftPct}%`,
+          right:          `${rightPct}%`,
+          background:     c.bar,
+          backgroundImage:'repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0px,rgba(255,255,255,.07) 3px,transparent 3px,transparent 9px)',
+          borderRadius:   `${isFirst ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isFirst ? BAR_R : 0}px`,
+          zIndex:         10,
+          pointerEvents:  'none',
+          overflow:       'hidden',
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: isSaleView ? 'center' : 'flex-start',
+          minWidth:       0,
         }}
       >
-        {/* Tên khách: chỉ ở piece đầu tiên */}
-        {isFirst && label && (
+        {/* SALE VIEW: chỉ icon ở giữa — không label, không giá */}
+        {isSaleView && isFirst && (
+          <span style={{ fontSize:'0.72rem', lineHeight:1, userSelect:'none' }}>
+            {seg.type === 'locked'   ? '🔒'
+             : seg.status === 'hold' ? '⏳'
+             : '✓'}
+          </span>
+        )}
+
+        {/* OWNER/ADMIN VIEW: tên khách ở đầu bar */}
+        {!isSaleView && isFirst && label && (
           <span style={{
             paddingLeft:  6,
             paddingRight: isLast ? 56 : 4,
@@ -414,42 +422,27 @@ export default function Calendar({
           }}>
             {label}
             {seg.phone && (
-              <span style={{ opacity: .85, fontWeight: 400, marginLeft: 3 }}>
+              <span style={{ opacity:.85, fontWeight:400, marginLeft:3 }}>
                 · {seg.phone}
               </span>
             )}
           </span>
         )}
 
-        {/* Total + tick: CHỈ ở piece cuối cùng, căn phải */}
-        {isLast && seg.total > 0 && (
+        {/* OWNER/ADMIN VIEW: total + tick ở cuối bar */}
+        {!isSaleView && isLast && seg.total > 0 && (
           <span style={{
-            position:    'absolute',
-            right:       5,
-            display:     'flex',
-            alignItems:  'center',
-            gap:         3,
-            flexShrink:  0,
+            position:'absolute', right:5,
+            display:'flex', alignItems:'center', gap:3, flexShrink:0,
           }}>
-            <span style={{
-              fontSize:   '0.62rem',
-              fontWeight: 700,
-              color:      '#fff',
-              whiteSpace: 'nowrap',
-              letterSpacing: '-0.01em',
-            }}>
+            <span style={{ fontSize:'0.62rem', fontWeight:700, color:'#fff', whiteSpace:'nowrap', letterSpacing:'-0.01em' }}>
               {seg.total.toLocaleString('vi-VN')}đ
             </span>
             {seg.status === 'confirmed' && (
               <span style={{
-                width:          15, height: 15,
-                borderRadius:   '50%',
-                background:     '#2e7d52',
-                border:         '1.5px solid rgba(255,255,255,.9)',
-                display:        'inline-flex',
-                alignItems:     'center',
-                justifyContent: 'center',
-                flexShrink:     0,
+                width:15, height:15, borderRadius:'50%',
+                background:'#2e7d52', border:'1.5px solid rgba(255,255,255,.9)',
+                display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:0,
               }}>
                 <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
                   <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
