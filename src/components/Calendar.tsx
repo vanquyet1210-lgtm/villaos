@@ -56,7 +56,7 @@ const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : 
 // ── Constants ─────────────────────────────────────────────────────
 
 const CELL_H   = 56;   // px — height của 1 ô ngày
-const BAR_T    = 20;   // px từ top ô đến top bar đầu tiên
+const BAR_T    = 30;   // px từ top ô đến top bar đầu tiên
 const BAR_H    = 15;   // px chiều cao bar
 const BAR_GAP  = 3;    // px khoảng cách giữa 2 bar chồng nhau
 const BAR_R    = 7;    // px border-radius đầu/cuối bar
@@ -473,8 +473,8 @@ export default function Calendar({
         return (
           <div key={`tint-${q.key}`} style={{
             position:      'absolute',
-            top:           q.row * CELL_H + BAR_T + q.slot * (BAR_H + BAR_GAP) - 2,
-            height:        BAR_H + 4,
+            top:           q.row * CELL_H + BAR_T + q.slot * (BAR_H + BAR_GAP),
+            height:        BAR_H,
             left:          `${leftPct}%`,
             right:         `${rightPct}%`,
             background:    c.bg,
