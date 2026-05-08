@@ -64,7 +64,7 @@ export default async function OwnerCalendarPage({
   return (
     <>
       <div className="page-header">
-        <h1>Xin chào, {session.profile.name ?? session.profile.email} 👋</h1>
+        <h1>Xin chào, {session.profile.name} 👋</h1>
       </div>
       <CalendarShell
         villas={villas}
