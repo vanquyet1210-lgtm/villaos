@@ -32,8 +32,7 @@ export default async function SaleCalendarPage({
     return (
       <>
         <div className="page-header">
-          <h1>📅 Lịch villa</h1>
-          <p>Chào {profile.name} 🏷️</p>
+          <h1>Xin chào, {profile.name} 👋</h1>
         </div>
         <div className="card" style={{ textAlign:'center', padding:'48px 24px' }}>
           <span style={{ fontSize:56, display:'block', marginBottom:16 }}>📭</span>
@@ -49,8 +48,7 @@ export default async function SaleCalendarPage({
   return (
     <>
       <div className="page-header">
-        <h1>📅 Lịch villa</h1>
-        <p>Chào {profile.name} · {villas.length} villa</p>
+        <h1>Xin chào, {profile.name} 👋</h1>
       </div>
       <CalendarShell
         villas={villas}
