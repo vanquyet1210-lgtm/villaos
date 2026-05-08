@@ -37,10 +37,11 @@ export interface CalendarProps {
   year:          number;
   onMonthChange: (year: number, month: number) => void;
   onDayClick?:   (dateStr: string, info: BarSegment | null) => void;
-  role?:           'owner' | 'sale' | 'customer' | 'admin';
-  readonly?:       boolean;
-  hotline?:        string; // số hotline chủ nhà
-  highlightEmpty?: boolean; // chế độ "xem ngày trống": mờ occupied, sáng empty
+  role?:             'owner' | 'sale' | 'customer' | 'admin';
+  readonly?:         boolean;
+  hotline?:          string; // số hotline chủ nhà
+  highlightEmpty?:   boolean; // chế độ "xem ngày trống": mờ occupied, sáng empty
+  onToggleEmpty?:    (val: boolean) => void;
 }
 
 // ── Colors ────────────────────────────────────────────────────────
@@ -329,7 +330,7 @@ function buildBarPieces(
 export default function Calendar({
   bookings, villaId, lockedDates = [],
   month, year, onMonthChange, onDayClick, readonly = false,
-  hotline, role, highlightEmpty = false,
+  hotline, role, highlightEmpty = false, onToggleEmpty,
 }: CalendarProps) {
   const today     = todayISO();
   const totalDays = daysInMonth(year, month);
@@ -488,9 +489,11 @@ export default function Calendar({
     <div className="cal-wrap">
       {/* ── Header ── */}
       <div className="cal-head">
-        <button className="cal-nav" onClick={handlePrev}>‹</button>
-        <span className="cal-title">{formatMonthYear(year, month)}</span>
-        <button className="cal-nav" onClick={handleNext}>›</button>
+        <div className="cal-head-center">
+          <button className="cal-nav" onClick={handlePrev}>‹</button>
+          <span className="cal-title">{formatMonthYear(year, month)}</span>
+          <button className="cal-nav" onClick={handleNext}>›</button>
+        </div>
       </div>
 
       {/* ── Day names ── */}
@@ -535,13 +538,18 @@ export default function Calendar({
                 onClick={() => handleDayClick(ds)}
                 style={{
                   cursor:     clickable || (entry && !entry.isCheckout) ? 'pointer' : 'default',
-                  opacity:    dimCell ? 0.35 : 1,
-                  background: glowCell ? 'rgba(180,212,195,.18)' : undefined,
-                  boxShadow:  glowCell ? 'inset 0 0 0 1.5px rgba(45,90,45,.25)' : undefined,
-                  transition: 'opacity .2s, background .2s',
+                  opacity:    dimCell ? 0.22 : 1,
+                  background: glowCell ? 'rgba(72,187,120,.18)' : undefined,
+                  boxShadow:  glowCell ? 'inset 0 0 0 2px rgba(34,139,70,.55)' : undefined,
+                  transition: 'opacity .2s, background .2s, box-shadow .2s',
+                  filter:     dimCell ? 'grayscale(60%)' : 'none',
                 }}
               >
-                <span className={`cal-dn${isToday ? ' cal-dn-today' : ''}`}>{day}</span>
+                <span className={[
+                  'cal-dn',
+                  isToday  ? 'cal-dn-today' : '',
+                  glowCell ? 'cal-dn-empty' : '',
+                ].filter(Boolean).join(' ')}>{day}</span>
               </div>
             );
           })}
@@ -553,6 +561,15 @@ export default function Calendar({
 
       {/* ── Legend + Hotline ── */}
       <div className="cal-legend">
+        {/* Nút gạt "Ngày trống" — chỉ sale */}
+        {role === 'sale' && onToggleEmpty && (
+          <label className="cal-toggle-wrap" onClick={() => onToggleEmpty(!highlightEmpty)}>
+            <span className="cal-toggle-label">Ngày trống</span>
+            <span className={`cal-toggle${highlightEmpty ? ' cal-toggle--on' : ''}`}>
+              <span className="cal-toggle-knob" />
+            </span>
+          </label>
+        )}
         {/* Hotline bên trái */}
         {hotline && (
           <a href={`tel:${hotline}`} className="cal-hotline">
@@ -586,10 +603,15 @@ export default function Calendar({
         .cal-head {
           display:         flex;
           align-items:     center;
-          justify-content: space-between;
+          justify-content: center;
           padding:         14px 16px;
           border-bottom:   1px solid var(--sage-pale);
           background:      var(--parchment);
+        }
+        .cal-head-center {
+          display:     flex;
+          align-items: center;
+          gap:         12px;
         }
         .cal-title {
           font-family: var(--font-display);
@@ -683,6 +705,10 @@ export default function Calendar({
           align-items:    center;
           justify-content:center;
         }
+        .cal-dn-empty {
+          color:       #166534;
+          font-weight: 800;
+        }
 
         .cal-legend {
           display:     flex;
@@ -716,6 +742,48 @@ export default function Calendar({
           font-size:   0.75rem;
           color:       var(--ink-muted);
         }
+        /* Toggle "Ngày trống" */
+        .cal-toggle-wrap {
+          display:     flex;
+          align-items: center;
+          gap:         7px;
+          cursor:      pointer;
+          user-select: none;
+          padding:     2px 0;
+        }
+        .cal-toggle-label {
+          font-size:   0.75rem;
+          font-weight: 600;
+          color:       var(--ink-muted);
+        }
+        .cal-toggle {
+          position:        relative;
+          display:         inline-flex;
+          align-items:     center;
+          width:           36px;
+          height:          20px;
+          border-radius:   10px;
+          background:      var(--stone);
+          transition:      background .2s;
+          flex-shrink:     0;
+        }
+        .cal-toggle--on {
+          background: var(--forest);
+        }
+        .cal-toggle-knob {
+          position:      absolute;
+          left:          2px;
+          width:         16px;
+          height:        16px;
+          border-radius: 50%;
+          background:    white;
+          box-shadow:    0 1px 3px rgba(0,0,0,.2);
+          transition:    left .2s;
+        }
+        .cal-toggle--on .cal-toggle-knob {
+          left: 18px;
+        }
+
         .cal-legend-dot {
           width: 12px; height: 12px;
           border-radius: 3px;
