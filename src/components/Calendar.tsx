@@ -37,9 +37,11 @@ export interface CalendarProps {
   year:          number;
   onMonthChange: (year: number, month: number) => void;
   onDayClick?:   (dateStr: string, info: BarSegment | null) => void;
-  role?:         'owner' | 'sale' | 'customer' | 'admin';
-  readonly?:     boolean;
-  hotline?:      string; // số hotline chủ nhà
+  role?:           'owner' | 'sale' | 'customer' | 'admin';
+  readonly?:       boolean;
+  hotline?:        string;
+  highlightEmpty?: boolean;
+  onToggleEmpty?:  (val: boolean) => void;
 }
 
 // ── Colors ────────────────────────────────────────────────────────
