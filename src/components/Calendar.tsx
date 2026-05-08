@@ -625,8 +625,11 @@ export default function Calendar({
         .cal-head-center {
           display:     flex;
           align-items: center;
-          gap:         8px;
+          gap:         0;
           flex-shrink: 0;
+          background:  var(--sage-pale);
+          border-radius: var(--radius-sm);
+          overflow:    hidden;
         }
         .cal-title {
           font-family: var(--font-display);
@@ -635,21 +638,22 @@ export default function Calendar({
           font-weight: 600;
           min-width:   110px;
           text-align:  center;
+          padding:     0 6px;
         }
         .cal-nav {
-          background:      none;
-          border:          1.5px solid var(--stone);
-          border-radius:   var(--radius-sm);
-          width: 24px; height: 24px;
-          font-size:       0.95rem;
+          background:      transparent;
+          border:          none;
+          border-radius:   0;
+          width: 28px; height: 28px;
+          font-size:       1rem;
           cursor:          pointer;
           color:           var(--ink);
           display:         flex;
           align-items:     center;
           justify-content: center;
-          transition:      background .12s, border-color .12s;
+          transition:      background .12s;
         }
-        .cal-nav:hover { background: var(--sage-pale); border-color: var(--sage); }
+        .cal-nav:hover { background: rgba(180,212,195,.4); }
 
         .cal-dow {
           display:               grid;
