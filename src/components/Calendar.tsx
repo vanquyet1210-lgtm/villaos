@@ -328,7 +328,7 @@ function buildBarPieces(
 export default function Calendar({
   bookings, villaId, lockedDates = [],
   month, year, onMonthChange, onDayClick, readonly = false,
-  hotline,
+  hotline, role,
 }: CalendarProps) {
   const today     = todayISO();
   const totalDays = daysInMonth(year, month);
