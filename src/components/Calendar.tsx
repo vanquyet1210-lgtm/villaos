@@ -56,7 +56,7 @@ const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : 
 // ── Constants ─────────────────────────────────────────────────────
 
 const CELL_H   = 72;   // px — height của 1 ô ngày
-const BAR_T    = 26;   // px từ top ô đến top bar đầu tiên
+const BAR_T    = 30;   // px từ top ô đến top bar đầu tiên
 const BAR_H    = 20;   // px chiều cao bar
 const BAR_GAP  = 3;    // px khoảng cách giữa 2 bar chồng nhau
 const BAR_R    = 7;    // px border-radius đầu/cuối bar
@@ -477,8 +477,8 @@ export default function Calendar({
         return (
           <div key={`tint-${q.key}`} style={{
             position:      'absolute',
-            top:           q.row * CELL_H + BAR_T + q.slot * (BAR_H + BAR_GAP) - 2,
-            height:        BAR_H + 4,
+            top:           q.row * CELL_H + BAR_T + q.slot * (BAR_H + BAR_GAP),
+            height:        BAR_H,
             left:          `${leftPct}%`,
             right:         `${rightPct}%`,
             background:    c.bg,
@@ -523,6 +523,9 @@ export default function Calendar({
             const isToday   = ds === today;
             const entry     = clickMap[ds];
             const clickable = !readonly && !isPast && (!entry || entry.isCheckout);
+            const isEmpty   = !isPast && (!entry || entry.isCheckout);
+            const dimCell   = highlightEmpty && !isEmpty;
+            const glowCell  = highlightEmpty && isEmpty && !isPast;
             return (
               <div
                 key={ds}
@@ -534,9 +537,20 @@ export default function Calendar({
                   entry && entry.isCheckout   ? 'cal-cell-checkout' : '',
                 ].filter(Boolean).join(' ')}
                 onClick={() => handleDayClick(ds)}
-                style={{ cursor: clickable || (entry && !entry.isCheckout) ? 'pointer' : 'default' }}
+                style={{
+                  cursor:     clickable || (entry && !entry.isCheckout) ? 'pointer' : 'default',
+                  opacity:    dimCell ? 0.22 : 1,
+                  background: glowCell ? 'rgba(72,187,120,.18)' : undefined,
+                  boxShadow:  glowCell ? 'inset 0 0 0 2px rgba(34,139,70,.55)' : undefined,
+                  transition: 'opacity .2s, background .2s, box-shadow .2s',
+                  filter:     dimCell ? 'grayscale(60%)' : 'none',
+                }}
               >
-                <span className={`cal-dn${isToday ? ' cal-dn-today' : ''}`}>{day}</span>
+                <span className={[
+                  'cal-dn',
+                  isToday  ? 'cal-dn-today' : '',
+                  glowCell ? 'cal-dn-empty' : '',
+                ].filter(Boolean).join(' ')}>{day}</span>
               </div>
             );
           })}
@@ -682,6 +696,10 @@ export default function Calendar({
           display:        flex;
           align-items:    center;
           justify-content:center;
+        }
+        .cal-dn-empty {
+          color:       #166534;
+          font-weight: 800;
         }
 
         .cal-legend {
