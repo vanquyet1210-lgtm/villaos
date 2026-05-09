@@ -47,9 +47,9 @@ export interface CalendarProps {
 // ── Colors — luxury navy / gold / slate ──────────────────────────
 
 const C = {
-  confirmed: { bg: 'rgba(28,43,74,.08)',  bar: '#1C2B4A' },
-  hold:      { bg: 'rgba(201,168,76,.12)', bar: '#C9A84C' },
-  locked:    { bg: 'rgba(90,105,120,.10)', bar: '#5A6978' },
+  confirmed: { bg: 'rgba(28,43,74,.08)',   bar: '#1C2B4A' },  // Navy — đã đặt
+  hold:      { bg: 'rgba(201,168,76,.12)', bar: '#C9A84C' },  // Gold — đang giữ
+  locked:    { bg: 'rgba(120,47,64,.10)',  bar: '#78303F' },  // Burgundy wine — ngày khóa
 };
 const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : C.confirmed;
 
@@ -388,7 +388,7 @@ export default function Calendar({
     const gradMap: Record<string, string> = {
       confirmed: 'linear-gradient(90deg, #1C2B4A 0%, #2E4270 100%)',
       hold:      'linear-gradient(90deg, #B8922A 0%, #D4AA55 100%)',
-      locked:    'linear-gradient(90deg, #4A5563 0%, #6B7885 100%)',
+      locked:    'linear-gradient(90deg, #78303F 0%, #9B4455 100%)',
     };
     const barGrad = gradMap[seg.status] ?? gradMap.confirmed;
 
