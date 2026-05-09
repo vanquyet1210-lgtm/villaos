@@ -44,12 +44,12 @@ export interface CalendarProps {
   onToggleEmpty?:  (val: boolean) => void;
 }
 
-// ── Colors ────────────────────────────────────────────────────────
+// ── Colors — luxury navy / gold / slate ──────────────────────────
 
 const C = {
-  confirmed: { bg: '#fde8e8', bar: '#e57373' },
-  hold:      { bg: '#fef6e4', bar: '#f0b429' },
-  locked:    { bg: '#dde8e3', bar: '#7aaba3' },
+  confirmed: { bg: 'rgba(28,43,74,.08)',  bar: '#1C2B4A' },
+  hold:      { bg: 'rgba(201,168,76,.12)', bar: '#C9A84C' },
+  locked:    { bg: 'rgba(90,105,120,.10)', bar: '#5A6978' },
 };
 const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : C.confirmed;
 
@@ -380,6 +380,17 @@ export default function Calendar({
 
     const isSaleView = role === 'sale';
     const label = p.seg.saleLabel ?? p.seg.fullName ?? p.seg.customer;
+    // full pill radius
+    const rL = isFirst ? BAR_H / 2 : 0;
+    const rR = isLast  ? BAR_H / 2 : 0;
+
+    // luxury gradient per status
+    const gradMap: Record<string, string> = {
+      confirmed: 'linear-gradient(90deg, #1C2B4A 0%, #2E4270 100%)',
+      hold:      'linear-gradient(90deg, #B8922A 0%, #D4AA55 100%)',
+      locked:    'linear-gradient(90deg, #4A5563 0%, #6B7885 100%)',
+    };
+    const barGrad = gradMap[seg.status] ?? gradMap.confirmed;
 
     return (
       <div
@@ -390,9 +401,8 @@ export default function Calendar({
           height:         BAR_H,
           left:           `${leftPct}%`,
           right:          `${rightPct}%`,
-          background:     c.bar,
-          backgroundImage:'repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0px,rgba(255,255,255,.07) 3px,transparent 3px,transparent 9px)',
-          borderRadius:   `${isFirst ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isFirst ? BAR_R : 0}px`,
+          background:     barGrad,
+          borderRadius:   `${rL}px ${rR}px ${rR}px ${rL}px`,
           zIndex:         10,
           pointerEvents:  'none',
           overflow:       'hidden',
@@ -400,67 +410,62 @@ export default function Calendar({
           alignItems:     'center',
           justifyContent: isSaleView ? 'center' : 'flex-start',
           minWidth:       0,
-          opacity:        highlightEmpty ? 0.25 : 1,
-          filter:         highlightEmpty ? 'grayscale(40%)' : 'none',
+          opacity:        highlightEmpty ? 0.2 : 1,
+          filter:         highlightEmpty ? 'grayscale(50%)' : 'none',
           transition:     'opacity .25s, filter .25s',
+          boxShadow:      '0 1px 4px rgba(0,0,0,.18)',
         }}
       >
-        {/* SALE VIEW: ổ khóa flat, màu trắng đậm, dễ thấy trên mobile */}
+        {/* SALE VIEW: dấu chấm trắng nhỏ tinh tế */}
         {isSaleView && isFirst && (
-          <svg
-            width="11" height="11"
-            viewBox="0 0 14 14"
-            fill="none"
-            style={{ flexShrink: 0, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.25))' }}
-          >
-            {/* thân khóa */}
-            <rect x="2" y="6.5" width="10" height="6.5" rx="1.5" fill="white"/>
-            {/* vòng cung */}
-            <path d="M4.5 6.5V4.5a2.5 2.5 0 0 1 5 0v2" stroke="white" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
-            {/* lỗ khóa */}
-            <circle cx="7" cy="9.8" r="1.1" fill={c.bar}/>
-          </svg>
+          <span style={{
+            width:        5, height: 5,
+            borderRadius: '50%',
+            background:   'rgba(255,255,255,0.85)',
+            flexShrink:   0,
+          }} />
         )}
 
         {/* OWNER/ADMIN VIEW: tên khách + số điện thoại */}
         {!isSaleView && isFirst && label && (
           <span style={{
-            paddingLeft:  6,
-            paddingRight: isLast ? 56 : 4,
-            fontSize:     '0.64rem',
-            fontWeight:   700,
-            color:        '#fff',
+            paddingLeft:  8,
+            paddingRight: isLast ? 60 : 4,
+            fontSize:     '0.62rem',
+            fontWeight:   500,
+            color:        'rgba(255,255,255,.92)',
             whiteSpace:   'nowrap',
             overflow:     'hidden',
             textOverflow: 'ellipsis',
             flex:         1,
             lineHeight:   1.15,
+            letterSpacing:'0.01em',
           }}>
             {label}
             {seg.phone && (
-              <span style={{ opacity:.85, fontWeight:400, marginLeft:3 }}>
+              <span style={{ opacity:.7, fontWeight:400, marginLeft:3 }}>
                 · {seg.phone}
               </span>
             )}
           </span>
         )}
 
-        {/* OWNER/ADMIN VIEW: total + tick ở cuối bar */}
+        {/* OWNER/ADMIN VIEW: total ở cuối bar */}
         {!isSaleView && isLast && seg.total > 0 && (
           <span style={{
-            position:   'absolute', right: 5,
+            position:   'absolute', right: 6,
             display:    'flex', alignItems: 'center', gap: 3, flexShrink: 0,
           }}>
-            <span style={{ fontSize:'0.62rem', fontWeight:700, color:'#fff', whiteSpace:'nowrap', letterSpacing:'-0.01em' }}>
+            <span style={{ fontSize:'0.58rem', fontWeight:600, color:'rgba(255,255,255,.9)', whiteSpace:'nowrap', letterSpacing:'0.02em' }}>
               {seg.total.toLocaleString('vi-VN')}đ
             </span>
             {seg.status === 'confirmed' && (
               <span style={{
-                width:15, height:15, borderRadius:'50%',
-                background:'#2e7d52', border:'1.5px solid rgba(255,255,255,.9)',
+                width:13, height:13, borderRadius:'50%',
+                background:'rgba(255,255,255,0.2)', border:'1px solid rgba(255,255,255,.5)',
                 display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:0,
               }}>
-                <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
+                <svg width="6" height="6" viewBox="0 0 10 10" fill="none">
                   <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </span>
@@ -500,9 +505,17 @@ export default function Calendar({
     <div className="cal-wrap">
       {/* ── Header ── */}
       <div className="cal-head">
-        <button className="cal-nav" onClick={handlePrev}>‹</button>
+        <button className="cal-nav" onClick={handlePrev} aria-label="Tháng trước">
+          <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+            <path d="M7 1L1 7l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
         <span className="cal-title">{formatMonthYear(year, month)}</span>
-        <button className="cal-nav" onClick={handleNext}>›</button>
+        <button className="cal-nav" onClick={handleNext} aria-label="Tháng sau">
+          <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+            <path d="M1 1l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
       </div>
 
       {/* ── Day names ── */}
@@ -547,8 +560,8 @@ export default function Calendar({
                 style={{
                   cursor:     clickable || (entry && !entry.isCheckout) ? 'pointer' : 'default',
                   opacity:    dimCell ? 0.22 : 1,
-                  background: glowCell ? 'rgba(72,187,120,.18)' : undefined,
-                  boxShadow:  glowCell ? 'inset 0 0 0 2px rgba(34,139,70,.55)' : undefined,
+                  background: glowCell ? 'rgba(201,168,76,.10)' : undefined,
+                  boxShadow:  glowCell ? 'inset 0 0 0 1.5px rgba(201,168,76,.50)' : undefined,
                   transition: 'opacity .2s, background .2s, box-shadow .2s',
                   filter:     dimCell ? 'grayscale(60%)' : 'none',
                 }}
@@ -585,76 +598,82 @@ export default function Calendar({
         <span style={{ flex: 1 }} />
         {/* Góc phải: legend màu */}
         {[
-          { label: 'Đã đặt',    bg: C.confirmed.bg, border: C.confirmed.bar },
-          { label: 'Đang giữ',  bg: C.hold.bg,      border: C.hold.bar },
-          { label: 'Ngày khóa', bg: C.locked.bg,    border: C.locked.bar },
-        ].map(({ label, bg, border }) => (
+          { label: 'Đã đặt',    color: C.confirmed.bar },
+          { label: 'Đang giữ',  color: C.hold.bar },
+          { label: 'Ngày khóa', color: C.locked.bar },
+        ].map(({ label, color }) => (
           <span key={label} className="cal-legend-item">
-            <span className="cal-legend-dot" style={{ background: bg, border: `1.5px solid ${border}` }} />
+            <span className="cal-legend-dot" style={{ background: color }} />
             {label}
           </span>
         ))}
       </div>
 
       <style>{`
+        /* ── Luxury Calendar ── */
         .cal-wrap {
-          background:    var(--white);
-          border-radius: var(--radius-lg);
-          border:        1px solid rgba(180,212,195,.3);
+          background:    #FAFAF8;
+          border-radius: 16px;
+          border:        1px solid rgba(28,43,74,.10);
+          box-shadow:    0 4px 24px rgba(28,43,74,.07);
           overflow:      hidden;
           user-select:   none;
         }
+
+        /* Header */
         .cal-head {
           display:         flex;
           align-items:     center;
           justify-content: space-between;
-          padding:         14px 16px;
-          border-bottom:   1px solid var(--sage-pale);
-          background:      var(--parchment);
+          padding:         16px 20px;
+          border-bottom:   1px solid rgba(28,43,74,.07);
+          background:      #FAFAF8;
         }
         .cal-title {
-          font-family: var(--font-display);
-          font-size:   1rem;
-          color:       var(--forest-deep);
-          font-weight: 600;
+          font-family: Georgia, 'Times New Roman', serif;
+          font-size:   1.05rem;
+          font-style:  italic;
+          font-weight: 400;
+          color:       #1C2B4A;
+          letter-spacing: 0.02em;
         }
         .cal-nav {
-          background:      none;
-          border:          1.5px solid var(--stone);
-          border-radius:   var(--radius-sm);
-          width: 32px; height: 32px;
-          font-size:       1.2rem;
+          background:      transparent;
+          border:          1px solid rgba(28,43,74,.18);
+          border-radius:   50%;
+          width:  30px; height: 30px;
           cursor:          pointer;
-          color:           var(--ink);
+          color:           #1C2B4A;
           display:         flex;
           align-items:     center;
           justify-content: center;
-          transition:      background .12s, border-color .12s;
+          transition:      background .15s, border-color .15s;
+          flex-shrink:     0;
         }
-        .cal-nav:hover { background: var(--sage-pale); border-color: var(--sage); }
+        .cal-nav:hover {
+          background:    rgba(28,43,74,.06);
+          border-color:  rgba(28,43,74,.35);
+        }
 
+        /* Day names */
         .cal-dow {
           display:               grid;
           grid-template-columns: repeat(7, minmax(0, 1fr));
-          border-bottom:         1px solid var(--sage-pale);
+          border-bottom:         1px solid rgba(28,43,74,.06);
+          background:            #F5F4F0;
         }
         .cal-dow-cell {
           text-align:     center;
-          font-size:      0.68rem;
-          font-weight:    700;
-          color:          var(--ink-muted);
-          padding:        6px 0;
+          font-size:      0.6rem;
+          font-weight:    600;
+          color:          #8A8F9A;
+          padding:        7px 0;
           text-transform: uppercase;
-          letter-spacing: 0.06em;
+          letter-spacing: 0.1em;
         }
 
-        /* Grid: position relative, chiều cao cố định = rowCount * CELL_H */
-        .cal-grid {
-          background: var(--white);
-          overflow:   hidden;
-        }
-
-        /* Cell layer */
+        /* Grid */
+        .cal-grid { background: #FAFAF8; overflow: hidden; }
         .cal-cells {
           position:              absolute;
           inset:                 0;
@@ -663,7 +682,6 @@ export default function Calendar({
           grid-auto-rows:        ${CELL_H}px;
           z-index:               5;
         }
-
         .cal-cell {
           position:        relative;
           display:         flex;
@@ -671,118 +689,129 @@ export default function Calendar({
           align-items:     center;
           justify-content: flex-start;
           padding-top:     4px;
-          border:          1px solid rgba(180,212,195,.15);
+          border-right:    1px solid rgba(28,43,74,.05);
+          border-bottom:   1px solid rgba(28,43,74,.05);
           background:      transparent;
-          transition:      background .1s;
+          transition:      background .12s;
           overflow:        visible;
         }
-        /* Chỉ hover trên ô trống — không hover ô có booking/khóa */
         .cal-cell:hover:not(.cal-cell-past):not(.cal-cell-busy):not(.cal-cell-empty):not(.cal-cell-locked):not(.cal-cell-checkout) {
-          background: rgba(180,212,195,.12);
+          background: rgba(201,168,76,.06);
         }
-        .cal-cell-empty { pointer-events: none; border-color: transparent; }
-        .cal-cell-past  { opacity: .45; pointer-events: none; }
-        .cal-cell-busy  { cursor: default; }
+        .cal-cell-empty  { pointer-events: none; border-color: transparent; }
+        .cal-cell-past   { opacity: .35; pointer-events: none; }
+        .cal-cell-busy   { cursor: default; }
 
+        /* Day number — keep size, lighter weight */
         .cal-dn {
           font-size:     0.78rem;
-          font-weight:   600;
-          color:         var(--ink);
+          font-weight:   300;
+          color:         #1C2B4A;
           line-height:   22px;
           min-width:     22px;
           text-align:    center;
           border-radius: 50%;
           position:      relative;
-          z-index:       8;        /* trên bar */
+          z-index:       8;
           background:    transparent;
+          letter-spacing: 0.01em;
         }
         .cal-dn-today {
-          background: var(--forest);
-          color:      var(--white);
+          background: #C9A84C;
+          color:      #fff;
           width:  22px; height: 22px;
-          display:        flex;
-          align-items:    center;
-          justify-content:center;
+          display:         flex;
+          align-items:     center;
+          justify-content: center;
+          font-weight:     500;
         }
         .cal-dn-empty {
-          color:       #166534;
-          font-weight: 800;
+          color:       #C9A84C;
+          font-weight: 500;
         }
 
+        /* Legend */
         .cal-legend {
           display:     flex;
           align-items: center;
-          gap:         8px;
-          padding:     8px 10px;
-          border-top:  1px solid var(--sage-pale);
-          background:  var(--parchment);
+          gap:         10px;
+          padding:     10px 16px;
+          border-top:  1px solid rgba(28,43,74,.07);
+          background:  #F5F4F0;
           flex-wrap:   nowrap;
           overflow:    hidden;
         }
         .cal-legend-item {
-          display:     flex;
-          align-items: center;
-          gap:         4px;
-          font-size:   0.68rem;
-          color:       var(--ink-muted);
-          white-space: nowrap;
-          flex-shrink: 0;
+          display:        flex;
+          align-items:    center;
+          gap:            5px;
+          font-size:      0.62rem;
+          color:          #8A8F9A;
+          white-space:    nowrap;
+          flex-shrink:    0;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
         }
-        .cal-hotline { display: none; } /* hotline ẩn trong legend */
-        .cal-hotline-icon { display: none; }
-
-        /* ── Pill toggle "Ngày trống" — cùng style pill tháng ── */
-        .cal-empty-pill {
-          display:       flex;
-          align-items:   center;
-          gap:           7px;
-          background:    var(--sage-pale);
-          border:        none;
-          border-radius: var(--radius-sm);
-          padding:       3px 10px;
-          cursor:        pointer;
-          font-size:     0.72rem;
-          font-weight:   600;
-          color:         var(--ink-muted);
-          transition:    color .15s;
-          white-space:   nowrap;
+        .cal-legend-dot {
+          width:         7px; height: 7px;
+          border-radius: 50%;
           flex-shrink:   0;
-          user-select:   none;
-          height:        26px;
         }
-        .cal-empty-pill--on { color: var(--forest); }
-        .cal-empty-pill:hover { background: rgba(180,212,195,.45); }
+
+        /* Pill toggle Ngày trống */
+        .cal-empty-pill {
+          display:        flex;
+          align-items:    center;
+          gap:            7px;
+          background:     rgba(28,43,74,.06);
+          border:         1px solid rgba(28,43,74,.12);
+          border-radius:  20px;
+          padding:        3px 10px;
+          cursor:         pointer;
+          font-size:      0.62rem;
+          font-weight:    500;
+          color:          #8A8F9A;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          transition:     color .15s, border-color .15s;
+          white-space:    nowrap;
+          flex-shrink:    0;
+          user-select:    none;
+          height:         24px;
+        }
+        .cal-empty-pill--on {
+          color:        #1C2B4A;
+          border-color: rgba(201,168,76,.5);
+          background:   rgba(201,168,76,.08);
+        }
+        .cal-empty-pill:hover { background: rgba(28,43,74,.1); }
+
+        /* Toggle mini knob */
         .cal-toggle-mini {
           position:      relative;
           display:       inline-flex;
           align-items:   center;
-          width:         28px;
-          height:        15px;
-          border-radius: 8px;
-          background:    rgba(0,0,0,.18);
+          width:         26px; height: 14px;
+          border-radius: 7px;
+          background:    rgba(0,0,0,.15);
           transition:    background .2s;
           flex-shrink:   0;
         }
-        .cal-toggle-mini--on { background: var(--forest); }
+        .cal-toggle-mini--on { background: #C9A84C; }
         .cal-toggle-mini-knob {
           position:      absolute;
           left:          2px;
-          width:         11px;
-          height:        11px;
+          width:         10px; height: 10px;
           border-radius: 50%;
           background:    white;
-          box-shadow:    0 1px 2px rgba(0,0,0,.18);
+          box-shadow:    0 1px 3px rgba(0,0,0,.2);
           transition:    left .18s;
         }
-        .cal-toggle-mini--on .cal-toggle-mini-knob { left: 15px; }
-        .cal-legend-dot {
-          width: 10px; height: 10px;
-          border-radius: 3px;
-          flex-shrink:   0;
-        }
+        .cal-toggle-mini--on .cal-toggle-mini-knob { left: 14px; }
 
         @media (max-width: 600px) {
-          .cal-dn { font-size: 0.68rem; }
+          .cal-dn { font-size: 0.72rem; }
+          .cal-title { font-size: 0.95rem; }
         }
       `}</style>
     </div>
