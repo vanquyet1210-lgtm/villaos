@@ -378,30 +378,55 @@ export default function Calendar({
     const rightPct = ((6 - colEnd + rightFrac)   / 7) * 100;
     const topPx    = row * CELL_H + BAR_T + p.slot * (BAR_H + BAR_GAP);
 
+    const isSaleView = role === 'sale';
     const label = p.seg.saleLabel ?? p.seg.fullName ?? p.seg.customer;
 
     return (
       <div
         key={key}
         style={{
-          position:     'absolute',
-          top:          topPx,
-          height:       BAR_H,
-          left:         `${leftPct}%`,
-          right:        `${rightPct}%`,
-          background:   c.bar,
-          backgroundImage: 'repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0px,rgba(255,255,255,.07) 3px,transparent 3px,transparent 9px)',
-          borderRadius: `${isFirst ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isFirst ? BAR_R : 0}px`,
-          zIndex:       10,
-          pointerEvents:'none',
-          overflow:     'hidden',
-          display:      'flex',
-          alignItems:   'center',
-          minWidth:     0,
+          position:       'absolute',
+          top:            topPx,
+          height:         BAR_H,
+          left:           `${leftPct}%`,
+          right:          `${rightPct}%`,
+          background:     c.bar,
+          backgroundImage:'repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0px,rgba(255,255,255,.07) 3px,transparent 3px,transparent 9px)',
+          borderRadius:   `${isFirst ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isLast ? BAR_R : 0}px ${isFirst ? BAR_R : 0}px`,
+          zIndex:         10,
+          pointerEvents:  'none',
+          overflow:       'hidden',
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: isSaleView ? 'center' : 'flex-start',
+          minWidth:       0,
+          opacity:        highlightEmpty ? 0.25 : 1,
+          filter:         highlightEmpty ? 'grayscale(40%)' : 'none',
+          transition:     'opacity .25s, filter .25s',
         }}
       >
-        {/* Tên khách: chỉ ở piece đầu tiên */}
-        {isFirst && label && (
+        {/* SALE VIEW: chỉ icon ổ khóa trong hình tròn, canh giữa */}
+        {isSaleView && isFirst && (
+          <span style={{
+            width:           BAR_H - 2,
+            height:          BAR_H - 2,
+            borderRadius:    '50%',
+            background:      'rgba(255,255,255,0.25)',
+            border:          '1px solid rgba(255,255,255,0.45)',
+            display:         'inline-flex',
+            alignItems:      'center',
+            justifyContent:  'center',
+            flexShrink:      0,
+          }}>
+            <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+              <rect x="2" y="5.5" width="8" height="5.5" rx="1.2" fill="white"/>
+              <path d="M4 5.5V4a2 2 0 1 1 4 0v1.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
+            </svg>
+          </span>
+        )}
+
+        {/* OWNER/ADMIN VIEW: tên khách + số điện thoại */}
+        {!isSaleView && isFirst && label && (
           <span style={{
             paddingLeft:  6,
             paddingRight: isLast ? 56 : 4,
@@ -416,42 +441,27 @@ export default function Calendar({
           }}>
             {label}
             {seg.phone && (
-              <span style={{ opacity: .85, fontWeight: 400, marginLeft: 3 }}>
+              <span style={{ opacity:.85, fontWeight:400, marginLeft:3 }}>
                 · {seg.phone}
               </span>
             )}
           </span>
         )}
 
-        {/* Total + tick: CHỈ ở piece cuối cùng, căn phải */}
-        {isLast && seg.total > 0 && (
+        {/* OWNER/ADMIN VIEW: total + tick ở cuối bar */}
+        {!isSaleView && isLast && seg.total > 0 && (
           <span style={{
-            position:    'absolute',
-            right:       5,
-            display:     'flex',
-            alignItems:  'center',
-            gap:         3,
-            flexShrink:  0,
+            position:   'absolute', right: 5,
+            display:    'flex', alignItems: 'center', gap: 3, flexShrink: 0,
           }}>
-            <span style={{
-              fontSize:   '0.62rem',
-              fontWeight: 700,
-              color:      '#fff',
-              whiteSpace: 'nowrap',
-              letterSpacing: '-0.01em',
-            }}>
+            <span style={{ fontSize:'0.62rem', fontWeight:700, color:'#fff', whiteSpace:'nowrap', letterSpacing:'-0.01em' }}>
               {seg.total.toLocaleString('vi-VN')}đ
             </span>
             {seg.status === 'confirmed' && (
               <span style={{
-                width:          15, height: 15,
-                borderRadius:   '50%',
-                background:     '#2e7d52',
-                border:         '1.5px solid rgba(255,255,255,.9)',
-                display:        'inline-flex',
-                alignItems:     'center',
-                justifyContent: 'center',
-                flexShrink:     0,
+                width:15, height:15, borderRadius:'50%',
+                background:'#2e7d52', border:'1.5px solid rgba(255,255,255,.9)',
+                display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:0,
               }}>
                 <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
                   <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
