@@ -1268,38 +1268,55 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           display:       flex;
           align-items:   center;
           flex:          1;
-          max-width:     260px;
           background:    var(--white);
           border:        1px solid rgba(28,43,74,.14);
           border-radius: 99px;
-          padding:       0 12px;
-          height:        36px;
-          gap:           6px;
+          padding:       0 14px;
+          height:        38px;
+          gap:           8px;
           transition:    border-color .15s, box-shadow .15s;
+          overflow:      hidden;
+          min-width:     0;
         }
         .villa-search-inner:focus-within {
           border-color: var(--gold, #C9A84C);
           box-shadow:   0 0 0 3px rgba(201,168,76,.12);
         }
-        .villa-search-icon  { color: var(--ink-muted); flex-shrink: 0; }
+        .villa-search-icon {
+          color:       var(--ink-muted);
+          flex-shrink: 0;
+          display:     flex;
+          align-items: center;
+        }
         .villa-search-input {
-          flex: 1; border: none; outline: none;
-          background: transparent; font-size: 0.82rem;
-          color: var(--ink); font-family: var(--font-body);
+          flex:        1;
+          border:      none;
+          outline:     none;
+          background:  transparent;
+          font-size:   0.84rem;
+          color:       var(--ink);
+          font-family: var(--font-body);
+          min-width:   0;
         }
         .villa-search-input::placeholder { color: var(--ink-muted); }
         .villa-search-clear {
-          background: none; border: none; cursor: pointer;
-          color: var(--ink-muted); font-size: 1rem;
-          padding: 0; line-height: 1; transition: color .12s;
+          background:  none;
+          border:      none;
+          cursor:      pointer;
+          color:       var(--ink-muted);
+          font-size:   1rem;
+          padding:     0;
+          line-height: 1;
+          flex-shrink: 0;
+          transition:  color .12s;
         }
         .villa-search-clear:hover { color: var(--ink); }
         .villa-search-filter-btn {
           display:        flex;
           align-items:    center;
           gap:            5px;
-          height:         36px;
-          padding:        0 14px;
+          height:         38px;
+          padding:        0 16px;
           background:     var(--white);
           border:         1px solid rgba(28,43,74,.14);
           border-radius:  99px;
@@ -1309,7 +1326,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           cursor:         pointer;
           white-space:    nowrap;
           flex-shrink:    0;
-          letter-spacing: 0.04em;
+          letter-spacing: 0.05em;
           text-transform: uppercase;
           transition:     border-color .15s, background .15s;
         }
@@ -1323,14 +1340,16 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           color:        #8B6914;
         }
         .villa-filter-dot {
-          width: 6px; height: 6px; border-radius: 50%;
-          background: var(--gold, #C9A84C); flex-shrink: 0;
+          width:         5px; height: 5px;
+          border-radius: 50%;
+          background:    var(--gold, #C9A84C);
+          flex-shrink:   0;
         }
         .villa-filter-clear-small {
-          background: none; border: none; cursor: pointer;
-          font-size: 0.72rem; color: var(--ink-muted);
-          padding: 4px 0; white-space: nowrap;
-          transition: color .12s; flex-shrink: 0;
+          background:     none; border: none; cursor: pointer;
+          font-size:      0.72rem; color: var(--ink-muted);
+          padding:        4px 0; white-space: nowrap;
+          transition:     color .12s; flex-shrink: 0;
         }
         .villa-filter-clear-small:hover { color: var(--red); }
 
