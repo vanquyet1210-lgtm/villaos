@@ -56,10 +56,10 @@ const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : 
 // ── Constants ─────────────────────────────────────────────────────
 
 const CELL_H   = 72;   // px — height của 1 ô ngày
-const BAR_T    = 30;   // px từ top ô đến top bar đầu tiên
-const BAR_H    = 20;   // px chiều cao bar
+const BAR_T    = 26;   // px từ top ô đến top bar
+const BAR_H    = 16;   // px chiều cao bar
 const BAR_GAP  = 3;    // px khoảng cách giữa 2 bar chồng nhau
-const BAR_R    = 7;    // px border-radius đầu/cuối bar
+const BAR_R    = 6;    // px border-radius đầu/cuối bar
 
 // ── Build click map ───────────────────────────────────────────────
 
@@ -405,24 +405,21 @@ export default function Calendar({
           transition:     'opacity .25s, filter .25s',
         }}
       >
-        {/* SALE VIEW: chỉ icon ổ khóa trong hình tròn, canh giữa */}
+        {/* SALE VIEW: ổ khóa flat, màu trắng đậm, dễ thấy trên mobile */}
         {isSaleView && isFirst && (
-          <span style={{
-            width:           BAR_H - 2,
-            height:          BAR_H - 2,
-            borderRadius:    '50%',
-            background:      'rgba(255,255,255,0.25)',
-            border:          '1px solid rgba(255,255,255,0.45)',
-            display:         'inline-flex',
-            alignItems:      'center',
-            justifyContent:  'center',
-            flexShrink:      0,
-          }}>
-            <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-              <rect x="2" y="5.5" width="8" height="5.5" rx="1.2" fill="white"/>
-              <path d="M4 5.5V4a2 2 0 1 1 4 0v1.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
-            </svg>
-          </span>
+          <svg
+            width="11" height="11"
+            viewBox="0 0 14 14"
+            fill="none"
+            style={{ flexShrink: 0, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.25))' }}
+          >
+            {/* thân khóa */}
+            <rect x="2" y="6.5" width="10" height="6.5" rx="1.5" fill="white"/>
+            {/* vòng cung */}
+            <path d="M4.5 6.5V4.5a2.5 2.5 0 0 1 5 0v2" stroke="white" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
+            {/* lỗ khóa */}
+            <circle cx="7" cy="9.8" r="1.1" fill={c.bar}/>
+          </svg>
         )}
 
         {/* OWNER/ADMIN VIEW: tên khách + số điện thoại */}
@@ -673,7 +670,7 @@ export default function Calendar({
           flex-direction:  column;
           align-items:     center;
           justify-content: flex-start;
-          padding-top:     5px;
+          padding-top:     3px;
           border:          1px solid rgba(180,212,195,.15);
           background:      transparent;
           transition:      background .1s;
@@ -715,11 +712,21 @@ export default function Calendar({
         .cal-legend {
           display:     flex;
           align-items: center;
-          gap:         12px;
-          padding:     10px 16px;
+          gap:         8px;
+          padding:     8px 10px;
           border-top:  1px solid var(--sage-pale);
           background:  var(--parchment);
-          flex-wrap:   wrap;
+          flex-wrap:   nowrap;
+          overflow:    hidden;
+        }
+        .cal-legend-item {
+          display:     flex;
+          align-items: center;
+          gap:         4px;
+          font-size:   0.68rem;
+          color:       var(--ink-muted);
+          white-space: nowrap;
+          flex-shrink: 0;
         }
         .cal-hotline { display: none; } /* hotline ẩn trong legend */
         .cal-hotline-icon { display: none; }
@@ -768,15 +775,8 @@ export default function Calendar({
           transition:    left .18s;
         }
         .cal-toggle-mini--on .cal-toggle-mini-knob { left: 15px; }
-        .cal-legend-item {
-          display:     flex;
-          align-items: center;
-          gap:         6px;
-          font-size:   0.75rem;
-          color:       var(--ink-muted);
-        }
         .cal-legend-dot {
-          width: 12px; height: 12px;
+          width: 10px; height: 10px;
           border-radius: 3px;
           flex-shrink:   0;
         }
