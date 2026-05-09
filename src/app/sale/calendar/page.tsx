@@ -34,6 +34,7 @@ export default async function SaleCalendarPage({
         <div className="page-header">
           <h1>Xin chào, {profile.name} 👋</h1>
         </div>
+        <div style={{ height:'0.5px', background:'linear-gradient(90deg,rgba(201,168,76,.6) 0%,rgba(201,168,76,.08) 100%)', marginBottom:'20px' }} />
         <div className="card" style={{ textAlign:'center', padding:'48px 24px' }}>
           <span style={{ fontSize:56, display:'block', marginBottom:16 }}>📭</span>
           <h3>Chưa có villa nào</h3>
@@ -50,6 +51,7 @@ export default async function SaleCalendarPage({
       <div className="page-header">
         <h1>Xin chào, {profile.name} 👋</h1>
       </div>
+      <div style={{ height:'0.5px', background:'linear-gradient(90deg,rgba(201,168,76,.6) 0%,rgba(201,168,76,.08) 100%)', marginBottom:'20px' }} />
       <CalendarShell
         villas={villas}
         initialVillaId={selectedVillaId ?? villas[0].id}

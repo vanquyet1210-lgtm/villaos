@@ -333,7 +333,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           {/* Search + Filter — tích hợp gọn */}
           <div className="villa-search-wrap">
             <div className="villa-search-inner">
-              <svg className="villa-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg className="villa-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
               <input
@@ -345,23 +345,23 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
               {filterSearch && (
                 <button className="villa-search-clear" onClick={() => setFilterSearch('')}>×</button>
               )}
-              {userRole !== 'owner' && (
-                <button
-                  className={`villa-search-filter-btn${showFilter ? ' active' : ''}`}
-                  onClick={() => setShowFilter(v => !v)}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
-                  </svg>
-                  Lọc
-                  {hasFilter && <span className="villa-filter-dot" />}
-                </button>
-              )}
             </div>
-            {hasFilter && (
-              <button className="villa-filter-clear-small" onClick={clearFilter}>✕ Xóa lọc</button>
+            {userRole !== 'owner' && (
+              <button
+                className={`villa-search-filter-btn${showFilter ? ' active' : ''}`}
+                onClick={() => setShowFilter(v => !v)}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
+                </svg>
+                Lọc
+                {hasFilter && <span className="villa-filter-dot" />}
+              </button>
             )}
           </div>
+          {hasFilter && (
+            <button className="villa-filter-clear-small" onClick={clearFilter}>✕ Xóa lọc</button>
+          )}
 
           {/* Expanded filter panel */}
           {userRole !== 'owner' && showFilter && (
@@ -479,14 +479,14 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
                     ? <img src={v.images[0]} alt={v.name} />
                     : <div className="villa-card-img-fallback">{v.emoji}</div>
                   }
-                  <div className="villa-card-badge">
-                    <span className="villa-card-dot" />
-                    Đang hoạt động
-                  </div>
                 </div>
                 {/* Info */}
                 <div className="villa-card-body">
                   <div className="villa-card-name">{v.emoji} {v.name}</div>
+                  <div className="villa-card-badge">
+                    <span className="villa-card-dot" />
+                    Đang hoạt động
+                  </div>
                   <div className="villa-card-addr">📍 {v.district}, {v.province}</div>
                   <div className="villa-card-stats">
                     <span>🛏 {v.bedrooms} phòng</span>
@@ -505,6 +505,22 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         </div>
       )}
 
+
+      {/* Section label */}
+      <div style={{
+        display:        'flex',
+        alignItems:     'center',
+        gap:            '10px',
+        fontSize:       '0.62rem',
+        fontWeight:     600,
+        color:          'var(--gold, #C9A84C)',
+        letterSpacing:  '0.14em',
+        textTransform:  'uppercase',
+        margin:         '20px 0 10px',
+      }}>
+        Lịch villa
+        <span style={{ flex:1, height:'0.5px', background:'linear-gradient(90deg,rgba(201,168,76,.4) 0%,transparent 100%)' }} />
+      </div>
 
       {/* Calendar */}
       <Calendar
@@ -1090,36 +1106,44 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         .villa-selector::-webkit-scrollbar-thumb { background: var(--sage); border-radius: 99px; }
 
         .villa-card {
-          flex:           0 0 210px;
-          display:        flex;
+          flex:          0 0 220px;
+          display:       flex;
           flex-direction: column;
-          border:         1px solid rgba(28,43,74,.10);
-          border-radius:  var(--radius-lg);
-          background:     var(--white);
-          cursor:         pointer;
-          text-align:     left;
-          font-family:    var(--font-body);
-          overflow:       hidden;
-          transition:     all .2s;
-          box-shadow:     0 1px 6px rgba(28,43,74,.06);
-          padding:        0;
+          border:        2px solid var(--stone);
+          border-radius: var(--radius-lg);
+          background:    var(--white);
+          cursor:        pointer;
+          text-align:    left;
+          font-family:   var(--font-body);
+          overflow:      hidden;
+          transition:    all .18s;
+          box-shadow:    none;
+          padding:       0;
         }
         .villa-card:hover {
-          border-color: rgba(201,168,76,.5);
-          box-shadow:   0 4px 16px rgba(28,43,74,.12);
+          border-color: var(--sage);
+          box-shadow:   none;
           transform:    translateY(-2px);
         }
         .villa-card.active {
-          border-color: var(--gold);
-          box-shadow:   0 0 0 2px rgba(201,168,76,.25);
+          border-color: var(--forest);
+          box-shadow:   none;
         }
 
         .villa-card-img {
           position:    relative;
           height:      110px;
           overflow:    hidden;
-          background:  var(--ivory-dark);
+          background:  var(--ivory-dark, #F0EDE6);
           flex-shrink: 0;
+        }
+        .villa-card-img::after {
+          content:        '';
+          position:       absolute;
+          inset:          0;
+          background:     linear-gradient(to bottom, transparent 35%, rgba(28,43,74,.5) 100%);
+          pointer-events: none;
+          z-index:        1;
         }
         .villa-card-img img {
           width:      100%;
@@ -1138,55 +1162,53 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           font-size:       2.2rem;
         }
         .villa-card-badge {
-          position:       absolute;
-          top:            7px;
-          left:           7px;
-          background:     rgba(201,168,76,.15);
-          border:         1px solid rgba(201,168,76,.4);
-          border-radius:  99px;
-          padding:        3px 8px;
-          font-size:      0.6rem;
-          font-weight:    600;
-          color:          #8B6914;
-          display:        flex;
+          display:        inline-flex;
           align-items:    center;
           gap:            4px;
+          background:     var(--gold-light, rgba(201,168,76,.12));
+          border:         1px solid rgba(201,168,76,.35);
+          border-radius:  99px;
+          padding:        2px 7px;
+          font-size:      0.58rem;
+          font-weight:    600;
+          color:          #8B6914;
           letter-spacing: 0.06em;
           text-transform: uppercase;
+          width:          fit-content;
         }
         .villa-card-dot {
           width:         5px;
           height:        5px;
           border-radius: 50%;
-          background:    var(--gold);
+          background:    var(--gold, #C9A84C);
           flex-shrink:   0;
         }
         .villa-card.active .villa-card-badge {
-          background: var(--navy);
-          border-color: var(--navy);
-          color:      rgba(255,255,255,.9);
+          background:   var(--navy, #1C2B4A);
+          border-color: var(--navy, #1C2B4A);
+          color:        rgba(255,255,255,.9);
         }
-        .villa-card.active .villa-card-dot { background: var(--gold); }
+        .villa-card.active .villa-card-dot { background: var(--gold, #C9A84C); }
 
         .villa-card-body {
-          padding: 10px 12px 12px;
+          padding: 8px 12px 12px;
           display: flex;
           flex-direction: column;
           gap: 3px;
         }
         .villa-card-name {
-          font-family:   var(--font-display);
+          font-family:   var(--font-display, Georgia, serif);
           font-size:     0.88rem;
           font-style:    italic;
           font-weight:   400;
-          color:         var(--navy);
+          color:         var(--navy, #1C2B4A);
           white-space:   nowrap;
           overflow:      hidden;
           text-overflow: ellipsis;
         }
-        .villa-card.active .villa-card-name { color: var(--navy); }
+        .villa-card.active .villa-card-name { color: var(--navy, #1C2B4A); }
         .villa-card-addr {
-          font-size:     0.68rem;
+          font-size:     0.7rem;
           color:         var(--ink-muted);
           white-space:   nowrap;
           overflow:      hidden;
@@ -1197,27 +1219,24 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           align-items: center;
           gap:         4px;
           flex-wrap:   wrap;
-          font-size:   0.68rem;
-          color:       var(--ink-muted);
+          font-size:   0.72rem;
+          color:       var(--ink-light);
           margin-top:  2px;
         }
         .villa-card-price {
+          font-size:      0.95rem;
+          font-weight:    800;
+          color:          #e53e3e;
           font-family:    var(--font-display);
-          font-size:      0.92rem;
-          font-style:     italic;
-          font-weight:    400;
-          color:          var(--navy);
-          letter-spacing: 0;
-          margin-top:     2px;
+          letter-spacing: -0.01em;
         }
         .villa-card-hint {
-          font-size:  0.6rem;
-          color:      var(--gold);
+          font-size:  0.65rem;
+          color:      var(--ink-muted);
           opacity:    0;
           margin-top: 4px;
           transition: opacity .15s;
           text-align: right;
-          letter-spacing: 0.04em;
         }
         .villa-card:hover .villa-card-hint { opacity: 1; }
         .villa-card-view-btn {
@@ -1249,61 +1268,67 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           display:       flex;
           align-items:   center;
           flex:          1;
+          max-width:     260px;
           background:    var(--white);
-          border:        1.5px solid var(--stone);
+          border:        1px solid rgba(28,43,74,.14);
           border-radius: 99px;
-          padding:       0 14px;
-          height:        42px;
-          gap:           8px;
+          padding:       0 12px;
+          height:        36px;
+          gap:           6px;
           transition:    border-color .15s, box-shadow .15s;
         }
         .villa-search-inner:focus-within {
-          border-color: var(--forest);
-          box-shadow:   0 0 0 3px rgba(46,125,82,.1);
+          border-color: var(--gold, #C9A84C);
+          box-shadow:   0 0 0 3px rgba(201,168,76,.12);
         }
         .villa-search-icon  { color: var(--ink-muted); flex-shrink: 0; }
         .villa-search-input {
           flex: 1; border: none; outline: none;
-          background: transparent; font-size: 0.875rem;
+          background: transparent; font-size: 0.82rem;
           color: var(--ink); font-family: var(--font-body);
         }
         .villa-search-input::placeholder { color: var(--ink-muted); }
         .villa-search-clear {
           background: none; border: none; cursor: pointer;
-          color: var(--ink-muted); font-size: 1.2rem;
-          padding: 0 2px; line-height: 1; transition: color .12s;
+          color: var(--ink-muted); font-size: 1rem;
+          padding: 0; line-height: 1; transition: color .12s;
         }
         .villa-search-clear:hover { color: var(--ink); }
         .villa-search-filter-btn {
-          display:       flex;
-          align-items:   center;
-          gap:           5px;
-          height:        42px;
-          padding:       0 16px;
-          background:    var(--white);
-          border:        1.5px solid var(--stone);
-          border-radius: 99px;
-          font-size:     0.82rem;
-          font-weight:   600;
-          color:         var(--ink);
-          cursor:        pointer;
-          white-space:   nowrap;
-          flex-shrink:   0;
-          transition:    border-color .15s, background .15s, color .15s;
+          display:        flex;
+          align-items:    center;
+          gap:            5px;
+          height:         36px;
+          padding:        0 14px;
+          background:     var(--white);
+          border:         1px solid rgba(28,43,74,.14);
+          border-radius:  99px;
+          font-size:      0.75rem;
+          font-weight:    600;
+          color:          var(--navy, #1C2B4A);
+          cursor:         pointer;
+          white-space:    nowrap;
+          flex-shrink:    0;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          transition:     border-color .15s, background .15s;
         }
-        .villa-search-filter-btn:hover { border-color: var(--forest); }
+        .villa-search-filter-btn:hover {
+          border-color: var(--gold, #C9A84C);
+          background:   rgba(201,168,76,.06);
+        }
         .villa-search-filter-btn.active {
-          border-color: var(--forest);
-          background:   rgba(46,125,82,.06);
-          color:        var(--forest);
+          border-color: var(--gold, #C9A84C);
+          background:   rgba(201,168,76,.08);
+          color:        #8B6914;
         }
         .villa-filter-dot {
-          width: 7px; height: 7px; border-radius: 50%;
-          background: var(--forest); flex-shrink: 0;
+          width: 6px; height: 6px; border-radius: 50%;
+          background: var(--gold, #C9A84C); flex-shrink: 0;
         }
         .villa-filter-clear-small {
           background: none; border: none; cursor: pointer;
-          font-size: 0.75rem; color: var(--ink-muted);
+          font-size: 0.72rem; color: var(--ink-muted);
           padding: 4px 0; white-space: nowrap;
           transition: color .12s; flex-shrink: 0;
         }
