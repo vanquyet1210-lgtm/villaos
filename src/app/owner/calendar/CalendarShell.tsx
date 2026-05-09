@@ -333,9 +333,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           {/* Search + Filter — tích hợp gọn */}
           <div className="villa-search-wrap">
             <div className="villa-search-inner">
-              <svg className="villa-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
               <input
                 className="villa-search-input"
                 placeholder="Tìm villa..."
@@ -345,6 +342,9 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
               {filterSearch && (
                 <button className="villa-search-clear" onClick={() => setFilterSearch('')}>×</button>
               )}
+              <svg className="villa-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
             </div>
             {userRole !== 'owner' && (
               <button
@@ -1271,11 +1271,11 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           background:    var(--white);
           border:        1px solid rgba(28,43,74,.14);
           border-radius: 99px;
-          padding:       0 14px;
+          padding:       0 14px 0 38px;
           height:        38px;
-          gap:           8px;
+          gap:           6px;
           transition:    border-color .15s, box-shadow .15s;
-          overflow:      hidden;
+          position:      relative;
           min-width:     0;
         }
         .villa-search-inner:focus-within {
@@ -1283,10 +1283,13 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           box-shadow:   0 0 0 3px rgba(201,168,76,.12);
         }
         .villa-search-icon {
+          position:    absolute;
+          left:        13px;
+          top:         50%;
+          transform:   translateY(-50%);
           color:       var(--ink-muted);
           flex-shrink: 0;
-          display:     flex;
-          align-items: center;
+          pointer-events: none;
         }
         .villa-search-input {
           flex:        1;
@@ -1297,6 +1300,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           color:       var(--ink);
           font-family: var(--font-body);
           min-width:   0;
+          width:       100%;
         }
         .villa-search-input::placeholder { color: var(--ink-muted); }
         .villa-search-clear {
