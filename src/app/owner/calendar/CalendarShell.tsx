@@ -1090,35 +1090,35 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         .villa-selector::-webkit-scrollbar-thumb { background: var(--sage); border-radius: 99px; }
 
         .villa-card {
-          flex:          0 0 220px;
-          display:       flex;
+          flex:           0 0 210px;
+          display:        flex;
           flex-direction: column;
-          border:        2px solid var(--stone);
-          border-radius: var(--radius-lg);
-          background:    var(--white);
-          cursor:        pointer;
-          text-align:    left;
-          font-family:   var(--font-body);
-          overflow:      hidden;
-          transition:    all .18s;
-          box-shadow:    none;
-          padding:       0;
+          border:         1px solid rgba(28,43,74,.10);
+          border-radius:  var(--radius-lg);
+          background:     var(--white);
+          cursor:         pointer;
+          text-align:     left;
+          font-family:    var(--font-body);
+          overflow:       hidden;
+          transition:     all .2s;
+          box-shadow:     0 1px 6px rgba(28,43,74,.06);
+          padding:        0;
         }
         .villa-card:hover {
-          border-color: var(--sage);
-          box-shadow:   none;
+          border-color: rgba(201,168,76,.5);
+          box-shadow:   0 4px 16px rgba(28,43,74,.12);
           transform:    translateY(-2px);
         }
         .villa-card.active {
-          border-color: var(--forest);
-          box-shadow:   none;
+          border-color: var(--gold);
+          box-shadow:   0 0 0 2px rgba(201,168,76,.25);
         }
 
         .villa-card-img {
-          position:   relative;
-          height:     110px;
-          overflow:   hidden;
-          background: var(--sage-pale);
+          position:    relative;
+          height:      110px;
+          overflow:    hidden;
+          background:  var(--ivory-dark);
           flex-shrink: 0;
         }
         .villa-card-img img {
@@ -1126,7 +1126,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           height:     100%;
           object-fit: cover;
           display:    block;
-          transition: transform .25s;
+          transition: transform .3s;
         }
         .villa-card:hover .villa-card-img img { transform: scale(1.05); }
         .villa-card-img-fallback {
@@ -1141,47 +1141,52 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           position:       absolute;
           top:            7px;
           left:           7px;
-          background:     rgba(255,255,255,.92);
-          backdrop-filter: blur(4px);
+          background:     rgba(201,168,76,.15);
+          border:         1px solid rgba(201,168,76,.4);
           border-radius:  99px;
           padding:        3px 8px;
-          font-size:      0.65rem;
+          font-size:      0.6rem;
           font-weight:    600;
-          color:          #2e7d52;
+          color:          #8B6914;
           display:        flex;
           align-items:    center;
           gap:            4px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
         }
         .villa-card-dot {
-          width:         6px;
-          height:        6px;
+          width:         5px;
+          height:        5px;
           border-radius: 50%;
-          background:    #4caf7d;
+          background:    var(--gold);
           flex-shrink:   0;
         }
         .villa-card.active .villa-card-badge {
-          background: var(--forest);
-          color:      white;
+          background: var(--navy);
+          border-color: var(--navy);
+          color:      rgba(255,255,255,.9);
         }
-        .villa-card.active .villa-card-dot { background: #a8e6c3; }
+        .villa-card.active .villa-card-dot { background: var(--gold); }
 
         .villa-card-body {
           padding: 10px 12px 12px;
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 3px;
         }
         .villa-card-name {
-          font-size:     0.84rem;
-          font-weight:   700;
-          color:         var(--forest-deep);
+          font-family:   var(--font-display);
+          font-size:     0.88rem;
+          font-style:    italic;
+          font-weight:   400;
+          color:         var(--navy);
           white-space:   nowrap;
           overflow:      hidden;
           text-overflow: ellipsis;
         }
-        .villa-card.active .villa-card-name { color: var(--forest); }
+        .villa-card.active .villa-card-name { color: var(--navy); }
         .villa-card-addr {
-          font-size:     0.7rem;
+          font-size:     0.68rem;
           color:         var(--ink-muted);
           white-space:   nowrap;
           overflow:      hidden;
@@ -1192,24 +1197,27 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           align-items: center;
           gap:         4px;
           flex-wrap:   wrap;
-          font-size:   0.72rem;
-          color:       var(--ink-light);
+          font-size:   0.68rem;
+          color:       var(--ink-muted);
           margin-top:  2px;
         }
         .villa-card-price {
-          font-size:      0.95rem;
-          font-weight:    800;
-          color:          #e53e3e;
           font-family:    var(--font-display);
-          letter-spacing: -0.01em;
+          font-size:      0.92rem;
+          font-style:     italic;
+          font-weight:    400;
+          color:          var(--navy);
+          letter-spacing: 0;
+          margin-top:     2px;
         }
         .villa-card-hint {
-          font-size:  0.65rem;
-          color:      var(--ink-muted);
+          font-size:  0.6rem;
+          color:      var(--gold);
           opacity:    0;
           margin-top: 4px;
           transition: opacity .15s;
           text-align: right;
+          letter-spacing: 0.04em;
         }
         .villa-card:hover .villa-card-hint { opacity: 1; }
         .villa-card-view-btn {

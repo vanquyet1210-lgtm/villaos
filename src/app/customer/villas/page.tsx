@@ -17,8 +17,8 @@ export default async function CustomerVillasPage() {
   return (
     <>
       <div className="page-header">
-        <h1>🏠 Khám phá villa</h1>
-        <p>{villas.length} villa đang có sẵn · Chào {session.profile.name} 👋</p>
+        <h1>Khám phá villa</h1>
+        <p>Chào mừng trở lại, {session.profile.name}</p>
       </div>
 
       {villas.length === 0 ? (
@@ -81,15 +81,15 @@ export default async function CustomerVillasPage() {
         .customer-villa-card {
           background:    var(--white);
           border-radius: var(--radius-xl);
-          border:        1px solid rgba(180,212,195,.3);
-          box-shadow:    var(--shadow-sm);
+          border:        1px solid rgba(28,43,74,.08);
+          box-shadow:    0 2px 12px rgba(28,43,74,.06);
           overflow:      hidden;
-          transition:    box-shadow .2s, transform .2s;
+          transition:    box-shadow .25s, transform .25s;
           animation:     slideUp .3s ease both;
         }
 
         .customer-villa-card:hover {
-          box-shadow: var(--shadow-lg);
+          box-shadow: 0 8px 32px rgba(28,43,74,.13);
           transform:  translateY(-3px);
         }
 
@@ -97,7 +97,7 @@ export default async function CustomerVillasPage() {
           padding: 16px 20px 20px;
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 8px;
         }
 
         .customer-villa-header {
@@ -108,39 +108,46 @@ export default async function CustomerVillasPage() {
         }
 
         .customer-villa-name {
+          font-family: var(--font-display);
           font-size:   1.1rem;
-          color:       var(--forest-deep);
+          font-style:  italic;
+          font-weight: 400;
+          color:       var(--navy);
           flex:        1;
         }
 
         .customer-villa-price {
           display:     flex;
           align-items: baseline;
-          gap:         3px;
+          gap:         2px;
           flex-shrink: 0;
         }
 
         .price-amount {
           font-family: var(--font-display);
-          font-size:   1.2rem;
-          color:       var(--forest);
-          font-weight: 700;
+          font-size:   1.1rem;
+          font-style:  italic;
+          color:       var(--navy);
+          font-weight: 400;
         }
 
         .price-unit {
-          font-size:  0.78rem;
-          color:      var(--ink-muted);
+          font-family: var(--font-body);
+          font-size:   0.72rem;
+          color:       var(--ink-muted);
+          font-style:  normal;
         }
 
         .customer-villa-meta {
-          font-size: 0.82rem;
-          color:     var(--ink-light);
+          font-size:      0.75rem;
+          color:          var(--ink-muted);
+          letter-spacing: 0.01em;
         }
 
         .customer-villa-desc {
-          font-size:   0.85rem;
+          font-size:   0.83rem;
           color:       var(--ink-light);
-          line-height: 1.5;
+          line-height: 1.55;
           display:     -webkit-box;
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
@@ -151,6 +158,20 @@ export default async function CustomerVillasPage() {
           display:   flex;
           flex-wrap: wrap;
           gap:       4px;
+        }
+
+        /* Luxury amenity chip */
+        .villa-amenity-chip {
+          display:        inline-flex;
+          align-items:    center;
+          padding:        3px 9px;
+          border-radius:  99px;
+          background:     rgba(201,168,76,.08);
+          border:         1px solid rgba(201,168,76,.25);
+          font-size:      0.72rem;
+          color:          #8B6914;
+          font-weight:    500;
+          letter-spacing: 0.02em;
         }
       `}</style>
     </>
