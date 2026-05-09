@@ -55,8 +55,8 @@ const col = (s?: string) => s === 'hold' ? C.hold : s === 'locked' ? C.locked : 
 
 // ── Constants ─────────────────────────────────────────────────────
 
-const CELL_H   = 72;   // px — height của 1 ô ngày
-const BAR_T    = 26;   // px từ top ô đến top bar
+const CELL_H   = 58;   // px — height của 1 ô ngày (thấp hơn)
+const BAR_T    = 26;   // px từ top ô đến top bar (giữ nguyên)
 const BAR_H    = 16;   // px chiều cao bar
 const BAR_GAP  = 3;    // px khoảng cách giữa 2 bar chồng nhau
 const BAR_R    = 6;    // px border-radius đầu/cuối bar
@@ -670,7 +670,7 @@ export default function Calendar({
           flex-direction:  column;
           align-items:     center;
           justify-content: flex-start;
-          padding-top:     3px;
+          padding-top:     4px;
           border:          1px solid rgba(180,212,195,.15);
           background:      transparent;
           transition:      background .1s;
