@@ -534,7 +534,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         hotline={(villa as any).phone ?? ''}
         role={userRole}
         highlightEmpty={highlightEmpty}
-        onToggleEmpty={userRole === 'sale' ? (v) => setHighlightEmpty(v) : undefined}
+        onToggleEmpty={(userRole === 'sale' || userRole === 'owner') ? (v) => setHighlightEmpty(v) : undefined}
       />
 
       {/* ── HOLD ĐANG CHỜ DUYỆT — chỉ sale ────────────────────── */}
@@ -1224,11 +1224,13 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           margin-top:  2px;
         }
         .villa-card-price {
-          font-size:      0.95rem;
-          font-weight:    800;
-          color:          #e53e3e;
-          font-family:    var(--font-display);
-          letter-spacing: -0.01em;
+          font-family:    var(--font-display, Georgia, serif);
+          font-size:      0.92rem;
+          font-style:     italic;
+          font-weight:    400;
+          color:          var(--navy, #1C2B4A);
+          letter-spacing: 0;
+          margin-top:     2px;
         }
         .villa-card-hint {
           font-size:  0.65rem;

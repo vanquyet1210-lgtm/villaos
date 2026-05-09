@@ -582,8 +582,8 @@ export default function Calendar({
 
       {/* ── Legend + Hotline ── */}
       <div className="cal-legend">
-        {/* Góc trái: pill toggle Ngày trống (chỉ sale) */}
-        {role === 'sale' && onToggleEmpty && (
+        {/* Góc trái: pill toggle Ngày trống (sale + owner) */}
+        {(role === 'sale' || role === 'owner') && onToggleEmpty && (
           <button
             className={`cal-empty-pill${highlightEmpty ? ' cal-empty-pill--on' : ''}`}
             onClick={() => onToggleEmpty(!highlightEmpty)}
