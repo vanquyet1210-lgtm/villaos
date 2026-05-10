@@ -54,6 +54,9 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
     const iv = setInterval(poll, 30000);
     return () => clearInterval(iv);
   }, []);
+
+  useEffect(() => {
+    const onScroll = () => {
       const y = window.scrollY;
       setNavHidden(y > lastYRef.current && y > 60);
       lastYRef.current = y;
