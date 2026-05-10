@@ -194,6 +194,27 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
     return () => clearInterval(interval);
   }, [userRole, villas]);
 
+  // Load tất cả hold của sale (cross-villa) cho owner xem
+  const [allOwnerHolds, setAllOwnerHolds] = useState<Booking[]>([]);
+  useEffect(() => {
+    if (userRole !== 'owner' && userRole !== 'admin') return;
+    const fetchHolds = () => {
+      Promise.all(villas.map(v => fetchVillaBookingsAction(v.id)))
+        .then(results => {
+          const holds = results.flat().filter(b =>
+            b.status === 'hold' &&
+            b.createdByRole === 'sale' &&
+            b.holdExpiresAt &&
+            new Date(b.holdExpiresAt).getTime() > Date.now()
+          );
+          setAllOwnerHolds(holds);
+        });
+    };
+    fetchHolds();
+    const interval = setInterval(fetchHolds, 30000);
+    return () => clearInterval(interval);
+  }, [userRole, villas]);
+
   // ── Form state (create booking) ────────────────────────────────
   const [customer,  setCustomer]  = useState('');
   const [phone,     setPhone]     = useState('');
@@ -316,6 +337,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
       const result = await confirmHold(id);
       if (result.error) { show('error', 'Lỗi', result.error); return; }
       show('success', '✅ Đã xác nhận booking');
+      setAllOwnerHolds(prev => prev.filter(b => b.id !== id));
       closeModal(); router.refresh();
     });
   }
@@ -327,6 +349,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
       const result = await cancelBooking(id);
       if (result.error) { show('error', 'Lỗi', result.error); return; }
       show('info', 'Đã hủy booking');
+      setAllOwnerHolds(prev => prev.filter(b => b.id !== id));
       closeModal(); router.refresh();
     });
   }
@@ -548,12 +571,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
 
       {/* ── YÊU CẦU GIỮ PHÒNG — owner thấy bên dưới lịch ─────── */}
       {userRole === 'owner' && (() => {
-        const pendingHolds = bookings.filter(b =>
-          b.status === 'hold' &&
-          b.createdByRole === 'sale' &&
-          b.holdExpiresAt &&
-          new Date(b.holdExpiresAt).getTime() > Date.now()
-        );
+        const pendingHolds = allOwnerHolds;
         if (!pendingHolds.length) return null;
         return (
           <div className="hold-requests-luxury">
