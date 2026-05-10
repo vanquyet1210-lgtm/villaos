@@ -192,7 +192,8 @@ export default function DashboardAccordion({ upcoming, holdHistory, revenue, kyc
                   {villas.length === 0
                     ? <p className="acc-empty">Chưa có villa nào.</p>
                     : villas.map(v => (
-                      <div key={v.id} className="acc-row">
+                      <Link key={v.id} href={`/owner/villas/${v.id}/edit`} style={{ textDecoration:'none', display:'block' }}>
+                      <div className="acc-row villa-acc-row">
                         <div className="villa-acc-thumb">
                           {v.images[0]
                             ? <img src={v.images[0]} alt={v.name} style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:8 }} />
@@ -207,9 +208,10 @@ export default function DashboardAccordion({ upcoming, holdHistory, revenue, kyc
                           <span className={`villa-acc-badge ${v.status === 'active' ? 'villa-acc-badge--active' : 'villa-acc-badge--off'}`}>
                             {v.status === 'active' ? 'Hoạt động' : 'Dừng'}
                           </span>
-                          <Link href={`/owner/villas/${v.id}/edit`} style={{ fontSize:'0.68rem', color:'#8A8F9A', textDecoration:'none', marginTop:4 }}>Sửa →</Link>
+                          <span style={{ fontSize:'0.68rem', color:'#8A8F9A', marginTop:4 }}>Chỉnh sửa →</span>
                         </div>
                       </div>
+                      </Link>
                     ))
                   }
                 </>
@@ -424,6 +426,13 @@ export default function DashboardAccordion({ upcoming, holdHistory, revenue, kyc
         }
         .villa-acc-badge--active { background:rgba(201,168,76,.12); color:#8B6914; border:1px solid rgba(201,168,76,.3); }
         .villa-acc-badge--off    { background:rgba(90,90,90,.08);   color:#666;    border:1px solid rgba(90,90,90,.15); }
+        .villa-acc-row {
+          cursor:     pointer;
+          transition: background .12s;
+          border-radius: 8px;
+          margin: 2px 0;
+        }
+        .villa-acc-row:hover { background: rgba(201,168,76,.05); }
 
         .guide-list { display:flex; flex-direction:column; gap:0; }
         .guide-row {
