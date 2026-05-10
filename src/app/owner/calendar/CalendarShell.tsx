@@ -203,7 +203,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   const [checkin,   setCheckin]   = useState('');
   const [checkout,  setCheckout]  = useState('');
   const [formError, setFormError] = useState<string | null>(null);
-  const [holdSuccess, setHoldSuccess] = useState<{ hotline: string } | null>(null);
+  const [holdSuccess, setHoldSuccess] = useState<{ hotline: string; villaName: string } | null>(null);
 
   function openCreateModal(dateStr: string) {
     const co = addDays(dateStr, 1);
@@ -301,7 +301,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         // Hiện popup thành công với hotline
         closeModal();
         router.refresh();
-        setHoldSuccess({ hotline: (villa as any).phone ?? '' });
+        setHoldSuccess({ hotline: (villa as any).phone ?? '', villaName: villa.name ?? '' });
       } else {
         show('success', bookStatus === 'hold' ? '⏳ Đã tạo Hold' : '✅ Đã tạo Booking', `${customer} · ${formatDate(checkin)} → ${formatDate(checkout)}`);
         closeModal();
@@ -540,7 +540,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         year={year}
         onMonthChange={(y, m) => { setYear(y); setMonth(m); }}
         onDayClick={handleDayClick}
-        hotline={(villa as any).phone ?? ''}
+        hotline={userRole !== 'sale' ? ((villa as any).phone ?? '') : ''}
         role={userRole}
         highlightEmpty={highlightEmpty}
         onToggleEmpty={(userRole === 'sale' || userRole === 'owner') ? (v) => setHighlightEmpty(v) : undefined}
@@ -732,7 +732,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
                       <span className="detail-meta-icon">👥</span>
                       <div><div className="detail-meta-label">Sức chứa</div><div className="detail-meta-val">{detailVilla.adults} người lớn{detailVilla.children > 0 ? ` · ${detailVilla.children} trẻ em` : ''}</div></div>
                     </div>
-                    {detailVilla.phone && (
+                    {detailVilla.phone && userRole !== 'sale' && (
                       <div className="detail-meta-item">
                         <span className="detail-meta-icon">📞</span>
                         <div><div className="detail-meta-label">Hotline</div>
@@ -785,13 +785,18 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           <div className="hold-success-box" onClick={e => e.stopPropagation()}>
             <div className="hold-success-icon">✅</div>
             <h3 className="hold-success-title">Giữ phòng thành công!</h3>
+            {holdSuccess.villaName && (
+              <div className="hold-success-villa">{holdSuccess.villaName}</div>
+            )}
             <p className="hold-success-note">
               Bạn có thể chủ động liên hệ với chủ nhà theo hotline hoặc đợi chủ nhà tự xác nhận.
             </p>
-            {holdSuccess.hotline && (
+            {holdSuccess.hotline ? (
               <a href={`tel:${holdSuccess.hotline}`} className="hold-success-hotline">
                 📞 {holdSuccess.hotline}
               </a>
+            ) : (
+              <p className="hold-success-no-hotline">Chủ nhà chưa cài hotline — vui lòng đợi xác nhận.</p>
             )}
             <button className="hold-success-btn" onClick={() => setHoldSuccess(null)}>
               Hoàn thành
@@ -1474,7 +1479,21 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           font-size:     1.2rem;
           font-weight:   400;
           color:         #1C2B4A;
-          margin:        0 0 12px;
+          margin:        0 0 6px;
+        }
+        .hold-success-villa {
+          font-size:     0.8rem;
+          font-weight:   600;
+          color:         #C9A84C;
+          letter-spacing:0.04em;
+          text-transform:uppercase;
+          margin-bottom: 10px;
+        }
+        .hold-success-no-hotline {
+          font-size:   0.78rem;
+          color:       #8A8F9A;
+          margin:      0 0 16px;
+          font-style:  italic;
         }
         .hold-success-note {
           font-size:     0.83rem;
