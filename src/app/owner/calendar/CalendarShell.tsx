@@ -546,6 +546,99 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         onToggleEmpty={(userRole === 'sale' || userRole === 'owner') ? (v) => setHighlightEmpty(v) : undefined}
       />
 
+      {/* ── YÊU CẦU GIỮ PHÒNG — owner thấy bên dưới lịch ─────── */}
+      {userRole === 'owner' && (() => {
+        const pendingHolds = bookings.filter(b =>
+          b.status === 'hold' &&
+          b.createdByRole === 'sale' &&
+          b.holdExpiresAt &&
+          new Date(b.holdExpiresAt).getTime() > Date.now()
+        );
+        if (!pendingHolds.length) return null;
+        return (
+          <div className="hold-requests-luxury">
+            {/* Section label */}
+            <div className="hold-req-label">
+              Yêu cầu giữ phòng
+              <span className="hold-req-count">{pendingHolds.length}</span>
+              <span className="hold-req-line" />
+            </div>
+
+            <div className="hold-req-list">
+              {pendingHolds.map(b => {
+                const nights   = calcNights(b.checkin, b.checkout);
+                const bVilla   = villas.find(v => v.id === b.villaId);
+                const exp      = new Date(b.holdExpiresAt!);
+                const minLeft  = Math.max(0, Math.round((exp.getTime() - Date.now()) / 60000));
+                const urgent   = minLeft <= 10;
+                return (
+                  <div key={b.id} className={`hold-req-card${urgent ? ' hold-req-card--urgent' : ''}`}>
+
+                    {/* Top: sale info + timer */}
+                    <div className="hold-req-top">
+                      <div className="hold-req-sale">
+                        <div className="hold-req-sale-avatar">
+                          {(b.createdByName ?? 'S').charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="hold-req-sale-name">{b.createdByName ?? b.createdBy ?? 'Sale'}</div>
+                          {b.createdByPhone && (
+                            <a href={`tel:${b.createdByPhone}`} className="hold-req-sale-phone">
+                              📞 {b.createdByPhone}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      <div className={`hold-req-timer${urgent ? ' hold-req-timer--urgent' : ''}`}>
+                        ⏱ {minLeft} phút
+                      </div>
+                    </div>
+
+                    {/* Middle: booking info */}
+                    <div className="hold-req-body">
+                      {bVilla && (
+                        <div className="hold-req-villa">{bVilla.emoji} {bVilla.name}</div>
+                      )}
+                      <div className="hold-req-dates">
+                        📅 {formatDate(b.checkin)} → {formatDate(b.checkout)}
+                        <span className="hold-req-sep">·</span>
+                        🌙 {nights} đêm
+                        <span className="hold-req-sep">·</span>
+                        <span className="hold-req-price">{fmtMoney(b.total)}</span>
+                      </div>
+                      <div className="hold-req-guest">
+                        👤 {b.customer}
+                        {b.phone && <span className="hold-req-sep">· 📞 {b.phone}</span>}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="hold-req-actions">
+                      <button
+                        className="hold-req-btn hold-req-btn--reject"
+                        disabled={isPending}
+                        onClick={() => handleCancel(b.id)}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        Từ chối
+                      </button>
+                      <button
+                        className="hold-req-btn hold-req-btn--approve"
+                        disabled={isPending}
+                        onClick={() => handleConfirm(b.id)}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        Duyệt
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── HOLD ĐANG CHỜ DUYỆT — chỉ sale ────────────────────── */}
       {userRole === 'sale' && (() => {
         // Dùng allSaleHolds — hiện tất cả hold kể cả khi đổi villa
@@ -605,85 +698,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
           </div>
         );
       })()}
-
-      {/* ── YÊU CẦU GIỮ PHÒNG — chỉ owner ─────────────────────── */}
-      {userRole === 'owner' && (() => {
-        const pendingHolds = bookings.filter(b =>
-          b.status === 'hold' &&
-          b.createdByRole === 'sale' &&
-          b.holdExpiresAt &&
-          new Date(b.holdExpiresAt).getTime() > Date.now()
-        );
-        if (!pendingHolds.length) return null;
-        return (
-          <div className="hold-requests">
-            <div className="hold-requests__header">
-              <span className="hold-requests__title">
-                ⏳ Yêu cầu giữ phòng
-              </span>
-              <span className="hold-requests__badge">{pendingHolds.length}</span>
-            </div>
-            <div className="hold-requests__list">
-              {pendingHolds.map(b => {
-                const nights = calcNights(b.checkin, b.checkout);
-                const villa  = villas.find(v => v.id === b.villaId);
-                const exp    = new Date(b.holdExpiresAt!);
-                const minLeft = Math.max(0, Math.round((exp.getTime() - Date.now()) / 60000));
-                return (
-                  <div key={b.id} className="hold-card">
-                    <div className="hold-card__info">
-                      <div className="hold-card__sale">
-                        🏷️ <strong>{b.createdByName ?? b.createdBy}</strong>
-                        {b.createdByPhone && (
-                          <a href={`tel:${b.createdByPhone}`} className="hold-card__phone">
-                            &nbsp;· 📞 {b.createdByPhone}
-                          </a>
-                        )}
-                      </div>
-                      <div className="hold-card__meta">
-                        <span>📅 {formatDate(b.checkin)} → {formatDate(b.checkout)}</span>
-                        <span className="hold-card__dot">·</span>
-                        <span>🌙 {nights} đêm</span>
-                        <span className="hold-card__dot">·</span>
-                        <span>💰 {fmtMoney(b.total)}</span>
-                        {villa && (
-                          <>
-                            <span className="hold-card__dot">·</span>
-                            <span>{villa.emoji} {villa.name}</span>
-                          </>
-                        )}
-                      </div>
-                      <div className="hold-card__guest">
-                        👤 {b.customer} · {b.phone}
-                      </div>
-                      <div className="hold-card__timer">
-                        ⏱ Còn {minLeft} phút để duyệt
-                      </div>
-                    </div>
-                    <div className="hold-card__actions">
-                      <button
-                        className="hold-btn hold-btn--reject"
-                        disabled={isPending}
-                        onClick={() => handleCancel(b.id)}
-                      >
-                        ✕ Từ chối
-                      </button>
-                      <button
-                        className="hold-btn hold-btn--approve"
-                        disabled={isPending}
-                        onClick={() => handleConfirm(b.id)}
-                      >
-                        ✓ Duyệt
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
-
 
       {/* ── VILLA DETAIL MODAL ───────────────────────────────── */}
       {showDetail && createPortal(
@@ -1445,6 +1459,172 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         }
         .amenity-chip:hover { border-color: var(--sage); background: var(--sage-pale); }
         .amenity-chip.active { background: var(--forest); border-color: var(--forest); color: white; font-weight: 600; }
+        /* ── Hold Requests Luxury (owner, below calendar) ── */
+        .hold-requests-luxury { margin-top: 20px; }
+        .hold-req-label {
+          display:        flex;
+          align-items:    center;
+          gap:            8px;
+          font-size:      0.62rem;
+          font-weight:    600;
+          color:          #C9A84C;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          margin-bottom:  12px;
+        }
+        .hold-req-count {
+          background:  #1C2B4A;
+          color:       #C9A84C;
+          border-radius: 99px;
+          padding:     1px 7px;
+          font-size:   0.6rem;
+        }
+        .hold-req-line {
+          flex:       1;
+          height:     0.5px;
+          background: linear-gradient(90deg,rgba(201,168,76,.4),transparent);
+        }
+        .hold-req-list { display:flex; flex-direction:column; gap:10px; }
+        .hold-req-card {
+          background:    #fff;
+          border:        1px solid rgba(201,168,76,.2);
+          border-radius: 14px;
+          overflow:      hidden;
+          box-shadow:    0 2px 10px rgba(28,43,74,.06);
+          transition:    box-shadow .2s;
+        }
+        .hold-req-card:hover { box-shadow: 0 4px 18px rgba(28,43,74,.10); }
+        .hold-req-card--urgent {
+          border-color: rgba(120,48,63,.3);
+          background:   rgba(120,48,63,.02);
+        }
+
+        /* Top row */
+        .hold-req-top {
+          display:         flex;
+          align-items:     center;
+          justify-content: space-between;
+          padding:         12px 14px 8px;
+          border-bottom:   0.5px solid rgba(28,43,74,.06);
+        }
+        .hold-req-sale {
+          display:     flex;
+          align-items: center;
+          gap:         10px;
+        }
+        .hold-req-sale-avatar {
+          width:           32px; height: 32px;
+          border-radius:   50%;
+          background:      linear-gradient(135deg,#1C2B4A,#2E4270);
+          color:           #C9A84C;
+          display:         flex;
+          align-items:     center;
+          justify-content: center;
+          font-family:     Georgia,serif;
+          font-style:      italic;
+          font-size:       0.9rem;
+          flex-shrink:     0;
+        }
+        .hold-req-sale-name {
+          font-size:   0.82rem;
+          font-weight: 600;
+          color:       #1C2B4A;
+        }
+        .hold-req-sale-phone {
+          font-size:       0.72rem;
+          color:           #8B6914;
+          text-decoration: none;
+          font-weight:     500;
+          display:         block;
+          margin-top:      1px;
+        }
+        .hold-req-sale-phone:hover { text-decoration: underline; }
+        .hold-req-timer {
+          font-size:   0.72rem;
+          font-weight: 600;
+          color:       #8B6914;
+          background:  rgba(201,168,76,.1);
+          border:      1px solid rgba(201,168,76,.25);
+          border-radius: 99px;
+          padding:     3px 10px;
+          white-space: nowrap;
+        }
+        .hold-req-timer--urgent {
+          color:       #78303F;
+          background:  rgba(120,48,63,.08);
+          border-color:rgba(120,48,63,.25);
+        }
+
+        /* Body */
+        .hold-req-body {
+          padding:  8px 14px 10px;
+          display:  flex;
+          flex-direction: column;
+          gap:      4px;
+        }
+        .hold-req-villa {
+          font-family: Georgia,serif;
+          font-style:  italic;
+          font-size:   0.88rem;
+          color:       #1C2B4A;
+        }
+        .hold-req-dates {
+          font-size:   0.75rem;
+          color:       #8A8F9A;
+          display:     flex;
+          align-items: center;
+          flex-wrap:   wrap;
+          gap:         4px;
+        }
+        .hold-req-price {
+          font-family: Georgia,serif;
+          font-style:  italic;
+          color:       #1C2B4A;
+          font-size:   0.82rem;
+        }
+        .hold-req-sep { opacity:.4; }
+        .hold-req-guest {
+          font-size:   0.75rem;
+          color:       #4A5568;
+          font-weight: 500;
+        }
+
+        /* Actions */
+        .hold-req-actions {
+          display:     flex;
+          gap:         8px;
+          padding:     10px 14px;
+          border-top:  0.5px solid rgba(28,43,74,.06);
+          background:  rgba(247,245,240,.6);
+        }
+        .hold-req-btn {
+          flex:            1;
+          display:         flex;
+          align-items:     center;
+          justify-content: center;
+          gap:             6px;
+          height:          36px;
+          border-radius:   10px;
+          border:          none;
+          font-size:       0.82rem;
+          font-weight:     600;
+          cursor:          pointer;
+          transition:      opacity .15s, transform .1s;
+          letter-spacing:  0.02em;
+        }
+        .hold-req-btn:hover:not(:disabled)  { opacity:.88; transform:translateY(-1px); }
+        .hold-req-btn:disabled { opacity:.5; cursor:not-allowed; }
+        .hold-req-btn--reject {
+          background: rgba(120,48,63,.08);
+          color:      #78303F;
+          border:     1px solid rgba(120,48,63,.2);
+        }
+        .hold-req-btn--approve {
+          background: #1C2B4A;
+          color:      #fff;
+        }
+        .hold-req-btn--approve:hover:not(:disabled) { background: #2E4270; }
+
         /* ── Hold Success Popup ── */
         .hold-success-overlay {
           position:        fixed;
