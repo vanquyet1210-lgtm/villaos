@@ -203,6 +203,7 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   const [checkin,   setCheckin]   = useState('');
   const [checkout,  setCheckout]  = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [holdSuccess, setHoldSuccess] = useState<{ hotline: string } | null>(null);
 
   function openCreateModal(dateStr: string) {
     const co = addDays(dateStr, 1);
@@ -295,9 +296,17 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
       });
 
       if (result.error) { setFormError(result.error); return; }
-      show('success', bookStatus === 'hold' ? '⏳ Đã tạo Hold' : '✅ Đã tạo Booking', `${customer} · ${formatDate(checkin)} → ${formatDate(checkout)}`);
-      closeModal();
-      router.refresh();
+
+      if (userRole === 'sale' && bookStatus === 'hold') {
+        // Hiện popup thành công với hotline
+        closeModal();
+        router.refresh();
+        setHoldSuccess({ hotline: (villa as any).phone ?? '' });
+      } else {
+        show('success', bookStatus === 'hold' ? '⏳ Đã tạo Hold' : '✅ Đã tạo Booking', `${customer} · ${formatDate(checkin)} → ${formatDate(checkout)}`);
+        closeModal();
+        router.refresh();
+      }
     });
   }
 
@@ -770,6 +779,27 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
       )}
 
       {/* ── MODAL ─────────────────────────────────────────────── */}
+      {/* ── Hold Success Popup (sale) ── */}
+      {holdSuccess && (
+        <div className="hold-success-overlay" onClick={() => setHoldSuccess(null)}>
+          <div className="hold-success-box" onClick={e => e.stopPropagation()}>
+            <div className="hold-success-icon">✅</div>
+            <h3 className="hold-success-title">Giữ phòng thành công!</h3>
+            <p className="hold-success-note">
+              Bạn có thể chủ động liên hệ với chủ nhà theo hotline hoặc đợi chủ nhà tự xác nhận.
+            </p>
+            {holdSuccess.hotline && (
+              <a href={`tel:${holdSuccess.hotline}`} className="hold-success-hotline">
+                📞 {holdSuccess.hotline}
+              </a>
+            )}
+            <button className="hold-success-btn" onClick={() => setHoldSuccess(null)}>
+              Hoàn thành
+            </button>
+          </div>
+        </div>
+      )}
+
       {modal && (
         <div className="modal-overlay" onClick={closeModal}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -791,8 +821,8 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
                 <div className="modal-body">
                   <div className="form-row">
                     <div className="field-group" style={{ flex: 1 }}>
-                      <label>Tên khách *</label>
-                      <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="Nguyễn Văn A" />
+                      <label>{userRole === 'sale' ? 'Tên sale *' : 'Tên khách *'}</label>
+                      <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder={userRole === 'sale' ? 'Tên của bạn' : 'Nguyễn Văn A'} />
                     </div>
                     <div className="field-group" style={{ flex: 1 }}>
                       <label>Số điện thoại *</label>
@@ -1410,6 +1440,80 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         }
         .amenity-chip:hover { border-color: var(--sage); background: var(--sage-pale); }
         .amenity-chip.active { background: var(--forest); border-color: var(--forest); color: white; font-weight: 600; }
+        /* ── Hold Success Popup ── */
+        .hold-success-overlay {
+          position:        fixed;
+          inset:           0;
+          background:      rgba(28,43,74,.45);
+          backdrop-filter: blur(4px);
+          z-index:         1000;
+          display:         flex;
+          align-items:     center;
+          justify-content: center;
+          padding:         24px;
+          animation:       fadeIn .2s ease;
+        }
+        .hold-success-box {
+          background:    #FAFAF8;
+          border-radius: 20px;
+          padding:       32px 24px 24px;
+          max-width:     340px;
+          width:         100%;
+          text-align:    center;
+          box-shadow:    0 16px 48px rgba(28,43,74,.18);
+          animation:     slideUp .25s ease;
+        }
+        .hold-success-icon {
+          font-size:     3rem;
+          margin-bottom: 12px;
+          line-height:   1;
+        }
+        .hold-success-title {
+          font-family:   Georgia, serif;
+          font-style:    italic;
+          font-size:     1.2rem;
+          font-weight:   400;
+          color:         #1C2B4A;
+          margin:        0 0 12px;
+        }
+        .hold-success-note {
+          font-size:     0.83rem;
+          color:         #8A8F9A;
+          line-height:   1.6;
+          margin:        0 0 16px;
+        }
+        .hold-success-hotline {
+          display:         inline-flex;
+          align-items:     center;
+          gap:             6px;
+          padding:         8px 20px;
+          background:      rgba(201,168,76,.1);
+          border:          1px solid rgba(201,168,76,.35);
+          border-radius:   99px;
+          color:           #8B6914;
+          font-size:       0.9rem;
+          font-weight:     600;
+          text-decoration: none;
+          margin-bottom:   16px;
+          transition:      background .15s;
+        }
+        .hold-success-hotline:hover { background: rgba(201,168,76,.2); }
+        .hold-success-btn {
+          display:      block;
+          width:        100%;
+          padding:      12px;
+          background:   #1C2B4A;
+          color:        white;
+          border:       none;
+          border-radius:12px;
+          font-size:    0.9rem;
+          font-weight:  500;
+          cursor:       pointer;
+          transition:   opacity .15s;
+          letter-spacing: 0.02em;
+        }
+        .hold-success-btn:hover { opacity: .88; }
+
         /* ── Detail modal ── */
         .modal-detail {
           max-width:  820px;

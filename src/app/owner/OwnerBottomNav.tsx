@@ -6,7 +6,6 @@ import Link                             from 'next/link';
 import { usePathname }                  from 'next/navigation';
 import { useState, useEffect, useRef }  from 'react';
 import { logoutAction }                 from '@/lib/services/auth.service';
-
 interface Props {
   isAdmin:  boolean;
   userName: string;
@@ -16,8 +15,11 @@ interface Props {
 export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
   const pathname  = usePathname();
   const [menu, setMenu]           = useState(false);
+  const [guide, setGuide]         = useState(false);
   const [navHidden, setNavHidden] = useState(false);
-  const lastYRef = useRef(0);
+  const lastYRef  = useRef(0);
+  const menuRef   = useRef<HTMLDivElement>(null);
+  const btnRef    = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const onScroll = () => {
@@ -28,6 +30,23 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Đóng menu khi chạm ra ngoài
+  useEffect(() => {
+    if (!menu) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as Node) &&
+        btnRef.current  && !btnRef.current.contains(e.target as Node)
+      ) { setMenu(false); setGuide(false); }
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [menu]);
 
   const tabs = [
     {
@@ -77,7 +96,7 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
             <div className="mob-topbar__sub">{brand || userName}</div>
           </div>
         </div>
-        <button className="mob-topbar__more" onClick={() => setMenu(v => !v)} aria-label="Menu">
+        <button ref={btnRef} className="mob-topbar__more" onClick={() => { setMenu(v => !v); setGuide(false); }} aria-label="Menu">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="5"  cy="12" r="2"/>
             <circle cx="12" cy="12" r="2"/>
@@ -86,42 +105,74 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
         </button>
 
         {menu && (
-          <>
-            <div className="mob-menu-backdrop" onClick={() => setMenu(false)} />
-            <div className="mob-menu">
-              {isAdmin && (
-                <>
-                  <Link href="/admin/dashboard" className="mob-menu__item" onClick={() => setMenu(false)}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                    Admin Panel
-                  </Link>
-                  <Link href="/admin/users" className="mob-menu__item" onClick={() => setMenu(false)}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    Quản lý Users
-                  </Link>
-                  <div className="mob-menu__divider" />
-                </>
-              )}
-              <div className="mob-menu__user">
-                <div className="mob-menu__avatar">{userName.charAt(0).toUpperCase()}</div>
-                <div>
-                  <div style={{ fontWeight:600, fontSize:'0.85rem', color:'var(--navy,#1C2B4A)' }}>{userName}</div>
-                  <div style={{ fontSize:'0.7rem', color:'var(--ink-muted)', letterSpacing:'0.04em', textTransform:'uppercase' }}>{brand || 'Chủ Villa'}</div>
-                </div>
+          <div ref={menuRef} className="mob-menu">
+            {isAdmin && (
+              <>
+                <Link href="/admin/dashboard" className="mob-menu__item" onClick={() => setMenu(false)}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  Admin Panel
+                </Link>
+                <Link href="/admin/users" className="mob-menu__item" onClick={() => setMenu(false)}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  Quản lý Users
+                </Link>
+                <div className="mob-menu__divider" />
+              </>
+            )}
+            <div className="mob-menu__user">
+              <div className="mob-menu__avatar">{userName.charAt(0).toUpperCase()}</div>
+              <div>
+                <div style={{ fontWeight:600, fontSize:'0.85rem', color:'#1C2B4A' }}>{userName}</div>
+                <div style={{ fontSize:'0.7rem', color:'var(--ink-muted)', letterSpacing:'0.04em', textTransform:'uppercase' }}>{brand || 'Chủ Villa'}</div>
               </div>
-              <div className="mob-menu__divider" />
-              <form action={logoutAction}>
-                <button type="submit" className="mob-menu__item mob-menu__item--danger">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                    <polyline points="16 17 21 12 16 7"/>
-                    <line x1="21" y1="12" x2="9" y2="12"/>
-                  </svg>
-                  Đăng xuất
-                </button>
-              </form>
             </div>
-          </>
+            <div className="mob-menu__divider" />
+
+            {/* Hướng dẫn */}
+            <button className="mob-menu__item" onClick={() => setGuide(v => !v)}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              Hướng dẫn sử dụng
+              <svg style={{ marginLeft:'auto', transition:'transform .2s', transform: guide ? 'rotate(180deg)' : 'none' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+
+            {guide && (
+              <div className="mob-guide">
+                {[
+                  { num:'1', title:'Thêm villa', desc:'Tab "Villa" → "+ Thêm villa mới". Điền tên, địa chỉ, số phòng, giá/đêm, ảnh, tiện ích và số hotline. Nhấn Lưu.' },
+                  { num:'2', title:'Cài hotline', desc:'Điền số hotline trong trang chỉnh sửa villa. Sale sẽ thấy số này sau khi tạo hold để chủ động liên hệ với bạn.' },
+                  { num:'3', title:'Đọc lịch', desc:'Ô trắng: còn trống. Xanh đậm: đã có booking (tên khách + giá). Vàng: đang hold chờ xác nhận. Đỏ: ngày bạn khóa.' },
+                  { num:'4', title:'Khóa ngày', desc:'Bấm vào ô ngày trống → "Khóa phòng". Dùng khi villa đang bảo trì hoặc bạn muốn nghỉ. Bấm lại để mở khóa.' },
+                  { num:'5', title:'Xác nhận hold', desc:'Khi sale tạo hold, ô vàng xuất hiện. Bấm vào → "Xác nhận" để chuyển thành Đã đặt, hoặc "Hủy" nếu không phù hợp.' },
+                  { num:'6', title:'Doanh thu', desc:'"Tổng quan" → mở mục Doanh thu. Xem tháng này, tháng trước, năm nay và biểu đồ 6 tháng theo từng villa.' },
+                  { num:'7', title:'KYC', desc:'Hoàn thành xác minh danh tính để mở tính năng thanh toán và tăng độ tin cậy với sale và khách hàng.' },
+                ].map(s => (
+                  <div key={s.num} className="mob-guide__step">
+                    <div className="mob-guide__num">{s.num}</div>
+                    <div>
+                      <div className="mob-guide__title">{s.title}</div>
+                      <div className="mob-guide__desc">{s.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mob-menu__divider" />
+            <form action={logoutAction}>
+              <button type="submit" className="mob-menu__item mob-menu__item--danger">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                Đăng xuất
+              </button>
+            </form>
+          </div>
         )}
       </header>
 
@@ -205,19 +256,20 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
           .mob-topbar__more:hover { background: rgba(201,168,76,.1); border-color: rgba(201,168,76,.3); }
 
           /* ── Dropdown ── */
-          .mob-menu-backdrop { position:fixed; inset:0; z-index:290; }
           .mob-menu {
             position:        fixed;
             top:             calc(56px + env(safe-area-inset-top) + 6px);
             right:           12px;
-            min-width:       210px;
-            background:      rgba(247,245,240,0.95);
+            min-width:       260px;
+            max-width:       calc(100vw - 24px);
+            max-height:      75vh;
+            overflow-y:      auto;
+            background:      rgba(247,245,240,0.97);
             backdrop-filter: blur(16px);
             border-radius:   16px;
-            box-shadow:      0 8px 32px rgba(28,43,74,.14);
+            box-shadow:      0 8px 32px rgba(28,43,74,.16);
             border:          1px solid rgba(201,168,76,.15);
             z-index:         310;
-            overflow:        hidden;
             animation:       mobMenuIn .15s ease;
           }
           @keyframes mobMenuIn {
@@ -258,6 +310,44 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
           .mob-menu__item:hover        { background: rgba(201,168,76,.08); }
           .mob-menu__item--danger      { color: #c0392b; }
           .mob-menu__item--danger:hover{ background: rgba(192,57,43,.06); }
+
+          /* Guide steps */
+          .mob-guide {
+            padding:       8px 14px 12px;
+            border-bottom: 0.5px solid rgba(28,43,74,.06);
+            display:       flex;
+            flex-direction:column;
+            gap:           10px;
+          }
+          .mob-guide__step {
+            display:     flex;
+            align-items: flex-start;
+            gap:         10px;
+          }
+          .mob-guide__num {
+            width:           22px; height: 22px;
+            border-radius:   50%;
+            background:      #1C2B4A;
+            color:           #C9A84C;
+            font-size:       0.68rem;
+            font-weight:     600;
+            display:         flex;
+            align-items:     center;
+            justify-content: center;
+            flex-shrink:     0;
+            margin-top:      1px;
+          }
+          .mob-guide__title {
+            font-size:   0.82rem;
+            font-weight: 600;
+            color:       #1C2B4A;
+            margin-bottom: 2px;
+          }
+          .mob-guide__desc {
+            font-size:   0.73rem;
+            color:       #8A8F9A;
+            line-height: 1.5;
+          }
 
           /* ── Bottom Nav ── */
           .mob-bottom-nav {

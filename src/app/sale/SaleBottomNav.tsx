@@ -136,9 +136,9 @@ export default function SaleBottomNav({ userName }: Props) {
                 {[
                   { num:'1', title:'Tìm villa phù hợp', desc:'Dùng ô tìm kiếm hoặc bấm "Lọc" để lọc theo số phòng, khu vực, giá. Vuốt ngang để xem các villa.' },
                   { num:'2', title:'Xem lịch trống', desc:'Bấm vào villa để chọn. Lịch hiện ra bên dưới. Bật nút "Ngày trống" để làm nổi bật các ô còn trống.' },
-                  { num:'3', title:'Chọn ngày', desc:'Bấm vào ô ngày trống trên lịch — ô xanh là còn trống, ô xám/màu là đã có booking.' },
-                  { num:'4', title:'Đặt lệnh Hold', desc:'Điền tên, số điện thoại khách. Bấm "Giữ ngày (Hold)" để tạo lệnh giữ chỗ cho khách.' },
-                  { num:'5', title:'Theo dõi & xác nhận', desc:'Vào tab "Booking" để xem danh sách hold. Liên hệ khách, sau đó chuyển trạng thái sang Đã đặt khi có cọc.' },
+                  { num:'3', title:'Chọn ngày', desc:'Bấm vào ô ngày trống trên lịch. Ô trắng: còn trống. Ô vàng: đang hold. Ô đỏ: chủ nhà khóa. Ô xanh đậm: đã có booking.' },
+                  { num:'4', title:'Đặt lệnh Hold', desc:'Điền tên sale và số điện thoại khách. Bấm "Giữ chỗ 30 phút" để tạo lệnh giữ chỗ.' },
+                  { num:'5', title:'Theo dõi & xác nhận', desc:'Bạn có thể chủ động liên hệ với chủ nhà theo hotline hoặc đợi chủ nhà tự xác nhận.' },
                 ].map(s => (
                   <div key={s.num} className="mob-guide__step">
                     <div className="mob-guide__num">{s.num}</div>
