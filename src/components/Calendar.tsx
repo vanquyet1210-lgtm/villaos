@@ -380,6 +380,14 @@ export default function Calendar({
 
     const isSaleView = role === 'sale';
     const label = p.seg.saleLabel ?? p.seg.fullName ?? p.seg.customer;
+
+    // Giá ngắn cho mobile
+    const totalFull  = seg.total.toLocaleString('vi-VN') + 'đ';
+    const totalShort = seg.total >= 1_000_000
+      ? (seg.total / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'tr'
+      : seg.total >= 1_000
+        ? (seg.total / 1_000).toFixed(0) + 'k'
+        : totalFull;
     // full pill radius
     const rL = isFirst ? BAR_H / 2 : 0;
     const rR = isLast  ? BAR_H / 2 : 0;
@@ -426,9 +434,9 @@ export default function Calendar({
           }} />
         )}
 
-        {/* OWNER/ADMIN VIEW: tên khách + số điện thoại */}
+        {/* OWNER/ADMIN VIEW: tên khách + số điện thoại — ẩn trên mobile */}
         {!isSaleView && isFirst && label && (
-          <span style={{
+          <span className="cal-bar-label" style={{
             paddingLeft:  8,
             paddingRight: isLast ? 60 : 4,
             fontSize:     '0.62rem',
@@ -450,14 +458,17 @@ export default function Calendar({
           </span>
         )}
 
-        {/* OWNER/ADMIN VIEW: total ở cuối bar */}
+        {/* OWNER/ADMIN VIEW: total ở cuối bar — giá ngắn mobile, đầy đủ desktop */}
         {!isSaleView && isLast && seg.total > 0 && (
           <span style={{
             position:   'absolute', right: 6,
             display:    'flex', alignItems: 'center', gap: 3, flexShrink: 0,
           }}>
-            <span style={{ fontSize:'0.58rem', fontWeight:600, color:'rgba(255,255,255,.9)', whiteSpace:'nowrap', letterSpacing:'0.02em' }}>
-              {seg.total.toLocaleString('vi-VN')}đ
+            <span className="cal-bar-price-full" style={{ fontSize:'0.58rem', fontWeight:600, color:'rgba(255,255,255,.9)', whiteSpace:'nowrap', letterSpacing:'0.02em' }}>
+              {totalFull}
+            </span>
+            <span className="cal-bar-price-short" style={{ fontSize:'0.62rem', fontWeight:600, color:'rgba(255,255,255,.9)', whiteSpace:'nowrap' }}>
+              {totalShort}
             </span>
             {seg.status === 'confirmed' && (
               <span style={{
@@ -812,6 +823,14 @@ export default function Calendar({
         @media (max-width: 600px) {
           .cal-dn { font-size: 0.72rem; }
           .cal-title { font-size: 0.95rem; }
+          /* Mobile: ẩn tên/SĐT trên bar, chỉ show giá ngắn */
+          .cal-bar-label        { display: none !important; }
+          .cal-bar-price-full   { display: none !important; }
+          .cal-bar-price-short  { display: inline !important; }
+        }
+        @media (min-width: 601px) {
+          .cal-bar-price-full   { display: inline !important; }
+          .cal-bar-price-short  { display: none !important; }
         }
       `}</style>
     </div>

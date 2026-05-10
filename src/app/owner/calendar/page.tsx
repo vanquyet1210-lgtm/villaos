@@ -4,7 +4,6 @@ import { getVillas }        from '@/lib/services/villa.service';
 import { redirect }         from 'next/navigation';
 import CalendarShell        from './CalendarShell';
 
-
 export const dynamic = 'force-dynamic';
 
 export default async function OwnerCalendarPage({
@@ -19,7 +18,6 @@ export default async function OwnerCalendarPage({
   const { data: _villas } = await getVillas();
   const villas = _villas ?? [];
   const firstVillaId = selectedVillaId ?? villas[0]?.id;
-  // Dùng service_role key để bypass RLS — thấy TẤT CẢ booking
   let initialBookings: any[] = [];
   if (firstVillaId) {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -66,6 +64,11 @@ export default async function OwnerCalendarPage({
       <div className="page-header">
         <h1>Xin chào, {session.profile.name} 👋</h1>
       </div>
+      <div style={{
+        height: '0.5px',
+        background: 'linear-gradient(90deg,rgba(201,168,76,.6) 0%,rgba(201,168,76,.08) 100%)',
+        marginBottom: '20px',
+      }} />
       <CalendarShell
         villas={villas}
         initialVillaId={selectedVillaId ?? villas[0].id}
