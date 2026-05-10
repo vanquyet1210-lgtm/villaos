@@ -147,7 +147,7 @@ export default async function OwnerDashboardPage() {
         upcoming={upcoming}
         holdHistory={holdHistory}
         revenue={{ thisMonth: revThisMonth, lastMonth: revLastMonth, thisYear: revThisYear, byVilla, monthly }}
-        kyc={{ status: _kyc?.status ?? 'none', submittedAt: _kyc?.created_at }}
+        kyc={{ status: (_kyc as any)?.status ?? 'none', submittedAt: (_kyc as any)?.created_at }}
       />
     </>
   );
