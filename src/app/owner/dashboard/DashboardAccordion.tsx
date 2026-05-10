@@ -31,17 +31,26 @@ export interface KycData {
   status: string; submittedAt?: string;
 }
 
+export interface VillaItem {
+  id: string; name: string; emoji: string;
+  district: string; province: string;
+  bedrooms: number; adults: number; price: number;
+  status: string; images: string[];
+}
+
 interface Props {
-  upcoming:  UpcomingBooking[];
+  upcoming:    UpcomingBooking[];
   holdHistory: HoldBooking[];
-  revenue:   RevenueData;
-  kyc:       KycData;
+  revenue:     RevenueData;
+  kyc:         KycData;
+  villas:      VillaItem[];
 }
 
 const SECTIONS = [
   { key: 'checkin',  icon: '📆', label: 'Check-in sắp tới' },
   { key: 'history',  icon: '📋', label: 'Lịch sử hold & booking' },
   { key: 'revenue',  icon: '💰', label: 'Doanh thu' },
+  { key: 'villas',   icon: '🏠', label: 'Villa của tôi' },
   { key: 'kyc',      icon: '🪪', label: 'Xác minh KYC' },
   { key: 'guide',    icon: '📖', label: 'Hướng dẫn sử dụng' },
 ];
@@ -55,7 +64,7 @@ function fmtDate(s: string) {
   return new Date(s).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
 
-export default function DashboardAccordion({ upcoming, holdHistory, revenue, kyc }: Props) {
+export default function DashboardAccordion({ upcoming, holdHistory, revenue, kyc, villas }: Props) {
   const [open, setOpen] = useState<string | null>(null);
   const toggle = (key: string) => setOpen(o => o === key ? null : key);
 
@@ -169,6 +178,40 @@ export default function DashboardAccordion({ upcoming, holdHistory, revenue, kyc
                       </div>
                     </div>
                   ))}
+                </>
+              )}
+
+              {/* VILLA CỦA TÔI */}
+              {s.key === 'villas' && (
+                <>
+                  <div style={{ display:'flex', justifyContent:'flex-end', padding:'8px 0 4px' }}>
+                    <Link href="/owner/villas/new" style={{ fontSize:'0.72rem', color:'#1C2B4A', textDecoration:'none', fontWeight:600, border:'1px solid rgba(28,43,74,.15)', borderRadius:'99px', padding:'4px 12px' }}>
+                      + Thêm villa
+                    </Link>
+                  </div>
+                  {villas.length === 0
+                    ? <p className="acc-empty">Chưa có villa nào.</p>
+                    : villas.map(v => (
+                      <div key={v.id} className="acc-row">
+                        <div className="villa-acc-thumb">
+                          {v.images[0]
+                            ? <img src={v.images[0]} alt={v.name} style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:8 }} />
+                            : <span style={{ fontSize:'1.4rem' }}>{v.emoji}</span>}
+                        </div>
+                        <div className="acc-row-info">
+                          <div className="acc-row-name">{v.name}</div>
+                          <div className="acc-row-meta">📍 {v.district}, {v.province}</div>
+                          <div className="acc-row-meta">🛏 {v.bedrooms} phòng · 👥 {v.adults} người · {fmtShort(v.price)}/đêm</div>
+                        </div>
+                        <div className="acc-row-right">
+                          <span className={`villa-acc-badge ${v.status === 'active' ? 'villa-acc-badge--active' : 'villa-acc-badge--off'}`}>
+                            {v.status === 'active' ? 'Hoạt động' : 'Dừng'}
+                          </span>
+                          <Link href={`/owner/villas/${v.id}/edit`} style={{ fontSize:'0.68rem', color:'#8A8F9A', textDecoration:'none', marginTop:4 }}>Sửa →</Link>
+                        </div>
+                      </div>
+                    ))
+                  }
                 </>
               )}
 
@@ -368,6 +411,20 @@ export default function DashboardAccordion({ upcoming, holdHistory, revenue, kyc
         .kyc-btn:hover { opacity:.85; }
 
         /* Guide */
+        .villa-acc-thumb {
+          width:56px; height:56px; border-radius:8px;
+          overflow:hidden; flex-shrink:0;
+          background:#F0EDE6;
+          display:flex; align-items:center; justify-content:center;
+        }
+        .villa-acc-badge {
+          font-size:0.6rem; font-weight:600; padding:2px 8px;
+          border-radius:99px; letter-spacing:0.04em;
+          text-transform:uppercase; white-space:nowrap;
+        }
+        .villa-acc-badge--active { background:rgba(201,168,76,.12); color:#8B6914; border:1px solid rgba(201,168,76,.3); }
+        .villa-acc-badge--off    { background:rgba(90,90,90,.08);   color:#666;    border:1px solid rgba(90,90,90,.15); }
+
         .guide-list { display:flex; flex-direction:column; gap:0; }
         .guide-row {
           display:flex; align-items:flex-start; gap:12px;

@@ -17,12 +17,43 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
   const [menu, setMenu]           = useState(false);
   const [guide, setGuide]         = useState(false);
   const [navHidden, setNavHidden] = useState(false);
+  const [holdCount, setHoldCount] = useState(0);
+  const [prevCount, setPrevCount] = useState(0);
   const lastYRef  = useRef(0);
   const menuRef   = useRef<HTMLDivElement>(null);
   const btnRef    = useRef<HTMLButtonElement>(null);
 
+  // Poll hold count mỗi 30s, phát âm khi có mới
   useEffect(() => {
-    const onScroll = () => {
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/owner/hold-count');
+        if (!res.ok) return;
+        const { count } = await res.json();
+        setHoldCount(count);
+        setPrevCount(prev => {
+          if (count > prev && prev > 0) {
+            // Phát âm thông báo
+            try {
+              const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.connect(gain); gain.connect(ctx.destination);
+              osc.frequency.setValueAtTime(880, ctx.currentTime);
+              osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+              gain.gain.setValueAtTime(0.3, ctx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+              osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+            } catch {}
+          }
+          return count;
+        });
+      } catch {}
+    };
+    poll();
+    const iv = setInterval(poll, 30000);
+    return () => clearInterval(iv);
+  }, []);
       const y = window.scrollY;
       setNavHidden(y > lastYRef.current && y > 60);
       lastYRef.current = y;
@@ -74,12 +105,15 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
       ),
     },
     {
-      href:  '/owner/villas',
-      label: 'Villa',
+      href:  '/owner/calendar?view=holds',
+      label: 'Hold',
       icon:  (a: boolean) => (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a?2.2:1.8} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
+          <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+          <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+          <line x1="6" y1="1" x2="6" y2="4"/>
+          <line x1="10" y1="1" x2="10" y2="4"/>
+          <line x1="14" y1="1" x2="14" y2="4"/>
         </svg>
       ),
     },
@@ -182,7 +216,12 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
           const active = pathname.startsWith(tab.href);
           return (
             <Link key={tab.href} href={tab.href} className={'mob-tab' + (active ? ' mob-tab--active' : '')}>
-              <span className="mob-tab__icon">{tab.icon(active)}</span>
+              <span className="mob-tab__icon" style={{ position:'relative' }}>
+                {tab.icon(active)}
+                {tab.label === 'Hold' && holdCount > 0 && (
+                  <span className="mob-tab__badge">{holdCount}</span>
+                )}
+              </span>
               <span className="mob-tab__label">{tab.label}</span>
             </Link>
           );
@@ -392,12 +431,33 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
             background:    linear-gradient(90deg, transparent, #C9A84C, transparent);
             border-radius: 0 0 2px 2px;
           }
-          .mob-tab__icon  { display:flex; align-items:center; justify-content:center; }
+          .mob-tab__icon  { display:flex; align-items:center; justify-content:center; position:relative; }
           .mob-tab__label {
             font-size:      0.58rem;
             font-weight:    600;
             letter-spacing: 0.06em;
             text-transform: uppercase;
+          }
+          .mob-tab__badge {
+            position:   absolute;
+            top:        -4px; right: -6px;
+            background: #78303F;
+            color:      white;
+            border-radius: 99px;
+            min-width:  16px; height: 16px;
+            font-size:  0.55rem;
+            font-weight:700;
+            display:    flex;
+            align-items:center;
+            justify-content:center;
+            padding:    0 3px;
+            border:     1.5px solid rgba(247,245,240,.9);
+            animation:  badgePop .3s ease;
+          }
+          @keyframes badgePop {
+            0%   { transform: scale(0); }
+            70%  { transform: scale(1.2); }
+            100% { transform: scale(1); }
           }
 
           .main-content {

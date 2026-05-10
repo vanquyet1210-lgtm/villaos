@@ -148,6 +148,12 @@ export default async function OwnerDashboardPage() {
         holdHistory={holdHistory}
         revenue={{ thisMonth: revThisMonth, lastMonth: revLastMonth, thisYear: revThisYear, byVilla, monthly }}
         kyc={{ status: (_kyc as any)?.status ?? 'none', submittedAt: (_kyc as any)?.created_at }}
+        villas={villas.map(v => ({
+          id: v.id, name: v.name, emoji: v.emoji,
+          district: v.district, province: v.province,
+          bedrooms: v.bedrooms, adults: v.adults,
+          price: v.price, status: v.status, images: v.images ?? [],
+        }))}
       />
     </>
   );

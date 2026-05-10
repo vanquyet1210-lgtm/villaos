@@ -6,7 +6,7 @@
 
 import { useState, useTransition, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter }           from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Calendar, { type BarSegment } from '@/components/Calendar';
 import { useBookingsRealtime } from '@/hooks/useBookingsRealtime';
 import { useToast }            from '@/components/Toast';
@@ -77,7 +77,14 @@ const AMENITY_ICONS: Record<string, string> = {
 };
 
 export default function CalendarShell({ villas, initialVillaId, userRole, initialBookings = [] }: CalendarShellProps) {
-  const router = useRouter();
+  const router      = useRouter();
+  const searchParams = useSearchParams();
+  const [showHoldModal, setShowHoldModal] = useState(searchParams.get('view') === 'holds');
+
+  // Khi URL có ?view=holds thì mở modal
+  useEffect(() => {
+    if (searchParams.get('view') === 'holds') setShowHoldModal(true);
+  }, [searchParams]);
   const { show } = useToast();
   const [isPending, startTransition] = useTransition();
 
@@ -811,6 +818,71 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
       )}
 
       {/* ── MODAL ─────────────────────────────────────────────── */}
+      {/* ── Hold Modal (owner) ── */}
+      {showHoldModal && userRole === 'owner' && (
+        <div className="hold-modal-overlay" onClick={() => { setShowHoldModal(false); router.replace('/owner/calendar'); }}>
+          <div className="hold-modal-box" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="hold-modal-header">
+              <span className="hold-modal-title">Lệnh Hold</span>
+              <button className="modal-close" onClick={() => { setShowHoldModal(false); router.replace('/owner/calendar'); }}>×</button>
+            </div>
+
+            {/* Pending holds */}
+            <div className="hold-modal-section-label">⏳ Đang chờ duyệt</div>
+            {allOwnerHolds.length === 0
+              ? <p className="hold-modal-empty">Không có lệnh hold nào đang chờ.</p>
+              : allOwnerHolds.map(b => {
+                const bv = villas.find(v => v.id === b.villaId);
+                const min = Math.max(0, Math.round((new Date(b.holdExpiresAt!).getTime() - Date.now()) / 60000));
+                return (
+                  <div key={b.id} className="hold-modal-row hold-modal-row--pending">
+                    <div className="hold-modal-row-top">
+                      <span className="hold-modal-sale">{b.createdByName ?? 'Sale'}</span>
+                      {b.createdByPhone && <a href={`tel:${b.createdByPhone}`} className="hold-modal-phone">📞 {b.createdByPhone}</a>}
+                      <span className="hold-modal-timer" style={{ color: min <= 10 ? '#78303F' : '#8B6914' }}>⏱ {min} phút</span>
+                    </div>
+                    <div className="hold-modal-meta">{bv?.emoji} {bv?.name} · 📅 {formatDate(b.checkin)} → {formatDate(b.checkout)} · {fmtMoney(b.total)}</div>
+                    <div className="hold-modal-meta">👤 {b.customer}{b.phone ? ` · 📞 ${b.phone}` : ''}</div>
+                    <div className="hold-modal-actions">
+                      <button className="hold-req-btn hold-req-btn--reject" disabled={isPending} onClick={() => handleCancel(b.id)}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        Từ chối
+                      </button>
+                      <button className="hold-req-btn hold-req-btn--approve" disabled={isPending} onClick={() => handleConfirm(b.id)}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        Duyệt
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            }
+
+            {/* Approved bookings (created by sale) */}
+            <div className="hold-modal-section-label" style={{ marginTop: 16 }}>✅ Đã duyệt</div>
+            {(() => {
+              const approved = bookings.filter(b => b.status === 'confirmed' && b.createdByRole === 'sale').slice(0, 10);
+              return approved.length === 0
+                ? <p className="hold-modal-empty">Chưa có lệnh nào được duyệt.</p>
+                : approved.map(b => {
+                  const bv = villas.find(v => v.id === b.villaId);
+                  return (
+                    <div key={b.id} className="hold-modal-row hold-modal-row--approved">
+                      <div className="hold-modal-row-top">
+                        <span className="hold-modal-sale">{(b as any).createdByName ?? 'Sale'}</span>
+                        {(b as any).createdByPhone && <a href={`tel:${(b as any).createdByPhone}`} className="hold-modal-phone">📞 {(b as any).createdByPhone}</a>}
+                      </div>
+                      <div className="hold-modal-meta">{bv?.emoji} {bv?.name} · 📅 {formatDate(b.checkin)} → {formatDate(b.checkout)} · {fmtMoney(b.total)}</div>
+                      <div className="hold-modal-meta">👤 {b.customer}{b.phone ? ` · 📞 ${b.phone}` : ''}</div>
+                    </div>
+                  );
+                });
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* ── Hold Success Popup (sale) ── */}
       {holdSuccess && (
         <div className="hold-success-overlay" onClick={() => setHoldSuccess(null)}>
@@ -1477,6 +1549,79 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
         }
         .amenity-chip:hover { border-color: var(--sage); background: var(--sage-pale); }
         .amenity-chip.active { background: var(--forest); border-color: var(--forest); color: white; font-weight: 600; }
+        /* ── Hold Modal ── */
+        .hold-modal-overlay {
+          position:        fixed; inset:0; z-index:900;
+          background:      rgba(28,43,74,.45);
+          backdrop-filter: blur(4px);
+          display:         flex; align-items:flex-end; justify-content:center;
+          animation:       fadeIn .2s ease;
+        }
+        .hold-modal-box {
+          background:    #FAFAF8;
+          border-radius: 20px 20px 0 0;
+          width:         100%; max-width: 600px;
+          max-height:    80vh; overflow-y: auto;
+          padding:       0 0 calc(env(safe-area-inset-bottom) + 16px);
+          animation:     slideUp .25s ease;
+        }
+        .hold-modal-header {
+          display:         flex;
+          align-items:     center;
+          justify-content: space-between;
+          padding:         16px 18px 12px;
+          border-bottom:   0.5px solid rgba(28,43,74,.08);
+          position:        sticky; top:0;
+          background:      #FAFAF8;
+          z-index:         1;
+        }
+        .hold-modal-title {
+          font-family: Georgia, serif;
+          font-style:  italic;
+          font-size:   1.05rem;
+          color:       #1C2B4A;
+        }
+        .hold-modal-section-label {
+          font-size:      0.6rem;
+          font-weight:    600;
+          color:          #C9A84C;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          padding:        10px 18px 4px;
+        }
+        .hold-modal-empty {
+          font-size:  0.8rem; color:#8A8F9A;
+          padding:    6px 18px 0; margin:0;
+        }
+        .hold-modal-row {
+          padding:       10px 18px;
+          border-bottom: 0.5px solid rgba(28,43,74,.06);
+        }
+        .hold-modal-row--pending { background: rgba(201,168,76,.03); }
+        .hold-modal-row--approved { background: rgba(28,43,74,.02); }
+        .hold-modal-row-top {
+          display:     flex; align-items:center; gap:8px; flex-wrap:wrap;
+          margin-bottom:4px;
+        }
+        .hold-modal-sale {
+          font-size:0.82rem; font-weight:600; color:#1C2B4A;
+        }
+        .hold-modal-phone {
+          font-size:0.75rem; color:#8B6914; text-decoration:none; font-weight:500;
+        }
+        .hold-modal-phone:hover { text-decoration:underline; }
+        .hold-modal-timer {
+          font-size:0.72rem; font-weight:600;
+          background:rgba(201,168,76,.1); border:1px solid rgba(201,168,76,.25);
+          border-radius:99px; padding:2px 8px;
+        }
+        .hold-modal-meta {
+          font-size:0.75rem; color:#8A8F9A; margin-top:2px;
+        }
+        .hold-modal-actions {
+          display:flex; gap:8px; margin-top:8px;
+        }
+
         /* ── Hold Requests Luxury (owner, below calendar) ── */
         .hold-requests-luxury { margin-top: 20px; }
         .hold-req-label {
