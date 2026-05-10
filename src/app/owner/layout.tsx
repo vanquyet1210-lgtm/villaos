@@ -1,11 +1,8 @@
-// ╔══════════════════════════════════════════════════════════════╗
-// ║  VillaOS v7 — app/owner/layout.tsx                          ║
-// ╚══════════════════════════════════════════════════════════════╝
-
-import Link from 'next/link';
+import Link             from 'next/link';
 import { getServerSession } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
+import { redirect }     from 'next/navigation';
 import { logoutAction } from '@/lib/services/auth.service';
+import OwnerBottomNav   from './OwnerBottomNav';
 
 export default async function OwnerLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
@@ -16,7 +13,7 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
 
   return (
     <div className="app-shell">
-      {/* Sidebar */}
+      {/* ── Desktop Sidebar ── */}
       <aside className="sidebar">
         <div className="sidebar-logo">
           <h2>🏡 VillaOS</h2>
@@ -62,10 +59,15 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="main-content">
-        {children}
-      </main>
+      {/* ── Main content ── */}
+      <main className="main-content">{children}</main>
+
+      {/* ── Mobile: TopBar + BottomNav ── */}
+      <OwnerBottomNav
+        isAdmin={isAdmin}
+        userName={profile.name}
+        brand={profile.brand ?? ''}
+      />
     </div>
   );
 }
