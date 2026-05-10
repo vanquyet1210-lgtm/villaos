@@ -32,7 +32,7 @@ export default function OwnerBottomNav({ isAdmin, userName, brand }: Props) {
   const tabs = [
     {
       href:  '/owner/dashboard',
-      label: 'Dashboard',
+      label: 'Tổng quan',
       icon:  (a: boolean) => (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a?2.2:1.8} strokeLinecap="round" strokeLinejoin="round">
           <rect x="3"  y="3"  width="7" height="7" rx="1"/>
