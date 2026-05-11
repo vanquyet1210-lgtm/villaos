@@ -52,7 +52,6 @@ const SECTIONS = [
   { key: 'revenue',  icon: '💰', label: 'Doanh thu' },
   { key: 'villas',   icon: '🏠', label: 'Villa của tôi' },
   { key: 'kyc',      icon: '🪪', label: 'Xác minh KYC' },
-  { key: 'guide',    icon: '📖', label: 'Hướng dẫn sử dụng' },
 ];
 
 function fmtShort(n: number) {

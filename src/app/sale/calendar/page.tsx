@@ -56,6 +56,8 @@ export default async function SaleCalendarPage({
         villas={villas}
         initialVillaId={selectedVillaId ?? villas[0].id}
         userRole="sale"
+        userName={profile.name ?? ''}
+        userPhone={(profile as any).phone ?? ''}
       />
     </>
   );

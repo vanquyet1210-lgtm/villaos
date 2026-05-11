@@ -29,6 +29,8 @@ interface CalendarShellProps {
   initialVillaId:  string;
   userRole:        UserRole;
   initialBookings?: Booking[];
+  userName?:       string;
+  userPhone?:      string;
 }
 
 type ModalMode = 'create' | 'view' | 'locked';
@@ -76,7 +78,7 @@ const AMENITY_ICONS: Record<string, string> = {
   'bar':          '🍹',
 };
 
-export default function CalendarShell({ villas, initialVillaId, userRole, initialBookings = [] }: CalendarShellProps) {
+export default function CalendarShell({ villas, initialVillaId, userRole, initialBookings = [], userName = '', userPhone = '' }: CalendarShellProps) {
   const router      = useRouter();
   const searchParams = useSearchParams();
   const [showHoldModal, setShowHoldModal] = useState(searchParams.get('view') === 'holds');
@@ -223,8 +225,8 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
   }, [userRole, villas]);
 
   // ── Form state (create booking) ────────────────────────────────
-  const [customer,  setCustomer]  = useState('');
-  const [phone,     setPhone]     = useState('');
+  const [customer,  setCustomer]  = useState(userRole === 'sale' ? userName : '');
+  const [phone,     setPhone]     = useState(userRole === 'sale' ? userPhone : '');
   const [email,     setEmail]     = useState('');
   const [note,      setNote]      = useState('');
   const [bookStatus, setBookStatus] = useState<'confirmed' | 'hold'>('confirmed');
@@ -237,7 +239,9 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
     const co = addDays(dateStr, 1);
     setCheckin(dateStr);
     setCheckout(co);
-    setCustomer(''); setPhone(''); setEmail(''); setNote('');
+    setCustomer(userRole === 'sale' ? userName : '');
+    setPhone(userRole === 'sale' ? userPhone : '');
+    setEmail(''); setNote('');
     // Sale chỉ được tạo Hold, owner mặc định confirmed
     setBookStatus(userRole === 'sale' ? 'hold' : 'confirmed');
     setFormError(null);
@@ -930,17 +934,14 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
                 <div className="modal-body">
                   <div className="form-row">
                     <div className="field-group" style={{ flex: 1 }}>
-                      <label>{userRole === 'sale' ? 'Tên sale *' : 'Tên khách *'}</label>
-                      <input value={customer} onChange={e => setCustomer(e.target.value)} placeholder={userRole === 'sale' ? 'Tên của bạn' : 'Nguyễn Văn A'} />
+                      <label>{userRole === 'sale' ? 'Tên sale *' : 'Tên khách'}</label>
+                      <input value={customer} onChange={e => setCustomer(e.target.value)}
+                        placeholder={userRole === 'sale' ? 'Tên của bạn' : 'Nguyễn Văn A'} />
                     </div>
                     <div className="field-group" style={{ flex: 1 }}>
-                      <label>Số điện thoại *</label>
+                      <label>{userRole === 'sale' ? 'Số điện thoại sale *' : 'Số điện thoại'}</label>
                       <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="0901234567" />
                     </div>
-                  </div>
-                  <div className="field-group">
-                    <label>Email</label>
-                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="khach@email.com" />
                   </div>
                   <div className="form-row">
                     <div className="field-group" style={{ flex: 1 }}>
@@ -960,24 +961,6 @@ export default function CalendarShell({ villas, initialVillaId, userRole, initia
                     </div>
                   )}
 
-                  {/* Sale chỉ tạo được Hold, không có lựa chọn */}
-                  {(userRole === 'owner' || userRole === 'admin') && (
-                    <div className="field-group">
-                      <label>Loại đặt</label>
-                      <div className="status-toggle">
-                        <button type="button"
-                          className={`status-btn${bookStatus === 'confirmed' ? ' active confirmed' : ''}`}
-                          onClick={() => setBookStatus('confirmed')}>
-                          ✅ Confirmed
-                        </button>
-                        <button type="button"
-                          className={`status-btn${bookStatus === 'hold' ? ' active hold' : ''}`}
-                          onClick={() => setBookStatus('hold')}>
-                          ⏳ Hold (30 phút)
-                        </button>
-                      </div>
-                    </div>
-                  )}
                   {userRole === 'sale' && (
                     <div className="field-group">
                       <div style={{ padding:'8px 12px', background:'var(--amber-light)', borderRadius:'var(--radius-md)', fontSize:'0.85rem', color:'var(--amber)', fontWeight:600 }}>

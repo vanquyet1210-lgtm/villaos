@@ -74,6 +74,8 @@ export default async function OwnerCalendarPage({
         initialVillaId={selectedVillaId ?? villas[0].id}
         userRole={session.profile.role}
         initialBookings={initialBookings}
+        userName={session.profile.name ?? ''}
+        userPhone={(session.profile as any).phone ?? ''}
       />
     </>
   );
