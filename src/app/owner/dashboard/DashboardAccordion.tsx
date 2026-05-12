@@ -137,7 +137,7 @@ export default function DashboardAccordion({ upcoming, holdHistory, revenue, kyc
                   ))
               )}
 
-              {/* DOANH THU */}
+              {/* DOANH THU — preview + link sang /owner/report */}
               {s.key === 'revenue' && (
                 <>
                   <div className="rev-grid">
@@ -154,17 +154,7 @@ export default function DashboardAccordion({ upcoming, holdHistory, revenue, kyc
                       <div className="rev-val">{fmtShort(revenue.thisYear)}</div>
                     </div>
                   </div>
-                  {/* Biểu đồ cột mini */}
-                  <div className="mini-chart">
-                    {revenue.monthly.map(m => (
-                      <div key={m.label} className="mini-bar-wrap">
-                        <div className="mini-bar" style={{ height: `${Math.round((m.value / maxRev) * 60)}px` }} />
-                        <div className="mini-bar-label">{m.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Theo villa */}
-                  {revenue.byVilla.map(v => (
+                  {revenue.byVilla.length > 0 && revenue.byVilla.map(v => (
                     <div key={v.name} className="acc-row">
                       <span className="acc-row-emoji">{v.emoji}</span>
                       <div className="acc-row-info">
@@ -177,6 +167,19 @@ export default function DashboardAccordion({ upcoming, holdHistory, revenue, kyc
                       </div>
                     </div>
                   ))}
+                  <Link
+                    href="/owner/report"
+                    style={{
+                      display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                      margin:'8px 0 4px', padding:'9px 0',
+                      background:'rgba(201,168,76,.08)', border:'1px solid rgba(201,168,76,.25)',
+                      borderRadius:10, textDecoration:'none',
+                      fontSize:'.8rem', fontWeight:600, color:'#8B6914',
+                      transition:'background .15s',
+                    }}
+                  >
+                    📊 Xem báo cáo doanh thu đầy đủ →
+                  </Link>
                 </>
               )}
 
