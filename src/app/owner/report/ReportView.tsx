@@ -198,25 +198,122 @@ export default function ReportView({ report }: Props) {
   );
 }
 
-// ── Mini bar chart ─────────────────────────────────────────────
+// ── Smooth Area Chart 6 tháng ─────────────────────────────────
 function Chart6m({ data }: { data: MonthlyReport['monthly6'] }) {
-  const maxVal = Math.max(...data.flatMap(d => [d.revenue, d.expense]), 1);
+  const W = 600, H = 200, PAD = { t: 40, r: 20, b: 36, l: 52 };
+  const chartW = W - PAD.l - PAD.r;
+  const chartH = H - PAD.t - PAD.b;
+  const n = data.length;
+
+  const maxVal = Math.max(...data.flatMap(d => [d.revenue, d.expense, d.profit]), 1) * 1.1;
+
+  const xPos = (i: number) => PAD.l + (i / (n - 1)) * chartW;
+  const yPos = (v: number) => PAD.t + chartH - Math.max(0, v / maxVal) * chartH;
+
+  // Smooth bezier path using cardinal spline
+  const smoothPath = (values: number[], close = true): string => {
+    if (n < 2) return '';
+    const pts = values.map((v, i) => [xPos(i), yPos(v)] as [number, number]);
+    let d = `M ${pts[0][0]},${pts[0][1]}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const cp1x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * 0.4;
+      const cp1y = pts[i][1];
+      const cp2x = pts[i + 1][0] - (pts[i + 1][0] - pts[i][0]) * 0.4;
+      const cp2y = pts[i + 1][1];
+      d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${pts[i+1][0]},${pts[i+1][1]}`;
+    }
+    if (close) {
+      d += ` L ${pts[n-1][0]},${PAD.t + chartH} L ${pts[0][0]},${PAD.t + chartH} Z`;
+    }
+    return d;
+  };
+
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => ({
+    y:     PAD.t + chartH * (1 - t),
+    label: t === 0 ? '0' : fmtShort(Math.round(maxVal * t)),
+  }));
+
   return (
-    <div style={{ display:'flex', alignItems:'flex-end', gap:8, height:120, padding:'0 4px' }}>
-      {data.map(d => (
-        <div key={d.label} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4, height:'100%' }}>
-          <div style={{ flex:1, width:'100%', display:'flex', flexDirection:'column', justifyContent:'flex-end', gap:2 }}>
-            <div style={{ height:`${Math.round(d.revenue/maxVal*100)}%`, background:'#9FE1CB', borderRadius:'3px 3px 0 0', minHeight:3 }} />
-          </div>
-          <div style={{ flex:1, width:'100%', display:'flex', flexDirection:'column', justifyContent:'flex-end', gap:2 }}>
-            <div style={{ height:`${Math.round(d.expense/maxVal*100)}%`, background:'#F5C4B3', borderRadius:'3px 3px 0 0', minHeight:3 }} />
-          </div>
-          <div style={{ fontSize:'.6rem', color:'#8A8F9A', whiteSpace:'nowrap' }}>{d.label}</div>
-        </div>
-      ))}
-      <div style={{ position:'absolute', display:'flex', gap:12, fontSize:'.65rem', color:'#8A8F9A', top:0, right:0 }}>
-        <span><span style={{display:'inline-block',width:8,height:8,background:'#9FE1CB',borderRadius:2,marginRight:3}} />Doanh thu</span>
-        <span><span style={{display:'inline-block',width:8,height:8,background:'#F5C4B3',borderRadius:2,marginRight:3}} />Chi phí</span>
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', height:'auto', overflow:'visible' }}
+        aria-label="Biểu đồ miền doanh thu chi phí lợi nhuận">
+        <defs>
+          <linearGradient id="ag-rev" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#178a5e" stopOpacity="0.55"/>
+            <stop offset="100%" stopColor="#178a5e" stopOpacity="0.04"/>
+          </linearGradient>
+          <linearGradient id="ag-pnl" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#C9A84C" stopOpacity="0.55"/>
+            <stop offset="100%" stopColor="#C9A84C" stopOpacity="0.06"/>
+          </linearGradient>
+          <linearGradient id="ag-exp" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#A32D2D" stopOpacity="0.35"/>
+            <stop offset="100%" stopColor="#A32D2D" stopOpacity="0.03"/>
+          </linearGradient>
+        </defs>
+
+        {/* Grid */}
+        {ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={PAD.l} y1={t.y} x2={W - PAD.r} y2={t.y}
+              stroke="rgba(28,43,74,.07)" strokeWidth="1" strokeDasharray="4 3"/>
+            <text x={PAD.l - 7} y={t.y + 4} textAnchor="end" fontSize="9" fill="#8A8F9A">{t.label}</text>
+          </g>
+        ))}
+
+        {/* Areas (bottom-up: expense, profit, revenue) */}
+        <path d={smoothPath(data.map(d => d.expense))} fill="url(#ag-exp)"/>
+        <path d={smoothPath(data.map(d => d.profit))}  fill="url(#ag-pnl)"/>
+        <path d={smoothPath(data.map(d => d.revenue))} fill="url(#ag-rev)"/>
+
+        {/* Lines */}
+        <path d={smoothPath(data.map(d => d.expense), false)} fill="none" stroke="#A32D2D" strokeWidth="1.5" strokeDasharray="5 3" strokeLinejoin="round"/>
+        <path d={smoothPath(data.map(d => d.profit),  false)} fill="none" stroke="#C9A84C" strokeWidth="2"   strokeLinejoin="round"/>
+        <path d={smoothPath(data.map(d => d.revenue), false)} fill="none" stroke="#178a5e" strokeWidth="2.5" strokeLinejoin="round"/>
+
+        {/* Dots + value labels */}
+        {data.map((d, i) => {
+          const x  = xPos(i);
+          const yr = yPos(d.revenue);
+          const yp = yPos(d.profit);
+          const above = i < n - 1;
+          return (
+            <g key={d.label}>
+              {/* Revenue dot + label */}
+              <circle cx={x} cy={yr} r="4" fill="white" stroke="#178a5e" strokeWidth="2"/>
+              <rect x={x - 22} y={yr - 26} width="44" height="18" rx="5"
+                fill="white" stroke="rgba(28,43,74,.12)" strokeWidth="1"/>
+              <text x={x} y={yr - 13} textAnchor="middle" fontSize="9" fill="#1C2B4A" fontWeight="500">
+                {fmtShort(d.revenue)}
+              </text>
+
+              {/* Profit dot */}
+              <circle cx={x} cy={yp} r="3" fill="white" stroke="#C9A84C" strokeWidth="1.5"/>
+
+              {/* X label */}
+              <text x={x} y={H - 6} textAnchor="middle" fontSize="9.5" fill="#8A8F9A">{d.label}</text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Legend */}
+      <div style={{ display:'flex', gap:16, fontSize:'.7rem', color:'#8A8F9A', marginTop:6, paddingLeft:PAD.l }}>
+        {[
+          { color:'#178a5e', label:'Doanh thu' },
+          { color:'#C9A84C', label:'Lợi nhuận' },
+          { color:'#A32D2D', label:'Chi phí', dash:true },
+        ].map(l => (
+          <span key={l.label} style={{ display:'flex', alignItems:'center', gap:5 }}>
+            <svg width="18" height="8">
+              {l.dash
+                ? <line x1="0" y1="4" x2="18" y2="4" stroke={l.color} strokeWidth="2" strokeDasharray="4 2"/>
+                : <path d="M0,7 Q9,1 18,7" fill={l.color} fillOpacity=".3" stroke={l.color} strokeWidth="1.5"/>
+              }
+            </svg>
+            {l.label}
+          </span>
+        ))}
       </div>
     </div>
   );
