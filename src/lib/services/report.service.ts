@@ -23,7 +23,7 @@ export async function getOrInitCategories(villaId?: string): Promise<ReportCateg
   if (!session) return [];
   const sb = await createSupabaseServerClient();
 
-  const { data: existing } = await sb
+  const { data: existing } = await (sb as any)
     .from('report_categories')
     .select('*')
     .eq('owner_id', session.profile.id)
@@ -48,7 +48,7 @@ export async function getOrInitCategories(villaId?: string): Promise<ReportCateg
     is_active:    true,
   }));
 
-  const { data: inserted } = await sb
+  const { data: inserted } = await (sb as any)
     .from('report_categories')
     .insert(rows)
     .select('*');
@@ -103,7 +103,7 @@ export async function getMonthlyReport(
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear  = month === 1 ? year - 1 : year;
 
-  const { data: entries } = await sb
+  const { data: entries } = await (sb as any)
     .from('report_entries')
     .select('*')
     .eq('owner_id', oid)
@@ -175,7 +175,7 @@ export async function upsertReportEntry(
   if (!session) return { error: 'Chưa đăng nhập' };
   const sb = await createSupabaseServerClient();
 
-  const { error } = await sb.from('report_entries').upsert({
+  const { error } = await (sb as any).from('report_entries').upsert({
     category_id: categoryId,
     villa_id:    villaId,
     owner_id:    session.profile.id,
@@ -214,8 +214,8 @@ export async function upsertCategory(data: {
   };
 
   const { error } = data.id
-    ? await sb.from('report_categories').update(row).eq('id', data.id)
-    : await sb.from('report_categories').insert(row);
+    ? await (sb as any).from('report_categories').update(row).eq('id', data.id)
+    : await (sb as any).from('report_categories').insert(row);
 
   return error ? { error: error.message } : {};
 }
@@ -225,7 +225,7 @@ export async function deactivateCategory(id: string): Promise<{ error?: string }
   const session = await getServerSession();
   if (!session) return { error: 'Chưa đăng nhập' };
   const sb = await createSupabaseServerClient();
-  const { error } = await sb.from('report_categories')
+  const { error } = await (sb as any).from('report_categories')
     .update({ is_active: false })
     .eq('id', id)
     .eq('owner_id', session.profile.id);
