@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import type { MonthlyReport }      from '@/types/report';
 import { getMonthlyReport, upsertReportEntry } from '@/lib/services/report.service';
 import ReportView    from './ReportView';
-import EntryForm     from './EntryForm';
+import EntryForm, { type SaveEntry } from './EntryForm';
 import CategorySetup from './CategorySetup';
 
 interface Props {
@@ -30,6 +30,7 @@ export default function ReportShell({
   const [villaId, setVillaId] = useState(initialVillaId);
   const [report,  setReport]  = useState(initialReport);
   const [isPending, start]    = useTransition();
+  const [formKey,   setFormKey] = useState(0);
 
   const loadReport = (y: number, m: number, vid: string | null) => {
     start(async () => {
@@ -105,15 +106,26 @@ export default function ReportShell({
       {/* Entry tab */}
       {tab === 'entry' && report && !isPending && (
         <EntryForm
+          key={formKey}
           report={report}
-          onSave={async entries => {
+          onSave={async (entries: SaveEntry[]) => {
             await Promise.all(
               entries.map(e =>
-                upsertReportEntry(e.categoryId, villaId, year, month, e.amount, e.note),
+                upsertReportEntry(
+                  e.categoryId,
+                  e.isShared ? null : villaId,
+                  year, month, e.amount, e.note,
+                ),
               ),
             );
             loadReport(year, month, villaId);
             setTab('report');
+          }}
+          onCopyPrevMonth={() => {
+            const pm = month === 1 ? 12 : month - 1;
+            const py = month === 1 ? year - 1 : year;
+            loadReport(py, pm, villaId);
+            setFormKey(k => k + 1);
           }}
         />
       )}
@@ -141,69 +153,108 @@ export default function ReportShell({
       )}
 
       <style>{`
-        .report-shell { max-width:860px; margin:0 auto; }
+        /* ── Design tokens (shared with EntryForm) ── */
+        .report-shell {
+          --rev-text:    #0A6B44;
+          --rev-bg:      #EBF7F2;
+          --shared-text: #1A3A6B;
+          --shared-bg:   #EAF0FB;
+          --muted:       #6B7280;
+          --border:      rgba(0,0,0,.09);
+          --surface:     #fff;
+          --surface-dim: #F8F9FA;
+
+          max-width: 900px;
+          margin: 0 auto;
+          font-family: 'Be Vietnam Pro', 'Inter', system-ui, sans-serif;
+        }
+
+        /* ── Topbar ── */
         .report-topbar {
-          display:flex; align-items:center; justify-content:space-between;
-          flex-wrap:wrap; gap:10px;
-          padding-bottom:16px;
-          border-bottom:0.5px solid rgba(28,43,74,.08);
-          margin-bottom:20px;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 10px;
+          padding-bottom: 16px;
+          border-bottom: 1px solid var(--border);
+          margin-bottom: 20px;
         }
-        .report-topbar-left { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+        .report-topbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+        /* Villa selector */
         .report-villa-select {
-          padding:6px 12px;
-          border:1px solid rgba(28,43,74,.14);
-          border-radius:99px;
-          background:var(--white,#fff);
-          font-size:.85rem; color:#1C2B4A; cursor:pointer;
+          padding: 7px 14px;
+          border: 1px solid rgba(26,58,107,.2);
+          border-radius: 99px;
+          background: var(--surface);
+          font-size: .83rem; font-family: inherit;
+          color: var(--shared-text); cursor: pointer;
+          transition: border-color .15s;
         }
+        .report-villa-select:focus { outline: none; border-color: var(--shared-text); }
+
+        /* Month nav */
         .report-month-nav {
-          display:flex; align-items:center;
-          background:rgba(28,43,74,.05);
-          border-radius:var(--radius-sm,6px); overflow:hidden;
+          display: flex; align-items: center;
+          background: var(--surface-dim);
+          border: 1px solid var(--border);
+          border-radius: 8px; overflow: hidden;
         }
         .report-month-nav button {
-          border:none; background:none;
-          width:28px; height:28px; font-size:1rem;
-          cursor:pointer; color:#1C2B4A; transition:background .12s;
+          border: none; background: none;
+          width: 30px; height: 30px; font-size: 1rem;
+          cursor: pointer; color: var(--shared-text);
+          transition: background .12s; flex-shrink: 0;
         }
-        .report-month-nav button:hover { background:rgba(201,168,76,.15); }
+        .report-month-nav button:hover { background: rgba(10,107,68,.1); }
         .report-month-nav span {
-          font-size:.85rem; font-family:Georgia,serif; font-style:italic;
-          color:#1C2B4A; padding:0 8px; min-width:120px; text-align:center;
+          font-size: .84rem; font-weight: 500;
+          color: #1A202C; padding: 0 10px;
+          min-width: 130px; text-align: center;
+          border-left: 1px solid var(--border);
+          border-right: 1px solid var(--border);
         }
+
+        /* Tabs */
         .report-tabs {
-          display:flex; gap:4px;
-          background:rgba(28,43,74,.05);
-          border-radius:var(--radius-sm,6px); padding:3px;
+          display: flex; gap: 3px;
+          background: var(--surface-dim);
+          border: 1px solid var(--border);
+          border-radius: 9px; padding: 3px;
         }
         .report-tab {
-          padding:6px 14px; border:none; border-radius:5px;
-          background:transparent; font-size:.8rem;
-          cursor:pointer; color:#8A8F9A; transition:background .12s, color .12s;
-          white-space:nowrap;
+          padding: 6px 16px; border: none; border-radius: 7px;
+          background: transparent; font-size: .8rem; font-family: inherit;
+          cursor: pointer; color: var(--muted);
+          transition: background .12s, color .12s;
+          white-space: nowrap;
         }
         .report-tab.active {
-          background:var(--white,#fff); color:#1C2B4A;
-          font-weight:500; box-shadow:0 1px 4px rgba(28,43,74,.08);
+          background: var(--surface); color: #1A202C;
+          font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,.09);
         }
-        .report-loading { text-align:center; padding:24px; color:#8A8F9A; font-size:.85rem; }
+        .report-tab:hover:not(.active) { color: #1A202C; background: rgba(0,0,0,.03); }
+
+        /* States */
+        .report-loading {
+          text-align: center; padding: 28px;
+          color: var(--muted); font-size: .84rem;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
         .report-empty {
-          text-align:center; padding:48px; color:#8A8F9A; font-size:.9rem;
-          display:flex; flex-direction:column; align-items:center; gap:14px;
+          text-align: center; padding: 52px 24px; color: var(--muted); font-size: .88rem;
+          display: flex; flex-direction: column; align-items: center; gap: 14px;
         }
         .report-empty-btn {
-          padding:9px 24px; border-radius:99px;
-          background:#1C2B4A; color:#fff;
-          border:none; font-size:.85rem; cursor:pointer;
-          transition:opacity .15s;
+          padding: 10px 26px; border-radius: 99px;
+          background: var(--rev-text); color: #fff;
+          border: none; font-size: .84rem; font-family: inherit;
+          font-weight: 600; cursor: pointer; transition: opacity .15s;
         }
-        .report-empty-btn:hover { opacity:.85; }
+        .report-empty-btn:hover { opacity: .88; }
 
-        @media (max-width:600px) {
-          .report-topbar { flex-direction:column; align-items:flex-start; }
-          .report-tabs   { width:100%; }
-          .report-tab    { flex:1; text-align:center; }
+        @media (max-width: 600px) {
+          .report-topbar { flex-direction: column; align-items: flex-start; }
+          .report-tabs   { width: 100%; }
+          .report-tab    { flex: 1; text-align: center; }
         }
       `}</style>
     </div>
