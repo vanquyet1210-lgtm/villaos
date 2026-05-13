@@ -27,7 +27,7 @@ const RATE_LIMITED_ROUTES = [
   { path: '/auth/forgot-password',  key: 'FORGOT_PASSWORD' as const },
 ];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl?.pathname ?? request.url;
   const method   = request.method;
 
