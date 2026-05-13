@@ -244,7 +244,16 @@ function computeCostAlerts(
     .map(c => {
       const prevAmt = prevMap.get(c.id) ?? 0;
       const pct     = prevAmt > 0 ? Math.round((c.amount - prevAmt) / prevAmt * 100) : 0;
-      return { ...c, prevAmount: prevAmt, pctChange: pct, reason: `Tăng ${pct}% so với tháng trước` };
+      return {
+        categoryId: c.id,
+        name:       c.name,
+        icon:       c.icon,
+        color:      c.color,
+        amount:     c.amount,
+        prevAmount: prevAmt,
+        pctChange:  pct,
+        reason:     `Tăng ${pct}% so với tháng trước`,
+      };
     })
     .filter(c => c.pctChange >= 20)
     .sort((a, b) => b.pctChange - a.pctChange)
