@@ -516,7 +516,7 @@ export default function ReportView({ report }: { report: MonthlyReport }) {
         <OccupancyCard rate={report.occupancyRate} prev={0} />
       </div>
 
-      {/* ── Row 2: Donut + 6-month chart ── */}
+      {/* ── Row 2: 2 Donut charts side by side ── */}
       <div className="rpt-row2">
         {report.revenue.some(e => e.amount > 0) && (() => {
           const total = report.revenue.reduce((s, e) => s + e.amount, 0);
@@ -532,7 +532,7 @@ export default function ReportView({ report }: { report: MonthlyReport }) {
                   color: e.color,
                 }));
           return (
-            <div className="rpt-section rpt-section--donut">
+            <div className="rpt-section rpt-section--donut-half">
               <div className="rpt-section-header" style={{ cursor:'default' }}>
                 <span className="rpt-section-title">📊 Doanh thu theo nguồn</span>
               </div>
@@ -543,7 +543,7 @@ export default function ReportView({ report }: { report: MonthlyReport }) {
           );
         })()}
         {report.expenses.some(e => e.amount > 0) && (
-          <div className="rpt-section rpt-section--donut">
+          <div className="rpt-section rpt-section--donut-half">
             <div className="rpt-section-header" style={{ cursor:'default' }}>
               <span className="rpt-section-title">🔴 Chi phí theo danh mục</span>
             </div>
@@ -552,22 +552,20 @@ export default function ReportView({ report }: { report: MonthlyReport }) {
             </div>
           </div>
         )}
-        <div className="rpt-section" style={{ flex:1 }}>
-          <div className="rpt-section-header" style={{ cursor:'default' }}>
-            <span className="rpt-section-title">📈 Doanh thu & Lợi nhuận (6 tháng)</span>
-          </div>
-          <div style={{ padding:'16px' }}>
-            <Chart6m data={report.monthly6} />
-          </div>
+      </div>
+
+      {/* ── Row 3: 6-month chart full width ── */}
+      <div className="rpt-section">
+        <div className="rpt-section-header" style={{ cursor:'default' }}>
+          <span className="rpt-section-title">📈 Doanh thu & Lợi nhuận (6 tháng)</span>
+        </div>
+        <div style={{ padding:'16px' }}>
+          <Chart6m data={report.monthly6} />
         </div>
       </div>
 
       {/* ── Cost alerts ── */}
       <CostAlerts alerts={report.costAlerts} />
-
-      {/* ── Revenue & Expense sections ── */}
-      <Section title="💚 Doanh thu" items={report.revenue}  total={report.totalRevenue} accentColor="#178a5e" />
-      <Section title="🔴 Chi phí"   items={report.expenses} total={report.totalExpense} accentColor="#A32D2D" />
 
       {/* ── Health score ── */}
       <HealthScore
@@ -603,9 +601,9 @@ export default function ReportView({ report }: { report: MonthlyReport }) {
         .kpi-delta.down { color:#A32D2D; }
         .kpi-sub    { font-size:.7rem; color:#A32D2D; margin-top:3px; }
 
-        /* Row 2: donut + chart */
+        /* Row 2: 2 donuts */
         .rpt-row2 { display:flex; gap:12px; }
-        .rpt-section--donut { width:260px; flex-shrink:0; }
+        .rpt-section--donut-half { flex:1; min-width:0; }
 
         /* Sections */
         .rpt-section {
