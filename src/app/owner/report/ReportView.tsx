@@ -9,6 +9,7 @@ import type {
   ChannelStat,
   HealthMetric,
   HealthLevel,
+  VillaSummary,
 } from '@/types/report';
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -239,26 +240,161 @@ function CostDonutChart({ expenses }: { expenses: ReportCategoryWithEntry[] }) {
 
 // ── Priority 4: Cost alerts ───────────────────────────────────
 
+
+// ── Hướng 2: All-villas comparison table ─────────────────────
+
+function AllVillasSummary({ villas }: { villas: VillaSummary[] }) {
+  if (!villas.length) return null;
+  const maxRev = Math.max(...villas.map(v => v.revenue));
+  return (
+    <div className="rpt-section">
+      <div className="rpt-section-header" style={{ cursor:'default' }}>
+        <span className="rpt-section-title">🏘️ So sánh các villa</span>
+      </div>
+      <div style={{ overflowX:'auto' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'.82rem' }}>
+          <thead>
+            <tr style={{ color:'#8A8F9A', fontSize:'.72rem', textTransform:'uppercase', letterSpacing:'.05em' }}>
+              <th style={{ padding:'10px 16px', textAlign:'left', fontWeight:500 }}>Villa</th>
+              <th style={{ padding:'10px 8px', textAlign:'right', fontWeight:500 }}>Doanh thu</th>
+              <th style={{ padding:'10px 8px', textAlign:'right', fontWeight:500 }}>CP riêng</th>
+              <th style={{ padding:'10px 8px', textAlign:'right', fontWeight:500 }}>CP chung</th>
+              <th style={{ padding:'10px 8px', textAlign:'right', fontWeight:500 }}>Lợi nhuận</th>
+              <th style={{ padding:'10px 8px', textAlign:'center', fontWeight:500 }}>Công suất</th>
+              <th style={{ padding:'10px 16px', textAlign:'left', fontWeight:500 }}>Tỷ trọng DT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {villas.map((v, i) => {
+              const isProfit = v.netProfit >= 0;
+              return (
+                <tr key={v.villaId} style={{
+                  borderTop: i === 0 ? 'none' : '0.5px solid rgba(28,43,74,.06)',
+                  background: i % 2 === 0 ? 'transparent' : 'rgba(28,43,74,.015)',
+                }}>
+                  <td style={{ padding:'12px 16px' }}>
+                    <div style={{ fontWeight:600, color:'#1C2B4A' }}>{v.emoji} {v.villaName}</div>
+                    <div style={{ fontSize:'.7rem', color:'#8A8F9A' }}>Phân bổ CP chung: {v.allocPct}%</div>
+                  </td>
+                  <td style={{ padding:'12px 8px', textAlign:'right', fontFamily:'Georgia,serif', fontStyle:'italic', color:'#178a5e' }}>
+                    {fmtShort(v.revenue)}
+                  </td>
+                  <td style={{ padding:'12px 8px', textAlign:'right', color:'#A32D2D' }}>
+                    {fmtShort(v.perVillaExpense)}
+                  </td>
+                  <td style={{ padding:'12px 8px', textAlign:'right', color:'#6B7280' }}>
+                    {fmtShort(v.sharedAlloc)}
+                  </td>
+                  <td style={{ padding:'12px 8px', textAlign:'right', fontWeight:600, color: isProfit ? '#178a5e' : '#A32D2D' }}>
+                    {isProfit ? '+' : ''}{fmtShort(v.netProfit)}
+                  </td>
+                  <td style={{ padding:'12px 8px', textAlign:'center' }}>
+                    <span style={{
+                      padding:'2px 8px', borderRadius:'99px', fontSize:'.72rem',
+                      background: v.occupancyRate >= 70 ? 'rgba(23,138,94,.1)' : v.occupancyRate >= 40 ? 'rgba(201,168,76,.15)' : 'rgba(163,45,45,.1)',
+                      color: v.occupancyRate >= 70 ? '#178a5e' : v.occupancyRate >= 40 ? '#856A00' : '#A32D2D',
+                    }}>{v.occupancyRate}%</span>
+                  </td>
+                  <td style={{ padding:'12px 16px' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <div style={{ flex:1, height:6, background:'rgba(28,43,74,.06)', borderRadius:3 }}>
+                        <div style={{ height:6, borderRadius:3, background:'#178a5e', width:`${maxRev > 0 ? v.revenue/maxRev*100 : 0}%` }}/>
+                      </div>
+                      <span style={{ fontSize:'.72rem', color:'#8A8F9A', minWidth:30 }}>{v.allocPct}%</span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop:'1px solid rgba(28,43,74,.1)', background:'rgba(28,43,74,.025)' }}>
+              <td style={{ padding:'10px 16px', fontWeight:600, color:'#1C2B4A', fontSize:'.8rem' }}>Tổng</td>
+              <td style={{ padding:'10px 8px', textAlign:'right', fontWeight:600, fontFamily:'Georgia,serif', fontStyle:'italic', color:'#178a5e' }}>
+                {fmtShort(villas.reduce((s,v) => s+v.revenue, 0))}
+              </td>
+              <td style={{ padding:'10px 8px', textAlign:'right', fontWeight:600, color:'#A32D2D' }}>
+                {fmtShort(villas.reduce((s,v) => s+v.perVillaExpense, 0))}
+              </td>
+              <td style={{ padding:'10px 8px', textAlign:'right', fontWeight:600, color:'#6B7280' }}>
+                {fmtShort(villas.reduce((s,v) => s+v.sharedAlloc, 0))}
+              </td>
+              <td style={{ padding:'10px 8px', textAlign:'right', fontWeight:600, color:'#1C2B4A' }}>
+                {fmtShort(villas.reduce((s,v) => s+v.netProfit, 0))}
+              </td>
+              <td colSpan={2}/>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Hướng 1: Shared cost allocation badge ────────────────────
+
+function SharedCostInfo({ sharedExpenses, allocPct, totalShared }: {
+  sharedExpenses: ReportCategoryWithEntry[];
+  allocPct: number;
+  totalShared: number;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!sharedExpenses.some(e => e.amount > 0)) return null;
+  const allocated = Math.round(totalShared * allocPct / 100);
+  return (
+    <div className="rpt-section">
+      <div className="rpt-section-header" style={{ cursor:'pointer' }} onClick={() => setOpen(o => !o)}>
+        <span className="rpt-section-title">🔗 Chi phí chung được phân bổ</span>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{
+            fontSize:'.75rem', padding:'2px 10px', borderRadius:'99px',
+            background:'rgba(107,114,128,.1)', color:'#6B7280',
+          }}>Tỷ lệ phân bổ: {allocPct}% → {fmtShort(allocated)}</span>
+          <span style={{ color:'#8A8F9A', fontSize:'.85rem' }}>{open ? '▲' : '▼'}</span>
+        </div>
+      </div>
+      {open && (
+        <div className="rpt-section-body">
+          <div style={{ padding:'8px 16px 4px', fontSize:'.72rem', color:'#8A8F9A' }}>
+            Chi phí chung = tổng cho tất cả villa. Phần bạn chịu tính theo tỷ lệ doanh thu ({allocPct}%).
+          </div>
+          {sharedExpenses.filter(e => e.amount > 0).map(e => {
+            const alloc = Math.round(e.amount * allocPct / 100);
+            return (
+              <div key={e.id} style={{
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                padding:'10px 16px', borderBottom:'0.5px solid rgba(28,43,74,.04)',
+                fontSize:'.83rem',
+              }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span>{e.icon}</span>
+                  <div>
+                    <div style={{ color:'#1C2B4A' }}>{e.name}</div>
+                    <div style={{ fontSize:'.7rem', color:'#8A8F9A' }}>Tổng: {fmtShort(e.amount)}</div>
+                  </div>
+                </div>
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontFamily:'Georgia,serif', fontStyle:'italic', color:'#A32D2D' }}>{fmtShort(alloc)}</div>
+                  <div style={{ fontSize:'.7rem', color:'#8A8F9A' }}>{allocPct}% phân bổ</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CostAlerts({ alerts }: { alerts: CostAlert[] }) {
   return (
     <div className="rpt-section">
       <div className="rpt-section-header" style={{ cursor:'default' }}>
         <span className="rpt-section-title">⚠️ Cảnh báo chi phí</span>
-        {alerts.length > 0 && (
-          <span style={{
-            fontSize:'.7rem', padding:'2px 8px', borderRadius:'99px',
-            background:'rgba(163,45,45,.1)', color:'#A32D2D', fontWeight:600,
-          }}>{alerts.length} mục</span>
-        )}
       </div>
       {alerts.length === 0 ? (
-        <div style={{
-          display:'flex', alignItems:'center', gap:10,
-          padding:'14px 16px', fontSize:'.82rem', color:'#178a5e',
-          background:'rgba(23,138,94,.04)',
-        }}>
-          <span style={{ fontSize:'1.1rem' }}>✅</span>
-          <span>Không có cảnh báo chi phí bất thường tháng này</span>
+        <div style={{ padding:'16px', fontSize:'.82rem', color:'#8A8F9A', textAlign:'center' }}>
+          ✅ Không có cảnh báo chi phí bất thường tháng này
         </div>
       ) : (
         <div className="rpt-section-body">
@@ -272,14 +408,7 @@ function CostAlerts({ alerts }: { alerts: CostAlert[] }) {
                 </div>
               </div>
               <div className="alert-amount">
-                <div style={{ textAlign:'right' }}>
-                  <div style={{ fontFamily:'Georgia,serif', fontStyle:'italic', fontSize:'.9rem', color:'#1C2B4A' }}>
-                    {fmtShort(a.amount)}
-                  </div>
-                  <div style={{ fontSize:'.68rem', color:'#8A8F9A' }}>
-                    Tháng trước: {fmtShort(a.prevAmount)}
-                  </div>
-                </div>
+                <span className="alert-val">{fmtShort(a.amount)}</span>
                 <span className="alert-badge">↑{a.pctChange}%</span>
               </div>
             </div>
@@ -500,16 +629,16 @@ function Chart6m({ data }: { data: MonthlyReport['monthly6'] }) {
       </svg>
       <div style={{ display:'flex', gap:16, fontSize:'.7rem', color:'#8A8F9A', marginTop:16, paddingLeft:PAD.l, position:'relative', zIndex:1, background:'var(--white,#fff)', paddingTop:4, paddingBottom:2 }}>
         {[
-          { color:'#178a5e', label:'Doanh thu' },
-          { color:'#C9A84C', label:'Lợi nhuận' },
-          { color:'#A32D2D', label:'Chi phí', dash:true },
+          { color:'#178a5e', label:'Doanh thu', dash:false },
+          { color:'#C9A84C', label:'Lợi nhuận', dash:false },
+          { color:'#A32D2D', label:'Chi phí',   dash:true  },
         ].map(l => (
           <span key={l.label} style={{ display:'flex', alignItems:'center', gap:5 }}>
-            <svg width="18" height="8">
-              {l.dash
-                ? <line x1="0" y1="4" x2="18" y2="4" stroke={l.color} strokeWidth="2" strokeDasharray="4 2"/>
-                : <path d="M0,7 Q9,1 18,7" fill={l.color} fillOpacity=".3" stroke={l.color} strokeWidth="1.5"/>
-              }
+            <svg width="24" height="10">
+              <line x1="0" y1="5" x2="24" y2="5"
+                stroke={l.color} strokeWidth="2"
+                strokeDasharray={l.dash ? '5 3' : undefined}/>
+              {!l.dash && <circle cx="12" cy="5" r="3" fill="white" stroke={l.color} strokeWidth="1.5"/>}
             </svg>
             {l.label}
           </span>
@@ -586,6 +715,20 @@ export default function ReportView({ report }: { report: MonthlyReport }) {
           <Chart6m data={report.monthly6} />
         </div>
       </div>
+
+      {/* ── Hướng 1: Shared cost allocation info ── */}
+      {report.villaId && (
+        <SharedCostInfo
+          sharedExpenses={report.sharedExpenses}
+          allocPct={report.sharedAllocPct}
+          totalShared={report.totalSharedExpense}
+        />
+      )}
+
+      {/* ── Hướng 2: All-villas comparison table ── */}
+      {report.allVillasSummary.length > 0 && (
+        <AllVillasSummary villas={report.allVillasSummary} />
+      )}
 
       {/* ── Cost alerts ── */}
       <CostAlerts alerts={report.costAlerts} />
