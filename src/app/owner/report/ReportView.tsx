@@ -240,29 +240,52 @@ function CostDonutChart({ expenses }: { expenses: ReportCategoryWithEntry[] }) {
 // ── Priority 4: Cost alerts ───────────────────────────────────
 
 function CostAlerts({ alerts }: { alerts: CostAlert[] }) {
-  if (!alerts.length) return null;
   return (
     <div className="rpt-section">
       <div className="rpt-section-header" style={{ cursor:'default' }}>
         <span className="rpt-section-title">⚠️ Cảnh báo chi phí</span>
+        {alerts.length > 0 && (
+          <span style={{
+            fontSize:'.7rem', padding:'2px 8px', borderRadius:'99px',
+            background:'rgba(163,45,45,.1)', color:'#A32D2D', fontWeight:600,
+          }}>{alerts.length} mục</span>
+        )}
       </div>
-      <div className="rpt-section-body">
-        {alerts.map(a => (
-          <div key={a.categoryId} className="alert-row">
-            <div className="alert-row-left">
-              <span className="alert-icon" style={{ background: `${a.color}18` }}>{a.icon}</span>
-              <div>
-                <div className="alert-name">{a.name}</div>
-                <div className="alert-reason">{a.reason}</div>
+      {alerts.length === 0 ? (
+        <div style={{
+          display:'flex', alignItems:'center', gap:10,
+          padding:'14px 16px', fontSize:'.82rem', color:'#178a5e',
+          background:'rgba(23,138,94,.04)',
+        }}>
+          <span style={{ fontSize:'1.1rem' }}>✅</span>
+          <span>Không có cảnh báo chi phí bất thường tháng này</span>
+        </div>
+      ) : (
+        <div className="rpt-section-body">
+          {alerts.map(a => (
+            <div key={a.categoryId} className="alert-row">
+              <div className="alert-row-left">
+                <span className="alert-icon" style={{ background: `${a.color}18` }}>{a.icon}</span>
+                <div>
+                  <div className="alert-name">{a.name}</div>
+                  <div className="alert-reason">{a.reason}</div>
+                </div>
+              </div>
+              <div className="alert-amount">
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontFamily:'Georgia,serif', fontStyle:'italic', fontSize:'.9rem', color:'#1C2B4A' }}>
+                    {fmtShort(a.amount)}
+                  </div>
+                  <div style={{ fontSize:'.68rem', color:'#8A8F9A' }}>
+                    Tháng trước: {fmtShort(a.prevAmount)}
+                  </div>
+                </div>
+                <span className="alert-badge">↑{a.pctChange}%</span>
               </div>
             </div>
-            <div className="alert-amount">
-              <span className="alert-val">{fmtShort(a.amount)}</span>
-              <span className="alert-badge">↑{a.pctChange}%</span>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -475,7 +498,7 @@ function Chart6m({ data }: { data: MonthlyReport['monthly6'] }) {
           );
         })}
       </svg>
-      <div style={{ display:'flex', gap:16, fontSize:'.7rem', color:'#8A8F9A', marginTop:6, paddingLeft:PAD.l }}>
+      <div style={{ display:'flex', gap:16, fontSize:'.7rem', color:'#8A8F9A', marginTop:16, paddingLeft:PAD.l, position:'relative', zIndex:1, background:'var(--white,#fff)', paddingTop:4, paddingBottom:2 }}>
         {[
           { color:'#178a5e', label:'Doanh thu' },
           { color:'#C9A84C', label:'Lợi nhuận' },
