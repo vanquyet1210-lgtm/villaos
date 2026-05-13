@@ -182,6 +182,61 @@ function DonutChart({ data }: { data: { source: string; amount: number; pct: num
   );
 }
 
+// ── Priority 4: Expense donut chart ──────────────────────────
+
+function CostDonutChart({ expenses }: { expenses: ReportCategoryWithEntry[] }) {
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
+  if (!total) return null;
+
+  // Top 4 + Khác
+  const sorted = [...expenses].sort((a, b) => b.amount - a.amount);
+  const top4   = sorted.slice(0, 4);
+  const rest   = sorted.slice(4);
+  const restAmt = rest.reduce((s, e) => s + e.amount, 0);
+  const data = [
+    ...top4.map(e => ({ source: e.name, amount: e.amount, pct: Math.round(e.amount / total * 100), color: e.color })),
+    ...(restAmt > 0 ? [{ source: 'Khác', amount: restAmt, pct: Math.round(restAmt / total * 100), color: '#8A8F9A' }] : []),
+  ];
+
+  const R = 60; const CX = 80; const CY = 80;
+  let angle = -Math.PI / 2;
+  const slices = data.map(d => {
+    const sweep = (d.amount / total) * 2 * Math.PI;
+    const x1 = CX + R * Math.cos(angle);
+    const y1 = CY + R * Math.sin(angle);
+    angle += sweep;
+    const x2 = CX + R * Math.cos(angle);
+    const y2 = CY + R * Math.sin(angle);
+    const large = sweep > Math.PI ? 1 : 0;
+    return { ...d, path: `M${CX},${CY} L${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2} Z` };
+  });
+
+  return (
+    <div className="donut-wrap">
+      <svg viewBox="0 0 160 160" width="140" height="140">
+        <circle cx={CX} cy={CY} r={R * 0.56} fill="white"/>
+        {slices.map((s, i) => (
+          <path key={i} d={s.path} fill={s.color} stroke="white" strokeWidth="1.5"/>
+        ))}
+        <text x={CX} y={CY - 4} textAnchor="middle" fontSize="11" fontWeight="600" fill="#1C2B4A">
+          {fmtShort(total)}
+        </text>
+        <text x={CX} y={CY + 10} textAnchor="middle" fontSize="8" fill="#8A8F9A">Tổng CP</text>
+      </svg>
+      <div className="donut-legend">
+        {data.map((d, i) => (
+          <div key={i} className="donut-legend-row">
+            <span className="donut-dot" style={{ background: d.color }}/>
+            <span className="donut-lbl">{d.source}</span>
+            <span className="donut-pct">{fmtShort(d.amount)}</span>
+            <span className="donut-pct-num">({d.pct}%)</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Priority 4: Cost alerts ───────────────────────────────────
 
 function CostAlerts({ alerts }: { alerts: CostAlert[] }) {
@@ -470,6 +525,16 @@ export default function ReportView({ report }: { report: MonthlyReport }) {
             </div>
             <div style={{ padding:'16px' }}>
               <DonutChart data={report.revenueBySource} />
+            </div>
+          </div>
+        )}
+        {report.expenses.some(e => e.amount > 0) && (
+          <div className="rpt-section rpt-section--donut">
+            <div className="rpt-section-header" style={{ cursor:'default' }}>
+              <span className="rpt-section-title">🔴 Chi phí theo danh mục</span>
+            </div>
+            <div style={{ padding:'16px' }}>
+              <CostDonutChart expenses={report.expenses.filter(e => e.amount > 0)} />
             </div>
           </div>
         )}
