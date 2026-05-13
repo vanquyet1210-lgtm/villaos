@@ -10,7 +10,6 @@ interface Props {
 }
 
 export default function EntryForm({ report, onSave }: Props) {
-  // Chỉ hiện các khoản thủ công (isAuto = false)
   const manualRevenue  = report.revenue.filter(c => !c.isAuto);
   const manualExpenses = report.expenses.filter(c => !c.isAuto);
 
@@ -19,12 +18,13 @@ export default function EntryForm({ report, onSave }: Props) {
     [...manualRevenue, ...manualExpenses].forEach(c => { m[c.id] = c.amount; });
     return m;
   };
-  const [amounts,  setAmounts]  = useState<Record<string, number>>(initAmounts);
-  const [saving,   setSaving]   = useState(false);
-  const [saved,    setSaved]    = useState(false);
+
+  const [amounts, setAmounts] = useState<Record<string, number>>(initAmounts);
+  const [saving,  setSaving]  = useState(false);
+  const [saved,   setSaved]   = useState(false);
 
   const setAmt = (id: string, val: string) => {
-    setAmounts(prev => ({ ...prev, [id]: parseInt(val.replace(/\D/g,'')) || 0 }));
+    setAmounts(prev => ({ ...prev, [id]: parseInt(val.replace(/\D/g, '')) || 0 }));
   };
 
   const handleSave = async () => {
@@ -68,10 +68,10 @@ export default function EntryForm({ report, onSave }: Props) {
           <div className="entry-section-title">💚 Doanh thu — nhập tay</div>
           {manualRevenue.map(c => (
             <div key={c.id} className="entry-row">
-              <label className="entry-row-name" htmlFor={`amt-${c.id}`}>{c.icon} {c.name}</label>
+              <label className="entry-row-name" htmlFor={`amt-rev-${c.id}`}>{c.icon} {c.name}</label>
               <div className="entry-input-wrap">
                 <input
-                  id={`amt-${c.id}`}
+                  id={`amt-rev-${c.id}`}
                   type="number"
                   min="0"
                   value={amounts[c.id] || ''}
@@ -91,10 +91,10 @@ export default function EntryForm({ report, onSave }: Props) {
           <div className="entry-section-title">🔴 Chi phí — nhập tay</div>
           {manualExpenses.map(c => (
             <div key={c.id} className="entry-row">
-              <label className="entry-row-name" htmlFor={`amt-${c.id}`}>{c.icon} {c.name}</label>
+              <label className="entry-row-name" htmlFor={`amt-exp-${c.id}`}>{c.icon} {c.name}</label>
               <div className="entry-input-wrap">
                 <input
-                  id={`amt-${c.id}`}
+                  id={`amt-exp-${c.id}`}
                   type="number"
                   min="0"
                   value={amounts[c.id] || ''}
@@ -114,7 +114,7 @@ export default function EntryForm({ report, onSave }: Props) {
           <span>Doanh thu dự kiến</span>
           <span className="entry-summary-val entry-summary-val--rev">
             {fmtShort(
-              report.revenue.reduce((s, c) => s + (c.isAuto ? c.amount : (amounts[c.id] ?? 0)), 0)
+              report.revenue.reduce((s, c) => s + (c.isAuto ? c.amount : (amounts[c.id] ?? 0)), 0),
             )}
           </span>
         </div>
@@ -122,7 +122,7 @@ export default function EntryForm({ report, onSave }: Props) {
           <span>Chi phí dự kiến</span>
           <span className="entry-summary-val entry-summary-val--exp">
             {fmtShort(
-              report.expenses.reduce((s, c) => s + (c.isAuto ? c.amount : (amounts[c.id] ?? 0)), 0)
+              report.expenses.reduce((s, c) => s + (c.isAuto ? c.amount : (amounts[c.id] ?? 0)), 0),
             )}
           </span>
         </div>
@@ -130,8 +130,8 @@ export default function EntryForm({ report, onSave }: Props) {
           <span>Lợi nhuận ước tính</span>
           <span className="entry-summary-val">
             {fmtShort(
-              report.revenue.reduce((s,c) => s+(c.isAuto?c.amount:(amounts[c.id]??0)),0) -
-              report.expenses.reduce((s,c) => s+(c.isAuto?c.amount:(amounts[c.id]??0)),0)
+              report.revenue.reduce((s, c)  => s + (c.isAuto ? c.amount : (amounts[c.id] ?? 0)), 0) -
+              report.expenses.reduce((s, c) => s + (c.isAuto ? c.amount : (amounts[c.id] ?? 0)), 0),
             )}
           </span>
         </div>
@@ -147,15 +147,15 @@ export default function EntryForm({ report, onSave }: Props) {
       <style>{`
         .entry-form { display:flex; flex-direction:column; gap:12px; }
         .entry-info {
-          display:     flex; align-items:flex-start; gap:10px;
-          background:  rgba(28,43,74,.04); border:1px solid rgba(28,43,74,.08);
+          display:flex; align-items:flex-start; gap:10px;
+          background:rgba(28,43,74,.04); border:1px solid rgba(28,43,74,.08);
           border-radius:12px; padding:12px 14px;
           font-size:.83rem; color:#4A5568; line-height:1.55;
         }
         .entry-section {
-          background:    var(--white,#fff);
-          border:        1px solid rgba(28,43,74,.08);
-          border-radius: 14px; overflow:hidden;
+          background:var(--white,#fff);
+          border:1px solid rgba(28,43,74,.08);
+          border-radius:14px; overflow:hidden;
         }
         .entry-section--auto { opacity:.7; }
         .entry-section-title {
@@ -165,21 +165,21 @@ export default function EntryForm({ report, onSave }: Props) {
           border-bottom:0.5px solid rgba(28,43,74,.06);
         }
         .entry-row {
-          display:         flex;
-          align-items:     center;
-          justify-content: space-between;
-          padding:         10px 16px;
-          border-bottom:   0.5px solid rgba(28,43,74,.04);
-          gap:             12px;
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          padding:10px 16px;
+          border-bottom:0.5px solid rgba(28,43,74,.04);
+          gap:12px;
         }
         .entry-row:last-child { border-bottom:none; }
         .entry-row-name { font-size:.85rem; color:#1C2B4A; flex:1; }
         .entry-input-wrap {
-          display:     flex;
-          align-items: center;
-          gap:         4px;
-          background:  rgba(28,43,74,.04);
-          border:      1px solid rgba(28,43,74,.1);
+          display:flex;
+          align-items:center;
+          gap:4px;
+          background:rgba(28,43,74,.04);
+          border:1px solid rgba(28,43,74,.1);
           border-radius:8px; padding:4px 8px;
         }
         .entry-input-wrap input {
@@ -192,14 +192,15 @@ export default function EntryForm({ report, onSave }: Props) {
           font-family:Georgia,serif; font-style:italic; font-size:.88rem; color:#1C2B4A;
         }
         .entry-summary {
-          background:    rgba(28,43,74,.03);
-          border:        1px solid rgba(28,43,74,.08);
-          border-radius: 14px; padding:14px 16px;
-          display:       flex; flex-direction:column; gap:8px;
+          background:rgba(28,43,74,.03);
+          border:1px solid rgba(28,43,74,.08);
+          border-radius:14px; padding:14px 16px;
+          display:flex; flex-direction:column; gap:8px;
         }
+        /* Priority 1 fix: removed duplicate/broken display property */
         .entry-summary-row {
-          display:justify-content:space-between;
-          display:flex; justify-content:space-between;
+          display:flex;
+          justify-content:space-between;
           font-size:.83rem; color:#4A5568;
         }
         .entry-summary-row--profit {
@@ -225,6 +226,6 @@ export default function EntryForm({ report, onSave }: Props) {
 
 function fmtShort(n: number) {
   if (!n) return '0đ';
-  if (n >= 1_000_000) return (n/1_000_000).toFixed(1).replace(/\.0$/,'') + ' tr';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + ' tr';
   return n.toLocaleString('vi-VN') + 'đ';
 }
