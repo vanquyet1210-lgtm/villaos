@@ -518,16 +518,30 @@ export default function ReportView({ report }: { report: MonthlyReport }) {
 
       {/* ── Row 2: Donut + 6-month chart ── */}
       <div className="rpt-row2">
-        {report.revenueBySource.length > 0 && (
-          <div className="rpt-section rpt-section--donut">
-            <div className="rpt-section-header" style={{ cursor:'default' }}>
-              <span className="rpt-section-title">📊 Doanh thu theo nguồn</span>
+        {report.revenue.some(e => e.amount > 0) && (() => {
+          const total = report.revenue.reduce((s, e) => s + e.amount, 0);
+          const src = report.revenueBySource.length > 0
+            ? report.revenueBySource
+            : report.revenue
+                .filter(e => e.amount > 0)
+                .sort((a, b) => b.amount - a.amount)
+                .map(e => ({
+                  source: e.name,
+                  amount: e.amount,
+                  pct: Math.round(e.amount / total * 100),
+                  color: e.color,
+                }));
+          return (
+            <div className="rpt-section rpt-section--donut">
+              <div className="rpt-section-header" style={{ cursor:'default' }}>
+                <span className="rpt-section-title">📊 Doanh thu theo nguồn</span>
+              </div>
+              <div style={{ padding:'16px' }}>
+                <DonutChart data={src} />
+              </div>
             </div>
-            <div style={{ padding:'16px' }}>
-              <DonutChart data={report.revenueBySource} />
-            </div>
-          </div>
-        )}
+          );
+        })()}
         {report.expenses.some(e => e.amount > 0) && (
           <div className="rpt-section rpt-section--donut">
             <div className="rpt-section-header" style={{ cursor:'default' }}>
