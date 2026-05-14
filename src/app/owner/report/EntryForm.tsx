@@ -139,6 +139,7 @@ export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
   const [saving,  setSaving] = useState(false);
   const [saved,   setSaved]  = useState(false);
   const [refresh, setRefresh] = useState(false);
+  const [expTab,  setExpTab] = useState(0);
 
   const va = (id: string, v: number) => setVA(p => ({ ...p, [id]: v }));
   const sa = (id: string, v: number) => setSA(p => ({ ...p, [id]: v }));
@@ -171,6 +172,9 @@ export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
     setTimeout(() => setRefresh(false), 800);
   };
 
+  // Villas for shared cost multi-villa table
+  const allVillas = report.allVillasSummary ?? [];
+
   return (
     <div className="ef">
 
@@ -190,277 +194,281 @@ export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
         </div>
       </div>
 
-      {/* ══ TOP GRID ══ */}
-      <div className="ef-top-grid">
-
-        {/* ── SECTION 1: DOANH THU ── */}
-        <div className="ef-card">
-          <div className="ef-card-hd ef-card-hd--rev">
-            <span className="ef-card-num ef-card-num--rev">1</span>
-            <span>NHẬP DOANH THU</span>
-          </div>
-
-          <div className="ef-rev-grid">
-            {/* AUTO column */}
-            <div className="ef-rev-col">
-              <div className="ef-col-tag ef-col-tag--auto">
-                <span className="ef-col-tag-dot"/>AUTO
-              </div>
-              <div className="ef-tbl-head">
-                <span>Nguồn doanh thu</span><span>Số tiền (đ)</span>
-              </div>
-              {autoRev.map(c => (
-                <div key={c.id} className="ef-tbl-row ef-tbl-row--auto">
-                  <div className="ef-tbl-name">
-                    <BrandIcon name={c.name} icon={c.icon}/>
-                    <span>{c.name}</span>
-                    <span className="ef-auto-badge">auto</span>
-                  </div>
-                  <span className="ef-tbl-fixed">{c.amount ? fmt(c.amount) : '—'}</span>
+      {/* ══ SECTION 1: DOANH THU ══ */}
+      <div className="ef-card">
+        <div className="ef-card-hd ef-card-hd--rev">
+          <span className="ef-card-num ef-card-num--rev">1</span>
+          <span>NHẬP DOANH THU</span>
+        </div>
+        <div className="ef-rev-grid">
+          {/* AUTO */}
+          <div className="ef-rev-col">
+            <div className="ef-col-tag ef-col-tag--auto"><span className="ef-col-tag-dot"/>AUTO</div>
+            <div className="ef-tbl-head"><span>Nguồn doanh thu</span><span>Số tiền (đ)</span></div>
+            {autoRev.map(c => (
+              <div key={c.id} className="ef-tbl-row ef-tbl-row--auto">
+                <div className="ef-tbl-name">
+                  <BrandIcon name={c.name} icon={c.icon}/>
+                  <span>{c.name}</span>
+                  <span className="ef-auto-badge">auto</span>
                 </div>
-              ))}
-              {manualRev.map(c => (
-                <div key={c.id} className="ef-tbl-row">
-                  <div className="ef-tbl-name">
-                    <BrandIcon name={c.name} icon={c.icon}/>
-                    <span>{c.name}</span>
-                  </div>
-                  <AmtInput value={villaAmts[c.id]??0} onChange={v=>va(c.id,v)} placeholder="Nhập số tiền"/>
+                <span className="ef-tbl-fixed">{c.amount ? fmt(c.amount) : '—'}</span>
+              </div>
+            ))}
+            {manualRev.map(c => (
+              <div key={c.id} className="ef-tbl-row">
+                <div className="ef-tbl-name">
+                  <BrandIcon name={c.name} icon={c.icon}/><span>{c.name}</span>
                 </div>
-              ))}
-              <div className="ef-col-subtotal ef-col-subtotal--rev">
-                <span>Tổng doanh thu tự động</span>
-                <span>{money(totalAutoRev + totalManRev)}</span>
+                <AmtInput value={villaAmts[c.id]??0} onChange={v=>va(c.id,v)} placeholder="Nhập số tiền"/>
               </div>
-            </div>
-
-            {/* MANUAL column */}
-            <div className="ef-rev-col ef-rev-col--manual">
-              <div className="ef-col-tag ef-col-tag--manual">
-                <span className="ef-col-tag-dot"/>MANUAL
-              </div>
-              <div className="ef-tbl-head">
-                <span>Nguồn doanh thu bổ sung</span><span>Số tiền (đ)</span>
-              </div>
-              {extraRows.map((row, i) => (
-                <div key={i} className="ef-tbl-row ef-tbl-row--extra">
-                  <input
-                    className="ef-extra-lbl"
-                    value={row.label}
-                    placeholder={`Doanh thu khác ${i + 1}`}
-                    onChange={e => setER(r => r.map((x,j) => j===i ? {...x,label:e.target.value} : x))}
-                  />
-                  <AmtInput
-                    value={row.amount}
-                    onChange={v => setER(r => r.map((x,j) => j===i ? {...x,amount:v} : x))}
-                  />
-                </div>
-              ))}
-              <button className="ef-add-btn" onClick={() => setER(r => [...r,{label:'',amount:0}])}>
-                ＋ Thêm dòng
-              </button>
-              <div className="ef-col-subtotal ef-col-subtotal--manual">
-                <span>Tổng nhập tay bổ sung</span>
-                <span>{money(totalExtraRev)}</span>
-              </div>
+            ))}
+            <div className="ef-col-subtotal ef-col-subtotal--rev">
+              <span>Tổng doanh thu tự động</span>
+              <span>{money(totalAutoRev + totalManRev)}</span>
             </div>
           </div>
 
-          {/* Revenue total */}
-          <div className="ef-big-total ef-big-total--rev">
-            <span>TỔNG DOANH THU (TỰ ĐỘNG + NHẬP TAY)</span>
-            <span className="ef-big-total-val">{money(totalRev)}</span>
+          {/* MANUAL */}
+          <div className="ef-rev-col ef-rev-col--manual">
+            <div className="ef-col-tag ef-col-tag--manual"><span className="ef-col-tag-dot"/>MANUAL</div>
+            <div className="ef-tbl-head"><span>Nguồn doanh thu bổ sung</span><span>Số tiền (đ)</span></div>
+            {extraRows.map((row, i) => (
+              <div key={i} className="ef-tbl-row ef-tbl-row--extra">
+                <input className="ef-extra-lbl" value={row.label}
+                  placeholder={`Doanh thu khác ${i + 1}`}
+                  onChange={e => setER(r => r.map((x,j) => j===i ? {...x,label:e.target.value} : x))}
+                />
+                <AmtInput value={row.amount}
+                  onChange={v => setER(r => r.map((x,j) => j===i ? {...x,amount:v} : x))}/>
+              </div>
+            ))}
+            <button className="ef-add-btn" onClick={() => setER(r => [...r,{label:'',amount:0}])}>＋ Thêm dòng</button>
+            <div className="ef-col-subtotal ef-col-subtotal--manual">
+              <span>Tổng nhập tay bổ sung</span><span>{money(totalExtraRev)}</span>
+            </div>
           </div>
         </div>
-
-        {/* ── SECTION 2: CHI PHÍ RIÊNG ── */}
-        <div className="ef-card">
-          <div className="ef-card-hd ef-card-hd--exp">
-            <span className="ef-card-num ef-card-num--exp">2</span>
-            <span>NHẬP CHI PHÍ RIÊNG (THEO VILLA)</span>
-          </div>
-
-          <div className={`ef-exp-grid ef-exp-grid--${Math.max(1, Math.min(pvEntries.length, 3))}`}>
-            {pvEntries.slice(0, 3).map(([gName, items], gi) => {
-              const meta  = getGroupMeta(gName, gi);
-              const gSum  = sumMap(items.map(c=>c.id), villaAmts);
-              return (
-                <div key={gName} className="ef-exp-col">
-                  <div className="ef-exp-col-hd" style={{ background:meta.light, borderBottom:`2px solid ${meta.border}` }}>
-                    <span style={{ color:meta.accent }}>{meta.icon}</span>
-                    <span style={{ color:meta.accent }}>
-                      2.{gi+1} {meta.label}
-                    </span>
-                  </div>
-                  <div className="ef-tbl-head">
-                    <span>Khoản chi</span><span>Số tiền (đ)</span>
-                  </div>
-                  {items.map(c => (
-                    <div key={c.id} className="ef-tbl-row">
-                      <div className="ef-tbl-name">
-                        <span className="ef-icon">{c.icon}</span>
-                        <span>{c.name.replace(' (chung)','')}</span>
-                      </div>
-                      <AmtInput value={villaAmts[c.id]??0} onChange={v=>va(c.id,v)}/>
-                    </div>
-                  ))}
-                  <div className="ef-col-subtotal" style={{ color:meta.accent }}>
-                    <span>Tổng {gName.toLowerCase()}</span>
-                    <span style={{ fontFamily:'Georgia,serif', fontStyle:'italic' }}>{money(gSum)}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {pvEntries.length === 0 && (
-            <div className="ef-empty-hint">
-              Chưa có danh mục chi phí riêng. Vào <strong>⚙️ Danh mục</strong> để thêm.
-            </div>
-          )}
-
-          <div className="ef-big-total ef-big-total--exp">
-            <span>TỔNG CHI PHÍ RIÊNG (THEO VILLA)</span>
-            <span className="ef-big-total-val">{money(totalPvExp)}</span>
-          </div>
+        <div className="ef-big-total ef-big-total--rev">
+          <span>TỔNG DOANH THU (TỰ ĐỘNG + NHẬP TAY)</span>
+          <span className="ef-big-total-val">{money(totalRev)}</span>
         </div>
       </div>
 
-      {/* ══ BOTTOM GRID ══ */}
-      <div className="ef-bot-grid">
-
-        {/* ── SECTION 3: CHI PHÍ CHUNG ── */}
-        <div className="ef-card">
-          <div className="ef-card-hd ef-card-hd--shared">
-            <span className="ef-card-num ef-card-num--shared">3</span>
-            <span>CHI PHÍ CHUNG (TOÀN HỆ THỐNG)</span>
-            <span className="ef-shared-lock">🔒 Cố định · Không đổi theo Villa</span>
-          </div>
-
-          <div className="ef-shared-body">
-            <div className="ef-shared-main">
-              {Object.entries(sharedGrps).map(([gName, items], gi) => (
-                <div key={gName} className="ef-shared-grp">
-                  <div className="ef-shared-grp-hd">
-                    <span className="ef-shared-grp-num">{gi+1}</span>
-                    CHI PHÍ {gName.toUpperCase()} (CHUNG)
-                  </div>
-                  <div className="ef-shared-thead">
-                    <span>Khoản chi</span>
-                    <span>Tổng hệ thống (đ)</span>
-                    <span>Phân bổ cho villa (đ)</span>
-                    <span>Tỷ lệ</span>
-                  </div>
-                  {sharedAuto.filter(c=>(c.groupName??'Nhân sự')===gName).map(c => (
-                    <div key={c.id} className="ef-shared-row ef-shared-row--auto">
-                      <div className="ef-tbl-name"><span>{c.icon}</span><span>{c.name}</span><span className="ef-auto-badge">auto</span></div>
-                      <span className="ef-num-cell">{c.amount ? fmt(c.amount) : '—'}</span>
-                      <span className="ef-num-cell ef-num-cell--alloc">{fmt(Math.round(c.amount*allocPct/100)) || '—'}</span>
-                      <span className="ef-pct-cell">{allocPct}%</span>
-                    </div>
-                  ))}
-                  {items.map(c => {
-                    const full  = sharedAmts[c.id]??0;
-                    const alloc = Math.round(full*allocPct/100);
-                    return (
-                      <div key={c.id} className="ef-shared-row">
-                        <div className="ef-tbl-name"><span>{c.icon}</span><span>{c.name}</span></div>
-                        <AmtInput value={full} onChange={v=>sa(c.id,v)}/>
-                        <span className="ef-num-cell ef-num-cell--alloc">{fmt(alloc)||'—'}</span>
-                        <span className="ef-pct-cell">{allocPct}%</span>
-                      </div>
-                    );
-                  })}
-                  <div className="ef-shared-subtotal">
-                    <span>Tổng chi phí {gName.toLowerCase()} (phân bổ)</span>
-                    <span/>
-                    <span className="ef-num-cell ef-num-cell--total">
-                      {money(Math.round(
-                        [...items.map(c=>sharedAmts[c.id]??0),
-                         ...sharedAuto.filter(c=>(c.groupName??'Nhân sự')===gName).map(c=>c.amount)]
-                          .reduce((a,b)=>a+b,0) * allocPct / 100
-                      ))}
-                    </span>
-                    <span/>
-                  </div>
+      {/* ══ SECTION 2: CHI PHÍ RIÊNG ══ */}
+      <div className="ef-card">
+        <div className="ef-card-hd ef-card-hd--exp">
+          <span className="ef-card-num ef-card-num--exp">2</span>
+          <span>NHẬP CHI PHÍ RIÊNG (THEO VILLA)</span>
+        </div>
+        <div className="ef-exp-grid ef-exp-grid--3">
+          {pvEntries.slice(0, 3).map(([gName, items], gi) => {
+            const meta = getGroupMeta(gName, gi);
+            const gSum = sumMap(items.map(c=>c.id), villaAmts);
+            return (
+              <div key={gName} className="ef-exp-col">
+                <div className="ef-exp-col-hd" style={{ background:meta.light, borderBottom:`2px solid ${meta.border}` }}>
+                  <span>{meta.icon}</span>
+                  <span style={{ color:meta.accent, fontWeight:800, fontSize:'.7rem', letterSpacing:'.05em' }}>
+                    2.{gi+1} {meta.label}
+                  </span>
                 </div>
-              ))}
-              {sharedExp.length === 0 && sharedAuto.length === 0 && (
-                <div className="ef-empty-hint">Chưa có danh mục chi phí chung.</div>
-              )}
-            </div>
-
-            {/* Info panel */}
-            <div className="ef-shared-info">
-              <div className="ef-info-list">
-                {[
-                  'Chi phí chung được phân bổ tự động theo tỷ lệ doanh thu cho từng villa.',
-                  'Khi thay đổi villa, phần chi phí chung sẽ giữ nguyên.',
-                  'Thay đổi danh mục tại ⚙️ Danh mục.',
-                ].map((s, i) => (
-                  <div key={i} className="ef-info-item">
-                    <span className="ef-info-i">ℹ</span><span>{s}</span>
+                <div className="ef-tbl-head"><span>Khoản chi</span><span>Số tiền (đ)</span></div>
+                {items.map(c => (
+                  <div key={c.id} className="ef-tbl-row">
+                    <div className="ef-tbl-name">
+                      <span className="ef-icon">{c.icon}</span>
+                      <span className="ef-name-text">{c.name.replace(' (chung)','')}</span>
+                    </div>
+                    <AmtInput value={villaAmts[c.id]??0} onChange={v=>va(c.id,v)}/>
                   </div>
                 ))}
-                {allocPct < 100 && (
-                  <div className="ef-alloc-pill">
-                    Villa này chịu <strong>{allocPct}%</strong> chi phí chung
-                  </div>
-                )}
+                <div className="ef-col-subtotal" style={{ color:meta.accent }}>
+                  <span>Tổng</span>
+                  <span style={{ fontFamily:'Georgia,serif', fontStyle:'italic' }}>{money(gSum)}</span>
+                </div>
               </div>
-              <button className="ef-detail-btn">☰ Xem chi tiết chi phí chung</button>
+            );
+          })}
+          {pvEntries.length === 0 && (
+            <div className="ef-empty-hint">Chưa có danh mục. Vào <strong>⚙️ Danh mục</strong> để thêm.</div>
+          )}
+        </div>
+        <div className="ef-big-total ef-big-total--exp">
+          <span>TỔNG CHI PHÍ RIÊNG (THEO VILLA)</span>
+          <span className="ef-big-total-val">{money(totalPvExp)}</span>
+        </div>
+      </div>
+
+      {/* ══ SECTION 3: CHI PHÍ CHUNG — multi-villa table ══ */}
+      <div className="ef-card">
+        <div className="ef-card-hd ef-card-hd--shared">
+          <span className="ef-card-num ef-card-num--shared">3</span>
+          <span>CHI PHÍ CHUNG (TOÀN HỆ THỐNG)</span>
+          <span className="ef-shared-lock">🔒 Cố định · Không đổi theo Villa</span>
+        </div>
+        <div className="ef-mv-wrap">
+          <table className="ef-mv-tbl">
+            <thead>
+              <tr className="ef-mv-hdr-row">
+                <th className="ef-mv-th ef-mv-th--name" rowSpan={2}>Khoản chi</th>
+                <th className="ef-mv-th ef-mv-th--all" colSpan={2}>
+                  <span className="ef-mv-villa-badge ef-mv-villa-badge--all">🌐 Toàn hệ thống</span>
+                </th>
+                {allVillas.map(v => (
+                  <th key={v.villaId} className="ef-mv-th ef-mv-th--villa" colSpan={2}>
+                    <span className="ef-mv-villa-badge">{v.emoji} {v.villaName}</span>
+                  </th>
+                ))}
+              </tr>
+              <tr className="ef-mv-sub-row">
+                <th className="ef-mv-sub">Số tiền (đ)</th>
+                <th className="ef-mv-sub">%</th>
+                {allVillas.map(v => (
+                  <>
+                    <th key={v.villaId+'a'} className="ef-mv-sub">Số tiền (đ)</th>
+                    <th key={v.villaId+'p'} className="ef-mv-sub ef-mv-sub--pct">% phân bổ</th>
+                  </>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(sharedGrps).map(([gName, items]) => (
+                <>
+                  <tr key={`g-${gName}`} className="ef-mv-grp-row">
+                    <td colSpan={2 + allVillas.length * 2} className="ef-mv-grp-cell">
+                      CHI PHÍ {gName.toUpperCase()} (CHUNG)
+                    </td>
+                  </tr>
+                  {sharedAuto.filter(c=>(c.groupName??'Nhân sự')===gName).map(c => (
+                    <tr key={c.id} className="ef-mv-row ef-mv-row--auto">
+                      <td className="ef-mv-td-name">
+                        <span className="ef-icon">{c.icon}</span><span>{c.name}</span>
+                        <span className="ef-auto-badge">auto</span>
+                      </td>
+                      <td className="ef-mv-td-num">{c.amount ? fmt(c.amount) : '—'}</td>
+                      <td className="ef-mv-td-pct">100%</td>
+                      {allVillas.map(v => (
+                        <>
+                          <td key={v.villaId+'a'} className="ef-mv-td-num ef-mv-td-alloc">
+                            {c.amount ? fmt(Math.round(c.amount * (v.allocPct??0) / 100)) : '—'}
+                          </td>
+                          <td key={v.villaId+'p'} className="ef-mv-td-pct-badge">
+                            <span className="ef-pct-cell">{v.allocPct??0}%</span>
+                          </td>
+                        </>
+                      ))}
+                    </tr>
+                  ))}
+                  {items.map(c => {
+                    const full = sharedAmts[c.id]??0;
+                    return (
+                      <tr key={c.id} className="ef-mv-row">
+                        <td className="ef-mv-td-name">
+                          <span className="ef-icon">{c.icon}</span><span>{c.name}</span>
+                        </td>
+                        <td className="ef-mv-td-input"><AmtInput value={full} onChange={v=>sa(c.id,v)}/></td>
+                        <td className="ef-mv-td-pct">100%</td>
+                        {allVillas.map(v => (
+                          <>
+                            <td key={v.villaId+'a'} className="ef-mv-td-num ef-mv-td-alloc">
+                              {full ? fmt(Math.round(full * (v.allocPct??0) / 100)) : '—'}
+                            </td>
+                            <td key={v.villaId+'p'} className="ef-mv-td-pct-badge">
+                              <span className="ef-pct-cell">{v.allocPct??0}%</span>
+                            </td>
+                          </>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                  {(() => {
+                    const groupTotal = [...items.map(c=>sharedAmts[c.id]??0), ...sharedAuto.filter(c=>(c.groupName??'Nhân sự')===gName).map(c=>c.amount)].reduce((a,b)=>a+b,0);
+                    return (
+                      <tr key={`sub-${gName}`} className="ef-mv-subtotal-row">
+                        <td className="ef-mv-subtotal-lbl">Tổng {gName.toLowerCase()}</td>
+                        <td className="ef-mv-subtotal-val" colSpan={2}>{money(groupTotal)}</td>
+                        {allVillas.map(v => (
+                          <td key={v.villaId} className="ef-mv-subtotal-val" colSpan={2}>
+                            {money(Math.round(groupTotal * (v.allocPct??0) / 100))}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })()}
+                </>
+              ))}
+              {sharedExp.length === 0 && sharedAuto.length === 0 && (
+                <tr><td colSpan={2 + allVillas.length * 2} className="ef-empty-hint">Chưa có danh mục chi phí chung.</td></tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="ef-mv-footer-row">
+                <td className="ef-mv-footer-lbl">TỔNG CHI PHÍ CHUNG</td>
+                <td className="ef-mv-footer-val" colSpan={2}>{money(totalSharedFull)}</td>
+                {allVillas.map(v => (
+                  <td key={v.villaId} className="ef-mv-footer-val" colSpan={2}>
+                    {money(Math.round(totalSharedFull * (v.allocPct??0) / 100))}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* ══ SECTION 4: TỔNG KẾT + HƯỚNG DẪN ══ */}
+      <div className="ef-summary-guide-row">
+
+        {/* Summary */}
+        <div className="ef-card ef-summary">
+          <div className="ef-summary-hd">TỔNG KẾT THÁNG {report.month}/{report.year}</div>
+          <div className="ef-formula">
+            <div className="ef-formula-item">
+              <div className="ef-formula-lbl">① Tổng doanh thu</div>
+              <div className="ef-formula-val ef-formula-val--rev">{money(totalRev)}</div>
+            </div>
+            <div className="ef-formula-op">−</div>
+            <div className="ef-formula-item">
+              <div className="ef-formula-lbl">② Tổng chi phí riêng</div>
+              <div className="ef-formula-val ef-formula-val--exp">{money(totalPvExp)}</div>
+            </div>
+            <div className="ef-formula-op">−</div>
+            <div className="ef-formula-item">
+              <div className="ef-formula-lbl">③ Chi phí chung (phân bổ {allocPct}%)</div>
+              <div className="ef-formula-val ef-formula-val--shared">{money(allocShared)}</div>
+            </div>
+            <div className="ef-formula-op">=</div>
+            <div className={`ef-formula-result${netProfit < 0 ? ' negative' : ''}`}>
+              <div className="ef-formula-lbl">LỢI NHUẬN ƯỚC TÍNH</div>
+              <div className="ef-formula-big">{money(Math.abs(netProfit))}</div>
             </div>
           </div>
         </div>
 
-        {/* ── RIGHT PANEL ── */}
-        <div className="ef-right">
-
-          {/* Summary formula */}
-          <div className="ef-summary">
-            <div className="ef-summary-hd">
-              TỔNG KẾT THÁNG {report.month}/{report.year}
-            </div>
-            <div className="ef-formula">
-              <div className="ef-formula-item">
-                <div className="ef-formula-lbl">Tổng doanh thu</div>
-                <div className="ef-formula-val ef-formula-val--rev">{money(totalRev)}</div>
-              </div>
-              <div className="ef-formula-op">−</div>
-              <div className="ef-formula-item">
-                <div className="ef-formula-lbl">Tổng chi phí riêng</div>
-                <div className="ef-formula-val ef-formula-val--exp">{money(totalPvExp)}</div>
-              </div>
-              <div className="ef-formula-op">−</div>
-              <div className="ef-formula-item">
-                <div className="ef-formula-lbl">Chi phí chung (phân bổ)</div>
-                <div className="ef-formula-val ef-formula-val--shared">{money(allocShared)}</div>
-              </div>
-              <div className="ef-formula-op">=</div>
-              <div className={`ef-formula-result${netProfit < 0 ? ' negative' : ''}`}>
-                <div className="ef-formula-lbl">LỢI NHUẬN ƯỚC TÍNH</div>
-                <div className="ef-formula-big">{money(Math.abs(netProfit))}</div>
+        {/* Detailed Guide */}
+        <div className="ef-card ef-guide">
+          <div className="ef-guide-hd">📋 HƯỚNG DẪN CHI TIẾT</div>
+          {[
+            { icon:'☁️', step:'Bước 1', title:'Dữ liệu tự động',
+              text:'VillaOS tự lấy doanh thu từ hệ thống booking (VillaOS, Agoda, Booking.com...). Hiển thị ở cột AUTO. Bạn có thể sửa nếu số liệu chưa đúng.' },
+            { icon:'✏️', step:'Bước 2', title:'Bổ sung doanh thu thủ công',
+              text:'Nhập thêm các khoản thu chưa có trong hệ thống (khách vãng lai, thanh toán trực tiếp, dịch vụ phát sinh...) vào cột MANUAL.' },
+            { icon:'🏠', step:'Bước 3', title:'Chi phí riêng theo villa',
+              text:'Điện, nước, vệ sinh, internet... là chi phí của từng villa. Nhập chính xác theo từng nhóm. Dữ liệu chỉ ảnh hưởng villa đang chọn.' },
+            { icon:'🔗', step:'Bước 4', title:'Chi phí chung toàn hệ thống',
+              text:'Lương nhân viên, hoa hồng, quản lý... được chia sẻ giữa các villa. Hệ thống tự phân bổ theo tỷ lệ doanh thu. Không cần nhập lại khi đổi villa.' },
+            { icon:'💾', step:'Bước 5', title:'Lưu dữ liệu',
+              text:'Nhấn "💾 Lưu dữ liệu" để lưu toàn bộ. Dữ liệu sẽ cập nhật vào báo cáo tháng và dashboard ngay lập tức.' },
+          ].map((s, i) => (
+            <div key={i} className="ef-guide-item">
+              <div className="ef-guide-step-badge">{s.icon}<span>{s.step}</span></div>
+              <div className="ef-guide-content">
+                <div className="ef-guide-title">{s.title}</div>
+                <div className="ef-guide-text">{s.text}</div>
               </div>
             </div>
-          </div>
-
-          {/* Quick guide */}
-          <div className="ef-guide">
-            <div className="ef-guide-hd">📋 HƯỚNG DẪN NHANH</div>
-            {[
-              { icon:'☁️', text:'Dữ liệu mục 1 tự động lấy từ hệ thống, có thể chỉnh sửa.' },
-              { icon:'✏️', text:'Bổ sung doanh thu thủ công ở cột bên phải.' },
-              { icon:'🏠', text:'Nhập chi phí riêng của villa theo 3 nhóm.' },
-              { icon:'🔗', text:'Chi phí chung được phân bổ tự động theo tỷ lệ doanh thu.' },
-              { icon:'💾', text:'Nhấn "Lưu dữ liệu" để lưu lại toàn bộ thông tin.' },
-            ].map((s, i) => (
-              <div key={i} className="ef-guide-item">
-                <span className="ef-guide-icon">{s.icon}</span>
-                <span className="ef-guide-text"><strong>{'①②③④⑤'[i]}</strong> {s.text}</span>
-              </div>
-            ))}
-            <button className="ef-guide-cta">📖 Xem hướng dẫn chi tiết →</button>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -551,9 +559,10 @@ const CSS = `
   padding: 1px 5px; font-size: .7rem;
 }
 
-/* ── Grids ── */
-.ef-top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.ef-bot-grid { display: grid; grid-template-columns: 1fr 320px; gap: 14px; align-items: start; }
+/* ef-top-grid and ef-bot-grid removed — sections are now full-width stacked rows */
+
+/* Summary + guide side by side */
+.ef-summary-guide-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 
 /* ── Cards ── */
 .ef-card {
@@ -867,8 +876,7 @@ const CSS = `
 
 /* Responsive */
 @media (max-width: 900px) {
-  .ef-top-grid  { grid-template-columns: 1fr; }
-  .ef-bot-grid  { grid-template-columns: 1fr; }
+  .ef-summary-guide-row { grid-template-columns: 1fr; }
   .ef-rev-grid  { grid-template-columns: 1fr; }
   .ef-exp-grid  { grid-template-columns: 1fr !important; }
   .ef-shared-body { grid-template-columns: 1fr; }
