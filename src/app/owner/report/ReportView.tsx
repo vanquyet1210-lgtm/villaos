@@ -792,3 +792,4 @@ export default function ReportView({ report }: Props) {
     </div>
   );
 }
+
