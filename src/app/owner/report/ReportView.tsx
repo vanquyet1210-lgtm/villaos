@@ -308,12 +308,7 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
       .map(([label, { value, color }]) => ({ label, value, color }));
   })();
 
-  const channels = report.channelStats ?? [];
-  const payouts  = report.upcomingPayouts ?? [];
-  const services = report.topServices ?? [];
   const alerts   = report.costAlerts ?? [];
-
-  const totalPayout = payouts.reduce((s, p) => s + p.amount, 0);
 
   const healthMetrics: HealthMetric[] = report.healthMetrics ?? [];
   const levelColor: Record<string, string> = {
@@ -348,12 +343,53 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
           prev={Math.round((report.occupancyRate ?? 68) * 0.88)} />
       </div>
 
-      {/* ══ Revenue: donut + chart ════════════════════════════ */}
+      {/* ══ Chart — full width ═══════════════════════════════ */}
+      <div className="rv-card rv-chart-card">
+        <div className="rv-chart-hdr">
+          <span className="rv-title" style={{ marginBottom: 0 }}>📊 DOANH THU &amp; LỢI NHUẬN (6 THÁNG)</span>
+          <div className="rv-chart-legend">
+            {[
+              { color: C.revenue, label: 'Doanh thu', dash: false },
+              { color: C.profit,  label: 'Lợi nhuận', dash: false },
+              { color: C.expense, label: 'Chi phí',   dash: true  },
+            ].map(l => (
+              <span key={l.label} className="rv-leg-item">
+                <svg width="18" height="8">
+                  {l.dash
+                    ? <line x1="0" y1="4" x2="18" y2="4" stroke={l.color} strokeWidth="2" strokeDasharray="4 2" />
+                    : <path d="M0,7 Q9,1 18,7" fill={l.color} fillOpacity=".3" stroke={l.color} strokeWidth="1.5" />}
+                </svg>
+                {l.label}
+              </span>
+            ))}
+          </div>
+          <div className="rv-period-tabs">
+            {(['6', '12', 'ytd'] as const).map(p => (
+              <button key={p} className={`rv-period-btn${chartPeriod === p ? ' active' : ''}`}
+                onClick={() => setChartPeriod(p)}>
+                {p === '6' ? '6 tháng' : p === '12' ? '12 tháng' : 'Năm nay'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Chart6m data={chartData} />
+      </div>
+
+      {/* ══ Donut pair: Revenue + Expense side by side ════════ */}
       <div className="rv-mid">
 
-        {/* Donut — colors sync with revenueBySource category colors */}
+        {/* Revenue donut */}
         <div className="rv-card">
-          <div className="rv-title">DOANH THU THEO NGUỒN</div>
+          <div className="rv-title">🟢 DOANH THU THEO NGUỒN</div>
+          <div className="rv-donut-summary" style={{ color: C.revenue }}>
+            {fmt(report.totalRevenue)}
+            {(() => {
+              const d = pctChange(report.totalRevenue, report.prevMonthRevenue);
+              return d ? <span className="rv-donut-delta" style={{ color: d.up ? C.revenue : C.expense }}>
+                {d.up ? ' ↑' : ' ↓'}{Math.abs(d.pct)}%
+              </span> : null;
+            })()}
+          </div>
           <div className="rv-donut-row">
             <Donut slices={revSlices} label={fmt(report.totalRevenue)} sub="Tổng doanh thu" />
             <div className="rv-legend">
@@ -371,97 +407,49 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
           )}
         </div>
 
-        {/* Area chart — uses C.revenue / C.profit / C.expense (same tokens as KPI) */}
-        <div className="rv-card rv-chart-card">
-          <div className="rv-chart-hdr">
-            <span className="rv-title" style={{ marginBottom: 0 }}>DOANH THU &amp; LỢI NHUẬN</span>
-            <div className="rv-chart-legend">
-              {[
-                { color: C.revenue, label: 'Doanh thu', dash: false },
-                { color: C.profit,  label: 'Lợi nhuận', dash: false },
-                { color: C.expense, label: 'Chi phí',   dash: true  },
-              ].map(l => (
-                <span key={l.label} className="rv-leg-item">
-                  <svg width="18" height="8">
-                    {l.dash
-                      ? <line x1="0" y1="4" x2="18" y2="4" stroke={l.color} strokeWidth="2" strokeDasharray="4 2" />
-                      : <path d="M0,7 Q9,1 18,7" fill={l.color} fillOpacity=".3" stroke={l.color} strokeWidth="1.5" />}
-                  </svg>
-                  {l.label}
-                </span>
-              ))}
-            </div>
-            <div className="rv-period-tabs">
-              {(['6', '12', 'ytd'] as const).map(p => (
-                <button key={p} className={`rv-period-btn${chartPeriod === p ? ' active' : ''}`}
-                  onClick={() => setChartPeriod(p)}>
-                  {p === '6' ? '6 tháng' : p === '12' ? '12 tháng' : 'Năm nay'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <Chart6m data={chartData} />
-        </div>
-      </div>
-
-      {/* ══ Chi phí section ═══════════════════════════════════ */}
-      <div className="rv-card rv-exp-card">
-        <div className="rv-exp-grid">
-
-          {/* Left: summary — red accent matching KPI */}
-          <div className="rv-exp-col rv-exp-col--first">
-            <div className="rv-title">CHI PHÍ</div>
-            <div className="rv-exp-sub">Tổng chi phí tháng {report.month}</div>
-            <div className="rv-exp-total" style={{ color: C.expense }}>
-              {fmt(report.totalExpense)}
-            </div>
+        {/* Expense donut + alerts */}
+        <div className="rv-card">
+          <div className="rv-title">🔴 CHI PHÍ THEO DANH MỤC</div>
+          <div className="rv-donut-summary" style={{ color: C.expense }}>
+            {fmt(report.totalExpense)}
             {(() => {
               const d = pctChange(report.totalExpense, report.prevMonthExpense);
-              return d ? (
-                <div className="kpi-delta" style={{ color: d.up ? C.expense : C.revenue }}>
-                  {d.up ? '↑' : '↓'} {Math.abs(d.pct)}% so với tháng trước
-                </div>
-              ) : null;
+              return d ? <span className="rv-donut-delta" style={{ color: d.up ? C.expense : C.revenue }}>
+                {d.up ? ' ↑' : ' ↓'}{Math.abs(d.pct)}%
+              </span> : null;
             })()}
           </div>
-
-          {/* Middle: donut — colors from expense category groupName */}
-          <div className="rv-exp-col rv-exp-col--mid">
-            <div className="rv-title">CHI PHÍ THEO DANH MỤC</div>
-            <div className="rv-donut-row rv-donut-row--sm">
-              <Donut slices={expSlices} />
-              <div className="rv-legend">
-                {expSlices.map(sl => (
-                  <LegendRow key={sl.label} color={sl.color}
-                    name={sl.label} value={sl.value} total={report.totalExpense} />
+          <div className="rv-donut-row rv-donut-row--sm">
+            <Donut slices={expSlices} label={fmt(report.totalExpense)} sub="Tổng chi phí" />
+            <div className="rv-legend">
+              {expSlices.map(sl => (
+                <LegendRow key={sl.label} color={sl.color}
+                  name={sl.label} value={sl.value} total={report.totalExpense} />
+              ))}
+            </div>
+          </div>
+          {/* Alerts inline below donut */}
+          {alerts.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div className="rv-title" style={{ marginBottom: 8 }}>⚠️ CẢNH BÁO CHI PHÍ</div>
+              <div className="rv-alerts">
+                {alerts.map((al, i) => (
+                  <div key={i} className={`rv-alert${al.pctChange > 30 ? ' rv-alert--warn' : ''}`}
+                    style={{ borderLeftColor: al.color }}>
+                    <span className="rv-alert-icon">{al.icon}</span>
+                    <div className="rv-alert-body">
+                      <div className="rv-alert-name">{al.name}</div>
+                      <div className="rv-alert-reason">{al.reason}</div>
+                    </div>
+                    <div className="rv-alert-amt"
+                      style={{ color: al.pctChange > 0 ? C.expense : C.revenue }}>
+                      {fmt(al.amount)}{al.pctChange > 0 ? ' ↑' : ' ↓'}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
-          </div>
-
-          {/* Right: alerts — border-left color from category */}
-          <div className="rv-exp-col">
-            <div className="rv-title">CẢNH BÁO CHI PHÍ</div>
-            <div className="rv-alerts">
-              {alerts.length === 0
-                ? <div style={{ fontSize: '.78rem', color: C.muted, padding: '8px 0' }}>Không có cảnh báo.</div>
-                : alerts.map((al, i) => (
-                    <div key={i} className={`rv-alert${al.pctChange > 30 ? ' rv-alert--warn' : ''}`}
-                      style={{ borderLeftColor: al.color }}>
-                      <span className="rv-alert-icon">{al.icon}</span>
-                      <div className="rv-alert-body">
-                        <div className="rv-alert-name">{al.name}</div>
-                        <div className="rv-alert-reason">{al.reason}</div>
-                      </div>
-                      <div className="rv-alert-amt"
-                        style={{ color: al.pctChange > 0 ? C.expense : C.revenue }}>
-                        {fmt(al.amount)}{al.pctChange > 0 ? ' ↑' : ' ↓'}
-                      </div>
-                    </div>
-                  ))
-              }
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -619,85 +607,6 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
         </div>
       </div>
 
-      {/* ══ Bottom row ════════════════════════════════════════ */}
-      <div className="rv-bottom">
-
-        {/* Payouts */}
-        <div className="rv-card">
-          <div className="rv-title">PAYOUT SẮP TỚI</div>
-          <div className="rv-payout-sub">Tổng sắp nhận</div>
-          <div className="rv-payout-total" style={{ color: C.cashflow }}>{fmt(totalPayout)}</div>
-          {payouts.map((p, i) => {
-            const ch  = channels.find(c => c.source === p.source);
-            const col = ch?.color ?? C.cashflow;
-            return (
-              <div key={i} className="rv-payout-row">
-                <span className="rv-payout-icon" style={{ background: col + '1a', color: col }}>💳</span>
-                <div className="rv-payout-info">
-                  <span className="rv-payout-ch">{p.source}</span>
-                  <span className="rv-payout-date">{p.expectedDate}</span>
-                </div>
-                <span className="rv-payout-amt" style={{ color: C.cashflow }}>{fmt(p.amount)}</span>
-              </div>
-            );
-          })}
-          <button className="rv-see-all">Xem tất cả</button>
-        </div>
-
-        {/* Channel performance */}
-        <div className="rv-card">
-          <div className="rv-title">HIỆU SUẤT KÊNH BÁN</div>
-          <table className="rv-ch-tbl">
-            <thead>
-              <tr>
-                <th>Kênh</th>
-                <th>Doanh thu</th>
-                <th>Tỷ lệ</th>
-                <th>ADR</th>
-                <th>Công suất</th>
-              </tr>
-            </thead>
-            <tbody>
-              {channels.map((ch, i) => (
-                <tr key={i}>
-                  <td>
-                    <span className="rv-ch-dot" style={{ background: ch.color }} />
-                    {ch.source}
-                  </td>
-                  <td>
-                    <span style={{ color: C.revenue, fontFamily: 'Georgia,serif', fontStyle: 'italic', fontWeight: 600 }}>
-                      {fmt(ch.revenue)}
-                    </span>
-                  </td>
-                  <td>{ch.pct}%</td>
-                  <td>{fmt(ch.adr)}</td>
-                  <td>
-                    <div className="rv-occ-track">
-                      <div className="rv-occ-fill" style={{ width: `${ch.occupancy}%`, background: ch.color }} />
-                    </div>
-                    <span className="rv-occ-pct">{ch.occupancy}%</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <button className="rv-see-all">Xem chi tiết hiệu suất</button>
-        </div>
-
-        {/* Top services */}
-        <div className="rv-card">
-          <div className="rv-title">TOP DỊCH VỤ THÊM</div>
-          {services.map((s, i) => (
-            <div key={i} className="rv-svc-row">
-              <span className="rv-svc-icon">{s.icon}</span>
-              <span className="rv-svc-name">{s.name}</span>
-              <span className="rv-svc-amt" style={{ color: C.revenue }}>{fmt(s.amount)}</span>
-            </div>
-          ))}
-          <button className="rv-see-all" style={{ marginTop: 8 }}>Xem tất cả</button>
-        </div>
-      </div>
-
       {/* ════════════════ STYLES ════════════════ */}
       <style>{`
         .rv { display:flex; flex-direction:column; gap:14px; }
@@ -736,11 +645,19 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
         .kpi-delta { font-size:.68rem; margin-top:2px; }
         .kpi-sub   { font-size:.65rem; color:${C.muted}; margin-top:2px; }
 
-        /* ── Mid: donut + chart ── */
-        .rv-mid { display:grid; grid-template-columns:290px 1fr; gap:12px; }
+        /* ── Mid: 2 donut cards equal width ── */
+        .rv-mid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
         .rv-donut-row { display:flex; align-items:center; gap:10px; }
         .rv-donut-row--sm { gap:8px; }
         .rv-hint { margin-top:10px; padding:7px 11px; border-radius:8px; border:1px solid; font-size:.73rem; font-weight:500; }
+        .rv-donut-summary {
+          font-family:Georgia,serif; font-style:italic; font-size:1.35rem; font-weight:700;
+          margin-bottom:10px; display:flex; align-items:baseline; gap:6px;
+        }
+        .rv-donut-delta { font-size:.75rem; font-weight:600; }
+
+        /* Chart — full width standalone */
+        .rv-chart-card { display:flex; flex-direction:column; }
 
         /* Legend — bar color injected inline */
         .rv-legend { display:flex; flex-direction:column; gap:7px; flex:1; min-width:0; }
@@ -895,7 +812,7 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
         .rv-shared-rows { display:flex; flex-direction:column; }
         .rv-shared-row {
           display:flex; align-items:center; gap:9px;
-          padding:11px 20px; border-bottom:0.5px solid ${C.border};
+          padding:7px 20px; border-bottom:0.5px solid ${C.border};
           transition:background .12s;
         }
         .rv-shared-row:hover { background:rgba(28,43,74,.02); }
@@ -947,11 +864,7 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
         @media (max-width:960px) {
           .rv-kpi { grid-template-columns:repeat(3,1fr); }
           .rv-mid { grid-template-columns:1fr; }
-          .rv-exp-grid { grid-template-columns:1fr; }
-          .rv-exp-col--first { border-right:none; border-bottom:0.5px solid ${C.border}; }
-          .rv-exp-col--mid   { border-right:none; border-bottom:0.5px solid ${C.border}; }
           .rv-health-grid { grid-template-columns:1fr; }
-          .rv-bottom { grid-template-columns:1fr; }
         }
         @media (max-width:560px) {
           .rv-kpi { grid-template-columns:repeat(2,1fr); }

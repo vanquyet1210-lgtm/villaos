@@ -553,7 +553,7 @@ const CSS = `
 
 /* ── Grids ── */
 .ef-top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.ef-bot-grid { display: grid; grid-template-columns: 1fr 360px; gap: 14px; align-items: start; }
+.ef-bot-grid { display: grid; grid-template-columns: 1fr 320px; gap: 14px; align-items: start; }
 
 /* ── Cards ── */
 .ef-card {
@@ -603,18 +603,18 @@ const CSS = `
 /* ── Table ── */
 .ef-tbl-head {
   display: flex; justify-content: space-between;
-  padding: 6px 14px; font-size: .68rem; font-weight: 600;
+  padding: 5px 12px; font-size: .66rem; font-weight: 600;
   color: var(--muted); background: rgba(0,0,0,.02);
   border-bottom: 1px solid var(--border);
 }
 .ef-tbl-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 14px; border-bottom: 1px solid rgba(0,0,0,.04); gap: 8px;
+  padding: 7px 12px; border-bottom: 1px solid rgba(0,0,0,.04); gap: 6px; min-width: 0;
 }
 .ef-tbl-row:last-of-type { border-bottom: none; }
 .ef-tbl-row--auto   { background: rgba(0,0,0,.01); }
 .ef-tbl-row--extra  { gap: 6px; }
-.ef-tbl-name { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; font-size: .82rem; }
+.ef-tbl-name { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-size: .79rem; overflow: hidden; }
 .ef-tbl-fixed {
   font-family: Georgia,serif; font-style: italic;
   font-size: .84rem; color: var(--text); white-space: nowrap;
@@ -686,27 +686,27 @@ const CSS = `
 
 /* ── Smart input ── */
 .ef-inp {
-  display: flex; align-items: center; gap: 4px;
+  display: flex; align-items: center; gap: 3px;
   border: 1px solid var(--border); border-radius: 8px;
-  padding: 4px 8px; background: rgba(0,0,0,.025);
-  transition: all .15s; min-width: 0;
+  padding: 4px 7px; background: rgba(0,0,0,.025);
+  transition: all .15s; min-width: 0; flex-shrink: 0;
 }
 .ef-inp--focus { border-color: #3B82F6; background: #fff; box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
 .ef-inp input {
-  border: none; background: transparent; font-size: .82rem;
-  color: var(--text); width: 100px; text-align: right; outline: none; min-width: 0;
+  border: none; background: transparent; font-size: .8rem;
+  color: var(--text); width: 80px; text-align: right; outline: none; min-width: 0;
   font-family: inherit;
 }
-.ef-inp-unit { font-size: .68rem; color: #94A3B8; flex-shrink: 0; }
+.ef-inp-unit { font-size: .65rem; color: #94A3B8; flex-shrink: 0; }
 
 /* ── Shared section ── */
-.ef-shared-body { display: grid; grid-template-columns: 1fr 200px; }
-.ef-shared-main { border-right: 1px solid var(--border); }
+.ef-shared-body { display: grid; grid-template-columns: 1fr 180px; }
+.ef-shared-main { border-right: 1px solid var(--border); overflow-x: auto; }
 .ef-shared-grp { border-bottom: 1px solid rgba(0,0,0,.05); }
 .ef-shared-grp:last-child { border-bottom: none; }
 .ef-shared-grp-hd {
   display: flex; align-items: center; gap: 7px;
-  padding: 9px 16px; font-size: .68rem; font-weight: 800;
+  padding: 8px 14px; font-size: .67rem; font-weight: 800;
   letter-spacing: .07em; color: var(--shared);
   background: rgba(26,58,107,.04); border-bottom: 1px solid rgba(0,0,0,.05);
 }
@@ -716,34 +716,34 @@ const CSS = `
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .ef-shared-thead {
-  display: grid; grid-template-columns: 1.6fr 1fr 1fr .65fr;
-  padding: 6px 16px; font-size: .67rem; font-weight: 600; color: var(--muted);
+  display: grid; grid-template-columns: 1.8fr 90px 90px 54px;
+  padding: 5px 14px; font-size: .64rem; font-weight: 600; color: var(--muted);
   background: rgba(0,0,0,.02); border-bottom: 1px solid var(--border);
   text-align: right;
 }
 .ef-shared-thead span:first-child { text-align: left; }
 .ef-shared-row {
-  display: grid; grid-template-columns: 1.6fr 1fr 1fr .65fr;
-  padding: 8px 16px; align-items: center; gap: 6px;
+  display: grid; grid-template-columns: 1.8fr 90px 90px 54px;
+  padding: 6px 14px; align-items: center; gap: 4px;
   border-bottom: 1px solid rgba(0,0,0,.04);
 }
 .ef-shared-row--auto { background: rgba(0,0,0,.01); }
 .ef-shared-row .ef-inp { justify-self: end; }
 .ef-num-cell {
-  font-family: Georgia,serif; font-style: italic; font-size: .82rem;
+  font-family: Georgia,serif; font-style: italic; font-size: .79rem;
   text-align: right; color: var(--text);
 }
 .ef-num-cell--alloc { color: var(--rev); }
 .ef-num-cell--total { color: var(--shared); font-weight: 700; }
 .ef-pct-cell {
-  text-align: right; font-size: .74rem; font-weight: 700;
+  text-align: right; font-size: .72rem; font-weight: 700;
   color: var(--shared); background: var(--shared-lt);
-  border-radius: 5px; padding: 2px 6px; justify-self: end;
+  border-radius: 5px; padding: 2px 5px; justify-self: end;
 }
 .ef-shared-subtotal {
-  display: grid; grid-template-columns: 1.6fr 1fr 1fr .65fr;
-  padding: 10px 16px; background: rgba(26,58,107,.04);
-  border-top: 1px solid rgba(0,0,0,.06); font-size: .76rem; font-weight: 700;
+  display: grid; grid-template-columns: 1.8fr 90px 90px 54px;
+  padding: 8px 14px; background: rgba(26,58,107,.04);
+  border-top: 1px solid rgba(0,0,0,.06); font-size: .74rem; font-weight: 700;
   color: var(--shared); align-items: center;
 }
 
