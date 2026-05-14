@@ -1,7 +1,7 @@
 'use client';
-// VillaOS v7 — app/owner/report/EntryForm.tsx  [v3 — Full Redesign]
+// VillaOS v7 — app/owner/report/EntryForm.tsx
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState } from 'react';
 import type { MonthlyReport, ReportCategoryWithEntry } from '@/types/report';
 
 export interface SaveEntry {
@@ -15,1489 +15,868 @@ interface Props {
   report:           MonthlyReport;
   onSave:           (entries: SaveEntry[]) => Promise<void>;
   onCopyPrevMonth?: () => void;
-  villaName?:       string;
-  villaCount?:      number;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Constants & helpers
-// ─────────────────────────────────────────────────────────────
-
-const MONTHS = ['','Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6',
-  'Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
-
-/** Locale-formatted Vietnamese money */
-function fmtVND(n: number) {
+// ── Formatters ────────────────────────────────────────────────
+const fmt   = (n: number) => n ? n.toLocaleString('vi-VN') : '';
+const money = (n: number) => {
   if (!n) return '0 đ';
   return n.toLocaleString('vi-VN') + ' đ';
+};
+const moneyShort = (n: number) => {
+  if (!n) return '0đ';
+  if (n >= 1_000_000) return (n/1_000_000).toFixed(1).replace(/\.0$/,'') + ' tr';
+  return n.toLocaleString('vi-VN') + 'đ';
+};
+const parseAmt = (v: string): number => {
+  const s = v.trim();
+  const tr = s.match(/^([\d.,]+)\s*tr$/i);
+  if (tr) return Math.round(parseFloat(tr[1].replace(/\./g,'').replace(',','.')) * 1_000_000);
+  return parseInt(s.replace(/\./g,'').replace(/,/g,'')) || 0;
+};
+
+// ── Brand icons ───────────────────────────────────────────────
+const BRAND: Record<string, { bg: string; color: string; label: string }> = {
+  'Agoda':           { bg:'#E8F0FE', color:'#1A73E8', label:'A'  },
+  'Booking.com':     { bg:'#E8F4FD', color:'#003580', label:'B'  },
+  'Airbnb':          { bg:'#FFF0F0', color:'#FF5A5F', label:'AB' },
+  'VillaOS':         { bg:'#EBF7F2', color:'#0A6B44', label:'VO' },
+  'Khách trực tiếp': { bg:'#F3E8FF', color:'#7C3AED', label:'KH' },
+  'Tour / Vé':       { bg:'#FFF7ED', color:'#C2410C', label:'TR' },
+  'Xe đưa đón':      { bg:'#F0FDF4', color:'#166534', label:'XE' },
+  'Dịch vụ thêm':    { bg:'#FDF4FF', color:'#9333EA', label:'DV' },
+};
+
+function BrandIcon({ name, icon }: { name: string; icon: string }) {
+  const b = BRAND[name];
+  if (b) return (
+    <span className="ef-brand" style={{ background: b.bg, color: b.color }}>
+      {b.label}
+    </span>
+  );
+  return <span className="ef-icon">{icon}</span>;
 }
 
-/** Compact: 203.000.000 → 203 tr */
-function fmtCompact(n: number) {
-  if (!n) return '0 đ';
-  if (Math.abs(n) >= 1_000_000)
-    return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + ' tr đ';
-  if (Math.abs(n) >= 1_000)
-    return (n / 1_000).toFixed(0) + 'k đ';
-  return n.toLocaleString('vi-VN') + ' đ';
-}
-
-function parseRaw(s: string): number {
-  return parseInt(s.replace(/[^\d]/g, ''), 10) || 0;
-}
-
-function nowStr() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
-    + `/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-}
-
-// ─────────────────────────────────────────────────────────────
-// AmountInput — clean controlled input with locale format
-// ─────────────────────────────────────────────────────────────
-
-function AmountInput({
-  id, value, onChange, placeholder = 'Nhập số tiền', readOnly = false,
-  accentColor = '#0A8A55',
-}: {
-  id?: string; value: number; onChange: (v: number) => void;
-  placeholder?: string; readOnly?: boolean; accentColor?: string;
+// ── Smart input ───────────────────────────────────────────────
+function AmtInput({ id, value, onChange, placeholder = 'Nhập số tiền' }: {
+  id?: string; value: number; onChange: (v: number) => void; placeholder?: string;
 }) {
-  const [isFocused, setFocused] = useState(false);
-  const [raw, setRaw] = useState('');
-
-  const displayed = isFocused ? raw : (value ? value.toLocaleString('vi-VN') : '');
-
+  const [raw,   setRaw]   = useState('');
+  const [focus, setFocus] = useState(false);
   return (
-    <div
-      className="ef-input-cell"
-      style={{ '--acc': accentColor } as React.CSSProperties}
-      data-focused={isFocused || undefined}
-      data-has-value={value > 0 || undefined}
-    >
+    <div className={`ef-inp${focus ? ' ef-inp--focus' : ''}`}>
       <input
-        id={id}
-        type="text"
-        inputMode="numeric"
-        readOnly={readOnly}
+        id={id} type="text" inputMode="numeric"
+        value={focus ? raw : (value ? fmt(value) : '')}
         placeholder={placeholder}
-        value={displayed}
-        onFocus={() => { setFocused(true); setRaw(value ? String(value) : ''); }}
-        onBlur={() => { setFocused(false); onChange(parseRaw(raw)); }}
-        onChange={e => setRaw(e.target.value.replace(/[^\d]/g, ''))}
+        onChange={e => { setRaw(e.target.value); onChange(parseAmt(e.target.value)); }}
+        onFocus={e => { setFocus(true); setRaw(value ? fmt(value) : ''); e.target.select(); }}
+        onBlur={() => { setFocus(false); onChange(parseAmt(raw)); setRaw(''); }}
       />
-      <span className="ef-unit">đ</span>
+      <span className="ef-inp-unit">đ</span>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// SectionCard — collapsible wrapper with color token
-// ─────────────────────────────────────────────────────────────
-
-function SectionCard({
-  num, title, sub, accent, children, defaultOpen = true,
-}: {
-  num?: string; title: string; sub?: string; accent: string;
-  children: React.ReactNode; defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="ef-card" style={{ '--card-accent': accent } as React.CSSProperties}>
-      <button className="ef-card-header" onClick={() => setOpen(o => !o)}>
-        <div className="ef-card-title-row">
-          {num && <span className="ef-card-num">{num}</span>}
-          <span className="ef-card-title">{title}</span>
-          {sub && <span className="ef-card-sub">{sub}</span>}
-        </div>
-        <span className="ef-card-chevron" data-open={open}>{open ? '▾' : '▸'}</span>
-      </button>
-      {open && <div className="ef-card-body">{children}</div>}
-    </div>
-  );
+// ── Helpers ───────────────────────────────────────────────────
+function initMap(items: ReportCategoryWithEntry[]) {
+  const m: Record<string, number> = {};
+  items.forEach(c => { m[c.id] = c.amount; });
+  return m;
+}
+function groupBy<T>(arr: T[], key: (x: T) => string) {
+  return arr.reduce((acc, x) => {
+    const k = key(x);
+    (acc[k] = acc[k] ?? []).push(x);
+    return acc;
+  }, {} as Record<string, T[]>);
+}
+function sumMap(ids: string[], map: Record<string, number>) {
+  return ids.reduce((s, id) => s + (map[id] ?? 0), 0);
 }
 
-// ─────────────────────────────────────────────────────────────
-// Main Component
-// ─────────────────────────────────────────────────────────────
+// ── Group meta ────────────────────────────────────────────────
+const GROUP_META: Record<string, { label: string; icon: string; accent: string; light: string; border: string }> = {
+  'Vận hành': { label:'CHI PHÍ VẬN HÀNH',  icon:'🔧', accent:'#B45309', light:'rgba(217,119,6,.07)',  border:'#F59E0B' },
+  'Tài chính': { label:'CHI PHÍ TÀI CHÍNH', icon:'💼', accent:'#6D28D9', light:'rgba(124,58,237,.07)', border:'#A78BFA' },
+  'Cố định':   { label:'CHI PHÍ TÀI CHÍNH', icon:'💼', accent:'#6D28D9', light:'rgba(124,58,237,.07)', border:'#A78BFA' },
+  'Khác':      { label:'CHI PHÍ KHÁC',       icon:'📦', accent:'#92400E', light:'rgba(180,83,9,.07)',   border:'#D97706' },
+};
+const FALLBACK_META = { label:'CHI PHÍ KHÁC', icon:'📦', accent:'#92400E', light:'rgba(180,83,9,.07)', border:'#D97706' };
 
-export default function EntryForm({
-  report, onSave, onCopyPrevMonth, villaName = 'Villa', villaCount = 4,
-}: Props) {
-
-  // ── Seed amounts from report data ──────────────────────────
-  const buildInit = () => {
-    const m: Record<string, number> = {};
-    [...report.revenue, ...report.expenses].forEach(c => { m[c.id] = c.amount; });
-    return m;
-  };
-
-  const [amounts,    setAmounts]    = useState<Record<string, number>>(buildInit);
-  const [lastSync,   setLastSync]   = useState(nowStr);
-  const [saving,     setSaving]     = useState(false);
-  const [saved,      setSaved]      = useState(false);
-  const [showGuide,  setShowGuide]  = useState(true);
-
-  // Extra manual revenue rows (editable label + amount)
-  const [extraRows, setExtraRows] = useState([
-    { id: 'x1', label: 'Doanh thu khác 1', amount: 0 },
-    { id: 'x2', label: 'Doanh thu khác 2', amount: 0 },
-    { id: 'x3', label: 'Doanh thu khác 3', amount: 0 },
-  ]);
-
-  // Fixed shared-cost demo rows (simulate staff costs)
-  const sharedRows = [
-    { label: 'Lương nhân viên',  icon: '👤', total: 120_000_000 },
-    { label: 'Lễ tân',           icon: '🧑‍💼', total:  60_000_000 },
-    { label: 'Quản lý',          icon: '👔', total:  60_000_000 },
-    { label: 'Bảo trì',          icon: '🔧', total:  40_000_000 },
+function getGroupMeta(name: string, idx: number) {
+  if (GROUP_META[name]) return GROUP_META[name];
+  const fallbacks = [
+    { label:'CHI PHÍ VẬN HÀNH',  icon:'🔧', accent:'#B45309', light:'rgba(217,119,6,.07)',  border:'#F59E0B' },
+    { label:'CHI PHÍ TÀI CHÍNH', icon:'💼', accent:'#6D28D9', light:'rgba(124,58,237,.07)', border:'#A78BFA' },
+    FALLBACK_META,
   ];
-  const allocPct     = villaCount > 0 ? Math.round(100 / villaCount) : 10;
-  const totalShared  = sharedRows.reduce((s, r) => s + r.total, 0);
-  const totalSharedAlloc = Math.round(totalShared * allocPct / 100);
+  return fallbacks[idx] ?? FALLBACK_META;
+}
 
-  // ── Helpers ────────────────────────────────────────────────
-  const set = useCallback((id: string, v: number) =>
-    setAmounts(prev => ({ ...prev, [id]: v })), []);
+// ── Main ──────────────────────────────────────────────────────
+export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
+  const now = new Date().toLocaleString('vi-VN', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' });
 
-  const setExtra = (id: string, v: number) =>
-    setExtraRows(prev => prev.map(r => r.id === id ? { ...r, amount: v } : r));
-
-  const setExtraLabel = (id: string, l: string) =>
-    setExtraRows(prev => prev.map(r => r.id === id ? { ...r, label: l } : r));
-
-  const addExtraRow = () =>
-    setExtraRows(prev => [
-      ...prev,
-      { id: `x${Date.now()}`, label: `Doanh thu khác ${prev.length + 1}`, amount: 0 },
-    ]);
-
-  const handleRefresh = () => setLastSync(nowStr());
-
-  const handleReset = () => {
-    setAmounts(buildInit());
-    setExtraRows([
-      { id: 'x1', label: 'Doanh thu khác 1', amount: 0 },
-      { id: 'x2', label: 'Doanh thu khác 2', amount: 0 },
-      { id: 'x3', label: 'Doanh thu khác 3', amount: 0 },
-    ]);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    const entries: SaveEntry[] = [
-      ...Object.entries(amounts).map(([categoryId, amount]) => ({ categoryId, amount })),
-    ];
-    await onSave(entries);
-    setSaving(false);
-    setSaved(true);
-    setLastSync(nowStr());
-    setTimeout(() => setSaved(false), 2500);
-  };
-
-  // ── Categorise revenue ─────────────────────────────────────
+  // Revenue
   const autoRev   = report.revenue.filter(c => c.isAuto);
   const manualRev = report.revenue.filter(c => !c.isAuto);
 
-  // Demo auto revenue if empty (for design preview)
-  const autoRevDisplay: Array<{ id: string; icon: string; name: string; amount: number; isReal?: boolean }> =
-    autoRev.length > 0
-      ? autoRev.map(c => ({ id: c.id, icon: c.icon, name: c.name, amount: amounts[c.id] ?? c.amount, isReal: true }))
-      : [
-          { id: 'd-agoda',   icon: '🅰️', name: 'Agoda',            amount: 70_000_000 },
-          { id: 'd-booking', icon: '🔵', name: 'Booking.com',       amount: 65_000_000 },
-          { id: 'd-airbnb',  icon: '🏠', name: 'Airbnb',            amount: 25_000_000 },
-          { id: 'd-direct',  icon: '🧑‍💻', name: 'Khách trực tiếp', amount: 20_000_000 },
-          { id: 'd-svc',     icon: '✨', name: 'Dịch vụ thêm',      amount: 15_000_000 },
-          { id: 'd-tour',    icon: '🗺️', name: 'Tour / Vé / Trải nghiệm', amount: 5_000_000 },
-          { id: 'd-car',     icon: '🚗', name: 'Xe đưa đón',        amount: 3_000_000 },
-        ];
+  // Per-villa expenses grouped
+  const pvExp      = report.expenses.filter(c => c.scope !== 'shared' && !c.isAuto);
+  const pvGroups   = groupBy(pvExp, c => c.groupName ?? 'Khác');
+  const pvEntries  = Object.entries(pvGroups);
 
-  // ── Categorise expenses ────────────────────────────────────
-  const getCat = (group: string) => report.expenses.filter(c => c.groupName === group);
+  // Shared
+  const sharedExp  = report.sharedExpenses.filter(c => !c.isAuto);
+  const sharedAuto = report.sharedExpenses.filter(c => c.isAuto);
+  const sharedGrps = groupBy(sharedExp, c => c.groupName ?? 'Nhân sự');
 
-  // Vận hành items — merge real categories + always-show items
-  const vanHanhCats  = getCat('Vận hành');
-  const fixedVH = [
-    { icon: '⚡', name: 'Điện',           key: 'vh-dien' },
-    { icon: '💧', name: 'Nước',           key: 'vh-nuoc' },
-    { icon: '📶', name: 'Internet',       key: 'vh-internet' },
-    { icon: '🧹', name: 'Vệ sinh',        key: 'vh-vesinh' },
-    { icon: '🔩', name: 'Vật tư tiêu hao', key: 'vh-vattu' },
-    { icon: '🔨', name: 'Bảo trì, sửa chữa', key: 'vh-baotri' },
-    { icon: '📦', name: 'Khác',           key: 'vh-khac' },
-  ];
+  // State
+  const [villaAmts,  setVA] = useState<Record<string,number>>(initMap([...manualRev, ...pvExp]));
+  const [sharedAmts, setSA] = useState<Record<string,number>>(initMap(sharedExp));
+  const [extraRows,  setER] = useState([{ label:'', amount:0 },{ label:'', amount:0 },{ label:'', amount:0 }]);
+  const [saving,  setSaving] = useState(false);
+  const [saved,   setSaved]  = useState(false);
+  const [refresh, setRefresh] = useState(false);
 
-  const taiChinhItems = [
-    { icon: '🏢', name: 'Thuê mặt bằng',  key: 'tc-mb' },
-    { icon: '🏦', name: 'Trả ngân hàng',  key: 'tc-nh' },
-    { icon: '📋', name: 'Thuế GTGT',      key: 'tc-gtgt' },
-    { icon: '📋', name: 'Thuế TNDN',      key: 'tc-tndn' },
-    { icon: '📋', name: 'Thuế khác',      key: 'tc-tk' },
-  ];
+  const va = (id: string, v: number) => setVA(p => ({ ...p, [id]: v }));
+  const sa = (id: string, v: number) => setSA(p => ({ ...p, [id]: v }));
 
-  const khacItems = [
-    { icon: '📣', name: 'Marketing',       key: 'kh-mkt' },
-    { icon: '📁', name: 'Văn phòng phẩm',  key: 'kh-vpp' },
-    { icon: '🛎️', name: 'Phí dịch vụ',    key: 'kh-pdv' },
-    { icon: '💳', name: 'Phí ngân hàng',   key: 'kh-pnh' },
-    { icon: '➕', name: 'Khác',            key: 'kh-kh' },
-  ];
+  // Totals
+  const totalAutoRev  = autoRev.reduce((s,c) => s + c.amount, 0);
+  const totalManRev   = manualRev.reduce((s,c) => s + (villaAmts[c.id]??0), 0);
+  const totalExtraRev = extraRows.reduce((s,r) => s + r.amount, 0);
+  const totalRev      = totalAutoRev + totalManRev + totalExtraRev;
+  const totalPvExp    = pvExp.reduce((s,c) => s + (villaAmts[c.id]??0), 0);
+  const totalSharedFull = [...sharedExp.map(c => sharedAmts[c.id]??0), ...sharedAuto.map(c=>c.amount)].reduce((a,b)=>a+b,0);
+  const allocPct      = report.sharedAllocPct ?? 100;
+  const allocShared   = Math.round(totalSharedFull * allocPct / 100);
+  const totalExp      = totalPvExp + allocShared;
+  const netProfit     = totalRev - totalExp;
 
-  // amounts for plain (non-category) rows stored in local state
-  const [vhAmounts,  setVhAmounts]  = useState<Record<string, number>>({});
-  const [tcAmounts,  setTcAmounts]  = useState<Record<string, number>>({});
-  const [othAmounts, setOthAmounts] = useState<Record<string, number>>({});
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave([
+      ...manualRev.map(c => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
+      ...pvExp.map(c     => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
+      ...sharedExp.map(c => ({ categoryId:c.id, amount:sharedAmts[c.id]??0, isShared:true })),
+    ]);
+    setSaving(false); setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
 
-  const setVH  = (k: string, v: number) => setVhAmounts(p  => ({ ...p, [k]: v }));
-  const setTC  = (k: string, v: number) => setTcAmounts(p  => ({ ...p, [k]: v }));
-  const setOth = (k: string, v: number) => setOthAmounts(p => ({ ...p, [k]: v }));
+  const handleRefresh = () => {
+    setRefresh(true);
+    setTimeout(() => setRefresh(false), 800);
+  };
 
-  // ── Totals ─────────────────────────────────────────────────
-  const totalAutoRev = autoRevDisplay.reduce((s, r) =>
-    s + (r.isReal ? (amounts[r.id] ?? r.amount) : r.amount), 0);
-
-  const totalManualRev = manualRev.reduce((s, c) => s + (amounts[c.id] ?? 0), 0)
-    + extraRows.reduce((s, r) => s + r.amount, 0);
-
-  const totalRevenue = totalAutoRev + totalManualRev;
-
-  const totalVH = Object.values(vhAmounts).reduce((s, v) => s + v, 0)
-    + vanHanhCats.reduce((s, c) => s + (amounts[c.id] ?? 0), 0);
-
-  const totalTC = Object.values(tcAmounts).reduce((s, v) => s + v, 0)
-    + getCat('Cố định').reduce((s, c) => s + (amounts[c.id] ?? 0), 0);
-
-  const totalOth = Object.values(othAmounts).reduce((s, v) => s + v, 0);
-
-  const totalVillaExp = totalVH + totalTC + totalOth;
-  const netProfit     = totalRevenue - totalVillaExp - totalSharedAlloc;
-
-  // ── Render ─────────────────────────────────────────────────
   return (
     <div className="ef">
 
-      {/* ══════════════════════════════════════════════════════
-          BANNER
-      ══════════════════════════════════════════════════════ */}
+      {/* ── Banner ── */}
       <div className="ef-banner">
-        <div className="ef-banner-l">
-          <div className="ef-banner-badge">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M3 15a4 4 0 0 0 4 4h9a5 5 0 1 0-3.26-8.82A4.5 4.5 0 0 0 3 15"/>
-            </svg>
-          </div>
+        <div className="ef-banner-left">
+          <div className="ef-banner-icon">☁️</div>
           <div>
-            <div className="ef-banner-title">Dữ liệu tự động lấy từ hệ thống <span className="ef-banner-note">(có thể chỉnh sửa)</span></div>
-            <div className="ef-banner-desc">Các khoản dưới đây được đồng bộ tự động. Bạn có thể chỉnh sửa nếu cần.</div>
+            <div className="ef-banner-title">Dữ liệu tự động lấy từ hệ thống <span className="ef-banner-badge">Có thể chỉnh sửa</span></div>
+            <div className="ef-banner-sub">Các khoản dưới đây được đồng bộ tự động từ booking. Bạn có thể chỉnh sửa nếu cần.</div>
           </div>
         </div>
-        <div className="ef-banner-r">
-          <span className="ef-banner-time">Cập nhật lần cuối: {lastSync}</span>
-          <button className="ef-refresh-btn" onClick={handleRefresh} title="Làm mới dữ liệu">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-              <path d="M21 3v5h-5"/>
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-              <path d="M8 16H3v5"/>
-            </svg>
-            Làm mới
-          </button>
+        <div className="ef-banner-right">
+          <span className="ef-banner-time">🕐 Cập nhật: {now}</span>
+          <button className={`ef-refresh-btn${refresh ? ' spinning' : ''}`} onClick={handleRefresh} title="Làm mới">↻</button>
+          <span className="ef-banner-hint">Gõ <kbd>18tr</kbd> = 18.000.000đ</span>
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          SECTION 1 — NHẬP DOANH THU
-      ══════════════════════════════════════════════════════ */}
-      <SectionCard num="1." title="NHẬP DOANH THU" accent="#0A8A55">
-        <div className="ef-rev-grid">
+      {/* ══ TOP GRID ══ */}
+      <div className="ef-top-grid">
 
-          {/* ── AUTO panel ── */}
-          <div className="ef-panel">
-            <div className="ef-panel-head ef-panel-head--auto">
-              <span className="ef-panel-head-icon">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <path d="M12 3v1m0 16v1M4.22 4.22l.7.7m14.14 14.14.7.7M3 12h1m16 0h1M4.22 19.78l.7-.7M18.36 5.64l.7-.7"/>
-                  <circle cx="12" cy="12" r="4"/>
-                </svg>
-              </span>
-              <span>Tự động <em>(có thể chỉnh sửa)</em></span>
-              <span className="ef-pill ef-pill--auto">AUTO</span>
+        {/* ── SECTION 1: DOANH THU ── */}
+        <div className="ef-card">
+          <div className="ef-card-hd ef-card-hd--rev">
+            <span className="ef-card-num ef-card-num--rev">1</span>
+            <span>NHẬP DOANH THU</span>
+          </div>
+
+          <div className="ef-rev-grid">
+            {/* AUTO column */}
+            <div className="ef-rev-col">
+              <div className="ef-col-tag ef-col-tag--auto">
+                <span className="ef-col-tag-dot"/>AUTO
+              </div>
+              <div className="ef-tbl-head">
+                <span>Nguồn doanh thu</span><span>Số tiền (đ)</span>
+              </div>
+              {autoRev.map(c => (
+                <div key={c.id} className="ef-tbl-row ef-tbl-row--auto">
+                  <div className="ef-tbl-name">
+                    <BrandIcon name={c.name} icon={c.icon}/>
+                    <span>{c.name}</span>
+                    <span className="ef-auto-badge">auto</span>
+                  </div>
+                  <span className="ef-tbl-fixed">{c.amount ? fmt(c.amount) : '—'}</span>
+                </div>
+              ))}
+              {manualRev.map(c => (
+                <div key={c.id} className="ef-tbl-row">
+                  <div className="ef-tbl-name">
+                    <BrandIcon name={c.name} icon={c.icon}/>
+                    <span>{c.name}</span>
+                  </div>
+                  <AmtInput value={villaAmts[c.id]??0} onChange={v=>va(c.id,v)} placeholder="Nhập số tiền"/>
+                </div>
+              ))}
+              <div className="ef-col-subtotal ef-col-subtotal--rev">
+                <span>Tổng doanh thu tự động</span>
+                <span>{money(totalAutoRev + totalManRev)}</span>
+              </div>
             </div>
-            <div className="ef-table-head">
-              <span>Nguồn doanh thu</span>
-              <span>Số tiền (đ)</span>
-            </div>
-            {autoRevDisplay.map(r => (
-              <div key={r.id} className="ef-row ef-row--auto">
-                <label className="ef-label" htmlFor={`ar-${r.id}`}>
-                  <span className="ef-row-ico">{r.icon}</span>
-                  {r.name}
-                </label>
-                {r.isReal ? (
-                  <AmountInput
-                    id={`ar-${r.id}`}
-                    value={amounts[r.id] ?? r.amount}
-                    onChange={v => set(r.id, v)}
-                    accentColor="#0A8A55"
+
+            {/* MANUAL column */}
+            <div className="ef-rev-col ef-rev-col--manual">
+              <div className="ef-col-tag ef-col-tag--manual">
+                <span className="ef-col-tag-dot"/>MANUAL
+              </div>
+              <div className="ef-tbl-head">
+                <span>Nguồn doanh thu bổ sung</span><span>Số tiền (đ)</span>
+              </div>
+              {extraRows.map((row, i) => (
+                <div key={i} className="ef-tbl-row ef-tbl-row--extra">
+                  <input
+                    className="ef-extra-lbl"
+                    value={row.label}
+                    placeholder={`Doanh thu khác ${i + 1}`}
+                    onChange={e => setER(r => r.map((x,j) => j===i ? {...x,label:e.target.value} : x))}
                   />
-                ) : (
-                  <div className="ef-static-amt">{fmtVND(r.amount)}</div>
-                )}
-              </div>
-            ))}
-            <div className="ef-panel-total ef-panel-total--green">
-              <span>Tổng doanh thu (tự động)</span>
-              <span>{fmtVND(totalAutoRev)}</span>
-            </div>
-          </div>
-
-          {/* ── MANUAL panel ── */}
-          <div className="ef-panel">
-            <div className="ef-panel-head ef-panel-head--manual">
-              <span className="ef-panel-head-icon">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/>
-                </svg>
-              </span>
-              <span>Nhập tay <em>(bổ sung)</em></span>
-              <span className="ef-pill ef-pill--manual">MANUAL</span>
-            </div>
-            <div className="ef-table-head">
-              <span>Nguồn doanh thu</span>
-              <span>Số tiền (đ)</span>
-            </div>
-            {manualRev.map(c => (
-              <div key={c.id} className="ef-row">
-                <label className="ef-label" htmlFor={`mr-${c.id}`}>
-                  <span className="ef-row-ico">{c.icon}</span>
-                  {c.name}
-                </label>
-                <AmountInput
-                  id={`mr-${c.id}`}
-                  value={amounts[c.id] ?? 0}
-                  onChange={v => set(c.id, v)}
-                  accentColor="#0A8A55"
-                />
-              </div>
-            ))}
-            {extraRows.map(r => (
-              <div key={r.id} className="ef-row ef-row--extra">
-                <input
-                  className="ef-label-edit"
-                  value={r.label}
-                  onChange={e => setExtraLabel(r.id, e.target.value)}
-                />
-                <AmountInput
-                  value={r.amount}
-                  onChange={v => setExtra(r.id, v)}
-                  accentColor="#0A8A55"
-                />
-              </div>
-            ))}
-            <button className="ef-add-row-btn" onClick={addExtraRow}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-              Thêm dòng
-            </button>
-            <div className="ef-panel-total ef-panel-total--green">
-              <span>Tổng doanh thu (nhập tay)</span>
-              <span>{fmtVND(totalManualRev)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Grand total revenue */}
-        <div className="ef-grand-rev">
-          <span>TỔNG DOANH THU (TỰ ĐỘNG + NHẬP TAY)</span>
-          <span className="ef-grand-num">{fmtVND(totalRevenue)}</span>
-        </div>
-      </SectionCard>
-
-      {/* ══════════════════════════════════════════════════════
-          SECTION 2 — CHI PHÍ RIÊNG
-      ══════════════════════════════════════════════════════ */}
-      <SectionCard num="2." title="NHẬP CHI PHÍ RIÊNG" sub="(THEO VILLA)" accent="#D97706">
-        <div className="ef-exp-grid">
-
-          {/* 2.1 Vận hành */}
-          <div className="ef-exp-col ef-exp-col--op">
-            <div className="ef-exp-col-head">
-              <span className="ef-exp-col-ico">🔥</span>
-              <span>2.1 CHI PHÍ VẬN HÀNH</span>
-            </div>
-            <div className="ef-table-head ef-table-head--sm">
-              <span>Khoản chi</span>
-              <span>Số tiền (đ)</span>
-            </div>
-            {fixedVH.map(r => (
-              <div key={r.key} className="ef-row ef-row--sm">
-                <label className="ef-label ef-label--sm" htmlFor={r.key}>
-                  <span className="ef-row-ico ef-row-ico--sm">{r.icon}</span>
-                  {r.name}
-                </label>
-                <AmountInput
-                  id={r.key}
-                  value={vhAmounts[r.key] ?? 0}
-                  onChange={v => setVH(r.key, v)}
-                  accentColor="#D97706"
-                />
-              </div>
-            ))}
-            {/* Also show real categories in this group */}
-            {vanHanhCats.filter(c => !fixedVH.some(f => f.name === c.name)).map(c => (
-              <div key={c.id} className="ef-row ef-row--sm">
-                <label className="ef-label ef-label--sm" htmlFor={`vh-${c.id}`}>
-                  <span className="ef-row-ico ef-row-ico--sm">{c.icon}</span>
-                  {c.name}
-                </label>
-                <AmountInput
-                  id={`vh-${c.id}`}
-                  value={amounts[c.id] ?? 0}
-                  onChange={v => set(c.id, v)}
-                  accentColor="#D97706"
-                />
-              </div>
-            ))}
-            <div className="ef-exp-total ef-exp-total--op">
-              <span>Tổng vận hành</span>
-              <span>{fmtVND(totalVH)}</span>
-            </div>
-          </div>
-
-          {/* 2.2 Tài chính */}
-          <div className="ef-exp-col ef-exp-col--fin">
-            <div className="ef-exp-col-head">
-              <span className="ef-exp-col-ico">🏦</span>
-              <span>2.2 CHI PHÍ TÀI CHÍNH</span>
-            </div>
-            <div className="ef-table-head ef-table-head--sm">
-              <span>Khoản chi</span>
-              <span>Số tiền (đ)</span>
-            </div>
-            {taiChinhItems.map(r => (
-              <div key={r.key} className="ef-row ef-row--sm">
-                <label className="ef-label ef-label--sm" htmlFor={r.key}>
-                  <span className="ef-row-ico ef-row-ico--sm">{r.icon}</span>
-                  {r.name}
-                </label>
-                <AmountInput
-                  id={r.key}
-                  value={tcAmounts[r.key] ?? 0}
-                  onChange={v => setTC(r.key, v)}
-                  accentColor="#7C3AED"
-                />
-              </div>
-            ))}
-            <div className="ef-exp-total ef-exp-total--fin">
-              <span>Tổng tài chính</span>
-              <span>{fmtVND(totalTC)}</span>
-            </div>
-          </div>
-
-          {/* 2.3 Khác */}
-          <div className="ef-exp-col ef-exp-col--oth">
-            <div className="ef-exp-col-head">
-              <span className="ef-exp-col-ico">📦</span>
-              <span>2.3 CHI PHÍ KHÁC</span>
-            </div>
-            <div className="ef-table-head ef-table-head--sm">
-              <span>Khoản chi</span>
-              <span>Số tiền (đ)</span>
-            </div>
-            {khacItems.map(r => (
-              <div key={r.key} className="ef-row ef-row--sm">
-                <label className="ef-label ef-label--sm" htmlFor={r.key}>
-                  <span className="ef-row-ico ef-row-ico--sm">{r.icon}</span>
-                  {r.name}
-                </label>
-                <AmountInput
-                  id={r.key}
-                  value={othAmounts[r.key] ?? 0}
-                  onChange={v => setOth(r.key, v)}
-                  accentColor="#0369A1"
-                />
-              </div>
-            ))}
-            <div className="ef-exp-total ef-exp-total--oth">
-              <span>Tổng khác</span>
-              <span>{fmtVND(totalOth)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Villa expense grand total */}
-        <div className="ef-grand-exp">
-          <span>TỔNG CHI PHÍ RIÊNG (THEO VILLA)</span>
-          <span className="ef-grand-num">{fmtVND(totalVillaExp)}</span>
-        </div>
-      </SectionCard>
-
-      {/* ══════════════════════════════════════════════════════
-          BOTTOM GRID — Section 3 + Summary/Guide
-      ══════════════════════════════════════════════════════ */}
-      <div className="ef-bottom">
-
-        {/* ── SECTION 3 — CHI PHÍ CHUNG ── */}
-        <SectionCard num="3." title="CHI PHÍ CHUNG" sub="(TOÀN HỆ THỐNG)" accent="#0F766E">
-          <div className="ef-shared-wrap">
-            <div className="ef-shared-main">
-
-              <div className="ef-shared-sub-head">
-                <span>👥</span>
-                <span>3.1 CHI PHÍ NHÂN SỰ (CHUNG)</span>
-              </div>
-
-              {/* Table header */}
-              <div className="ef-shared-th">
-                <span>Khoản chi</span>
-                <span>Tổng hệ thống (đ)</span>
-                <span>Phân bổ cho villa (đ)</span>
-                <span>Tỷ lệ</span>
-              </div>
-
-              {sharedRows.map(r => (
-                <div key={r.label} className="ef-shared-row">
-                  <span className="ef-shared-name">
-                    <span>{r.icon}</span>{r.label}
-                  </span>
-                  <span className="ef-shared-sys">{fmtVND(r.total)}</span>
-                  <span className="ef-shared-alloc">{fmtVND(Math.round(r.total * allocPct / 100))}</span>
-                  <span className="ef-shared-pct">{allocPct} %</span>
+                  <AmtInput
+                    value={row.amount}
+                    onChange={v => setER(r => r.map((x,j) => j===i ? {...x,amount:v} : x))}
+                  />
                 </div>
               ))}
-
-              <div className="ef-shared-total">
-                <span>Tổng chi phí nhân sự (phân bổ)</span>
-                <span />
-                <span className="ef-shared-total-num">{fmtVND(totalSharedAlloc)}</span>
-                <span />
-              </div>
-
-              <button className="ef-link-btn">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/>
-                </svg>
-                Xem chi tiết chi phí chung
+              <button className="ef-add-btn" onClick={() => setER(r => [...r,{label:'',amount:0}])}>
+                ＋ Thêm dòng
               </button>
+              <div className="ef-col-subtotal ef-col-subtotal--manual">
+                <span>Tổng nhập tay bổ sung</span>
+                <span>{money(totalExtraRev)}</span>
+              </div>
             </div>
+          </div>
 
-            {/* Info sidebar */}
-            <div className="ef-shared-info">
-              {[
-                'Chi phí chung được <strong>phân bổ tự động</strong> theo tỷ lệ cho từng villa.',
-                'Khi thay đổi Villa, phần chi phí chung sẽ giữ nguyên.',
-                'Bạn có thể xem hoặc đề xuất thay đổi chi phí chung tại mục <strong>Danh mục</strong>.',
-              ].map((t, i) => (
-                <div key={i} className="ef-info-row">
-                  <span className="ef-info-dot">ⓘ</span>
-                  <span dangerouslySetInnerHTML={{ __html: t }} />
+          {/* Revenue total */}
+          <div className="ef-big-total ef-big-total--rev">
+            <span>TỔNG DOANH THU (TỰ ĐỘNG + NHẬP TAY)</span>
+            <span className="ef-big-total-val">{money(totalRev)}</span>
+          </div>
+        </div>
+
+        {/* ── SECTION 2: CHI PHÍ RIÊNG ── */}
+        <div className="ef-card">
+          <div className="ef-card-hd ef-card-hd--exp">
+            <span className="ef-card-num ef-card-num--exp">2</span>
+            <span>NHẬP CHI PHÍ RIÊNG (THEO VILLA)</span>
+          </div>
+
+          <div className={`ef-exp-grid ef-exp-grid--${Math.max(1, Math.min(pvEntries.length, 3))}`}>
+            {pvEntries.slice(0, 3).map(([gName, items], gi) => {
+              const meta  = getGroupMeta(gName, gi);
+              const gSum  = sumMap(items.map(c=>c.id), villaAmts);
+              return (
+                <div key={gName} className="ef-exp-col">
+                  <div className="ef-exp-col-hd" style={{ background:meta.light, borderBottom:`2px solid ${meta.border}` }}>
+                    <span style={{ color:meta.accent }}>{meta.icon}</span>
+                    <span style={{ color:meta.accent }}>
+                      2.{gi+1} {meta.label}
+                    </span>
+                  </div>
+                  <div className="ef-tbl-head">
+                    <span>Khoản chi</span><span>Số tiền (đ)</span>
+                  </div>
+                  {items.map(c => (
+                    <div key={c.id} className="ef-tbl-row">
+                      <div className="ef-tbl-name">
+                        <span className="ef-icon">{c.icon}</span>
+                        <span>{c.name.replace(' (chung)','')}</span>
+                      </div>
+                      <AmtInput value={villaAmts[c.id]??0} onChange={v=>va(c.id,v)}/>
+                    </div>
+                  ))}
+                  <div className="ef-col-subtotal" style={{ color:meta.accent }}>
+                    <span>Tổng {gName.toLowerCase()}</span>
+                    <span style={{ fontFamily:'Georgia,serif', fontStyle:'italic' }}>{money(gSum)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {pvEntries.length === 0 && (
+            <div className="ef-empty-hint">
+              Chưa có danh mục chi phí riêng. Vào <strong>⚙️ Danh mục</strong> để thêm.
+            </div>
+          )}
+
+          <div className="ef-big-total ef-big-total--exp">
+            <span>TỔNG CHI PHÍ RIÊNG (THEO VILLA)</span>
+            <span className="ef-big-total-val">{money(totalPvExp)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ══ BOTTOM GRID ══ */}
+      <div className="ef-bot-grid">
+
+        {/* ── SECTION 3: CHI PHÍ CHUNG ── */}
+        <div className="ef-card">
+          <div className="ef-card-hd ef-card-hd--shared">
+            <span className="ef-card-num ef-card-num--shared">3</span>
+            <span>CHI PHÍ CHUNG (TOÀN HỆ THỐNG)</span>
+            <span className="ef-shared-lock">🔒 Cố định · Không đổi theo Villa</span>
+          </div>
+
+          <div className="ef-shared-body">
+            <div className="ef-shared-main">
+              {Object.entries(sharedGrps).map(([gName, items], gi) => (
+                <div key={gName} className="ef-shared-grp">
+                  <div className="ef-shared-grp-hd">
+                    <span className="ef-shared-grp-num">{gi+1}</span>
+                    CHI PHÍ {gName.toUpperCase()} (CHUNG)
+                  </div>
+                  <div className="ef-shared-thead">
+                    <span>Khoản chi</span>
+                    <span>Tổng hệ thống (đ)</span>
+                    <span>Phân bổ cho villa (đ)</span>
+                    <span>Tỷ lệ</span>
+                  </div>
+                  {sharedAuto.filter(c=>(c.groupName??'Nhân sự')===gName).map(c => (
+                    <div key={c.id} className="ef-shared-row ef-shared-row--auto">
+                      <div className="ef-tbl-name"><span>{c.icon}</span><span>{c.name}</span><span className="ef-auto-badge">auto</span></div>
+                      <span className="ef-num-cell">{c.amount ? fmt(c.amount) : '—'}</span>
+                      <span className="ef-num-cell ef-num-cell--alloc">{fmt(Math.round(c.amount*allocPct/100)) || '—'}</span>
+                      <span className="ef-pct-cell">{allocPct}%</span>
+                    </div>
+                  ))}
+                  {items.map(c => {
+                    const full  = sharedAmts[c.id]??0;
+                    const alloc = Math.round(full*allocPct/100);
+                    return (
+                      <div key={c.id} className="ef-shared-row">
+                        <div className="ef-tbl-name"><span>{c.icon}</span><span>{c.name}</span></div>
+                        <AmtInput value={full} onChange={v=>sa(c.id,v)}/>
+                        <span className="ef-num-cell ef-num-cell--alloc">{fmt(alloc)||'—'}</span>
+                        <span className="ef-pct-cell">{allocPct}%</span>
+                      </div>
+                    );
+                  })}
+                  <div className="ef-shared-subtotal">
+                    <span>Tổng chi phí {gName.toLowerCase()} (phân bổ)</span>
+                    <span/>
+                    <span className="ef-num-cell ef-num-cell--total">
+                      {money(Math.round(
+                        [...items.map(c=>sharedAmts[c.id]??0),
+                         ...sharedAuto.filter(c=>(c.groupName??'Nhân sự')===gName).map(c=>c.amount)]
+                          .reduce((a,b)=>a+b,0) * allocPct / 100
+                      ))}
+                    </span>
+                    <span/>
+                  </div>
                 </div>
               ))}
+              {sharedExp.length === 0 && sharedAuto.length === 0 && (
+                <div className="ef-empty-hint">Chưa có danh mục chi phí chung.</div>
+              )}
             </div>
-          </div>
 
-          {/* Fixed badge */}
-          <div className="ef-shared-footer">
-            <span className="ef-locked-badge">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <rect x="3" y="11" width="18" height="11" rx="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-              </svg>
-              Cố định — Không đổi theo Villa
-            </span>
-          </div>
-        </SectionCard>
-
-        {/* ── RIGHT COLUMN ── */}
-        <div className="ef-right">
-
-          {/* ── TỔNG KẾT ── */}
-          <div className="ef-summary">
-            <div className="ef-summary-head">
-              TỔNG KẾT {MONTHS[report.month]?.toUpperCase()} {report.year}
-            </div>
-            <div className="ef-formula">
-              <div className="ef-formula-block">
-                <div className="ef-formula-lbl">Tổng doanh thu</div>
-                <div className="ef-formula-val ef-formula-val--rev">{fmtCompact(totalRevenue)}</div>
-              </div>
-              <div className="ef-formula-op">−</div>
-              <div className="ef-formula-block">
-                <div className="ef-formula-lbl">Tổng chi phí riêng</div>
-                <div className="ef-formula-val ef-formula-val--exp">{fmtCompact(totalVillaExp)}</div>
-              </div>
-              <div className="ef-formula-op">−</div>
-              <div className="ef-formula-block">
-                <div className="ef-formula-lbl">Chi phí chung (phân bổ)</div>
-                <div className="ef-formula-val ef-formula-val--shr">{fmtCompact(totalSharedAlloc)}</div>
-              </div>
-              <div className="ef-formula-op ef-formula-op--eq">=</div>
-              <div className="ef-formula-block ef-formula-block--result">
-                <div className="ef-formula-lbl">LỢI NHUẬN ƯỚC TÍNH</div>
-                <div className={`ef-formula-val ef-formula-val--profit${netProfit < 0 ? ' neg' : ''}`}>
-                  {fmtCompact(netProfit)}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── HƯỚNG DẪN NHANH ── */}
-          <div className="ef-guide">
-            <button
-              className="ef-guide-head"
-              onClick={() => setShowGuide(v => !v)}
-            >
-              <span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M12 16v-4m0-4h.01"/>
-                </svg>
-                Hướng dẫn nhanh
-              </span>
-              <span className="ef-guide-chevron">{showGuide ? '▾' : '▸'}</span>
-            </button>
-
-            {showGuide && (
-              <div className="ef-guide-body">
+            {/* Info panel */}
+            <div className="ef-shared-info">
+              <div className="ef-info-list">
                 {[
-                  { ico: '🔄', text: 'Dữ liệu ở mục (1) được tự động lấy từ hệ thống, bạn có thể chỉnh sửa nếu cần.' },
-                  { ico: '✏️', text: 'Bổ sung doanh thu thủ công ở cột bên phải (nếu có).' },
-                  { ico: '📊', text: 'Nhập các khoản chi phí riêng của villa theo 3 nhóm.' },
-                  { ico: '🔒', text: 'Chi phí chung là cố định từ toàn hệ thống, được phân bổ tự động cho villa.' },
-                  { ico: '💾', text: 'Nhấn "Lưu dữ liệu" để lưu lại toàn bộ thông tin.' },
-                ].map((g, i) => (
-                  <div key={i} className="ef-guide-item">
-                    <span className="ef-guide-num">{i + 1}</span>
-                    <span className="ef-guide-ico">{g.ico}</span>
-                    <span>{g.text}</span>
+                  'Chi phí chung được phân bổ tự động theo tỷ lệ doanh thu cho từng villa.',
+                  'Khi thay đổi villa, phần chi phí chung sẽ giữ nguyên.',
+                  'Thay đổi danh mục tại ⚙️ Danh mục.',
+                ].map((s, i) => (
+                  <div key={i} className="ef-info-item">
+                    <span className="ef-info-i">ℹ</span><span>{s}</span>
                   </div>
                 ))}
-                <button className="ef-guide-cta">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-                  </svg>
-                  Xem hướng dẫn chi tiết
-                </button>
+                {allocPct < 100 && (
+                  <div className="ef-alloc-pill">
+                    Villa này chịu <strong>{allocPct}%</strong> chi phí chung
+                  </div>
+                )}
               </div>
-            )}
+              <button className="ef-detail-btn">☰ Xem chi tiết chi phí chung</button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── RIGHT PANEL ── */}
+        <div className="ef-right">
+
+          {/* Summary formula */}
+          <div className="ef-summary">
+            <div className="ef-summary-hd">
+              TỔNG KẾT THÁNG {report.month}/{report.year}
+            </div>
+            <div className="ef-formula">
+              <div className="ef-formula-item">
+                <div className="ef-formula-lbl">Tổng doanh thu</div>
+                <div className="ef-formula-val ef-formula-val--rev">{money(totalRev)}</div>
+              </div>
+              <div className="ef-formula-op">−</div>
+              <div className="ef-formula-item">
+                <div className="ef-formula-lbl">Tổng chi phí riêng</div>
+                <div className="ef-formula-val ef-formula-val--exp">{money(totalPvExp)}</div>
+              </div>
+              <div className="ef-formula-op">−</div>
+              <div className="ef-formula-item">
+                <div className="ef-formula-lbl">Chi phí chung (phân bổ)</div>
+                <div className="ef-formula-val ef-formula-val--shared">{money(allocShared)}</div>
+              </div>
+              <div className="ef-formula-op">=</div>
+              <div className={`ef-formula-result${netProfit < 0 ? ' negative' : ''}`}>
+                <div className="ef-formula-lbl">LỢI NHUẬN ƯỚC TÍNH</div>
+                <div className="ef-formula-big">{money(Math.abs(netProfit))}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick guide */}
+          <div className="ef-guide">
+            <div className="ef-guide-hd">📋 HƯỚNG DẪN NHANH</div>
+            {[
+              { icon:'☁️', text:'Dữ liệu mục 1 tự động lấy từ hệ thống, có thể chỉnh sửa.' },
+              { icon:'✏️', text:'Bổ sung doanh thu thủ công ở cột bên phải.' },
+              { icon:'🏠', text:'Nhập chi phí riêng của villa theo 3 nhóm.' },
+              { icon:'🔗', text:'Chi phí chung được phân bổ tự động theo tỷ lệ doanh thu.' },
+              { icon:'💾', text:'Nhấn "Lưu dữ liệu" để lưu lại toàn bộ thông tin.' },
+            ].map((s, i) => (
+              <div key={i} className="ef-guide-item">
+                <span className="ef-guide-icon">{s.icon}</span>
+                <span className="ef-guide-text"><strong>{'①②③④⑤'[i]}</strong> {s.text}</span>
+              </div>
+            ))}
+            <button className="ef-guide-cta">📖 Xem hướng dẫn chi tiết →</button>
           </div>
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          FOOTER
-      ══════════════════════════════════════════════════════ */}
+      {/* ── Footer ── */}
       <div className="ef-footer">
-        <button className="ef-btn ef-btn--ghost" onClick={onCopyPrevMonth}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
-          </svg>
-          Sao chép từ tháng trước
+        <button className="ef-btn ef-btn--copy" onClick={onCopyPrevMonth}>
+          📋 Sao chép từ tháng trước
         </button>
         <div className="ef-footer-r">
-          <button className="ef-btn ef-btn--muted"  onClick={() => {}}>Hủy</button>
-          <button className="ef-btn ef-btn--danger" onClick={handleReset}>Reset</button>
-          <button
-            className={`ef-btn ef-btn--primary${saving ? ' loading' : ''}${saved ? ' saved' : ''}`}
-            disabled={saving}
-            onClick={handleSave}
-          >
-            {saving ? (
-              <>
-                <svg className="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
-                </svg>
-                Đang lưu...
-              </>
-            ) : saved ? '✅ Đã lưu!' : (
-              <>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-                </svg>
-                Lưu dữ liệu
-              </>
-            )}
+          <button className="ef-btn ef-btn--ghost">Hủy</button>
+          <button className="ef-btn ef-btn--reset" onClick={() => {
+            setVA(initMap([...manualRev,...pvExp]));
+            setSA(initMap(sharedExp));
+            setER([{label:'',amount:0},{label:'',amount:0},{label:'',amount:0}]);
+          }}>Reset</button>
+          <button className="ef-btn ef-btn--save" disabled={saving} onClick={handleSave}>
+            {saving ? '⏳ Đang lưu...' : saved ? '✅ Đã lưu!' : '💾 Lưu dữ liệu'}
           </button>
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          STYLES
-      ══════════════════════════════════════════════════════ */}
-      <style>{`
-        /* ── Base / Tokens ─────────────────────────────────── */
-        .ef {
-          --font: 'DM Sans', 'Be Vietnam Pro', 'Inter', system-ui, sans-serif;
-          --rev:       #0A8A55;
-          --rev-light: #ECFDF5;
-          --rev-mid:   #D1FAE5;
-          --exp-op:    #D97706;
-          --exp-op-l:  #FFFBEB;
-          --exp-op-m:  #FDE68A;
-          --exp-fin:   #7C3AED;
-          --exp-fin-l: #F5F3FF;
-          --exp-fin-m: #DDD6FE;
-          --exp-oth:   #0369A1;
-          --exp-oth-l: #EFF6FF;
-          --exp-oth-m: #BFDBFE;
-          --shr:       #0F766E;
-          --shr-light: #F0FDFA;
-          --shr-mid:   #99F6E4;
-          --muted:     #6B7280;
-          --border:    #E5E7EB;
-          --border-md: rgba(0,0,0,.09);
-          --text:      #111827;
-          --text-2:    #374151;
-          --surface:   #FFFFFF;
-          --bg:        #F9FAFB;
-
-          font-family:    var(--font);
-          font-size:      13.5px;
-          color:          var(--text);
-          display:        flex;
-          flex-direction: column;
-          gap:            14px;
-          line-height:    1.5;
-        }
-
-        /* ── Banner ─────────────────────────────────────────── */
-        .ef-banner {
-          display:       flex;
-          align-items:   center;
-          justify-content: space-between;
-          flex-wrap:     wrap;
-          gap:           10px;
-          padding:       13px 18px;
-          background:    #EFF6FF;
-          border:        1.5px solid #BFDBFE;
-          border-radius: 12px;
-        }
-        .ef-banner-l {
-          display:     flex;
-          align-items: flex-start;
-          gap:         12px;
-        }
-        .ef-banner-badge {
-          width:          34px;
-          height:         34px;
-          border-radius:  9px;
-          background:     #DBEAFE;
-          color:          #1D4ED8;
-          display:        flex;
-          align-items:    center;
-          justify-content:center;
-          flex-shrink:    0;
-        }
-        .ef-banner-title {
-          font-size:   .82rem;
-          font-weight: 700;
-          color:       #1E3A8A;
-          letter-spacing: .01em;
-        }
-        .ef-banner-note {
-          font-weight: 400;
-          font-size:   .75rem;
-          color:       #3B82F6;
-        }
-        .ef-banner-desc {
-          font-size:   .74rem;
-          color:       #3B82F6;
-          margin-top:  2px;
-        }
-        .ef-banner-r {
-          display:     flex;
-          align-items: center;
-          gap:         8px;
-          flex-shrink: 0;
-        }
-        .ef-banner-time {
-          font-size: .72rem;
-          color:     #6B7280;
-        }
-        .ef-refresh-btn {
-          display:       flex;
-          align-items:   center;
-          gap:           5px;
-          padding:       5px 11px;
-          background:    #DBEAFE;
-          border:        1px solid #93C5FD;
-          border-radius: 7px;
-          color:         #1D4ED8;
-          font-size:     .72rem;
-          font-weight:   600;
-          cursor:        pointer;
-          font-family:   var(--font);
-          transition:    background .12s;
-        }
-        .ef-refresh-btn:hover { background: #BFDBFE; }
-
-        /* ── SectionCard ─────────────────────────────────────── */
-        .ef-card {
-          background:    var(--surface);
-          border:        1.5px solid var(--border);
-          border-radius: 14px;
-          overflow:      hidden;
-          border-top:    3px solid var(--card-accent, #E5E7EB);
-        }
-        .ef-card-header {
-          display:         flex;
-          align-items:     center;
-          justify-content: space-between;
-          width:           100%;
-          padding:         13px 18px;
-          background:      none;
-          border:          none;
-          cursor:          pointer;
-          font-family:     var(--font);
-          border-bottom:   1px solid var(--border);
-          transition:      background .1s;
-        }
-        .ef-card-header:hover { background: var(--bg); }
-        .ef-card-title-row {
-          display:     flex;
-          align-items: center;
-          gap:         8px;
-        }
-        .ef-card-num {
-          font-size:   .85rem;
-          font-weight: 900;
-          color:       var(--card-accent, #374151);
-          opacity:     .6;
-        }
-        .ef-card-title {
-          font-size:      .82rem;
-          font-weight:    800;
-          letter-spacing: .06em;
-          color:          var(--text);
-        }
-        .ef-card-sub {
-          font-size:   .72rem;
-          font-weight: 400;
-          color:       var(--muted);
-          letter-spacing: .02em;
-        }
-        .ef-card-chevron {
-          font-size: .75rem;
-          color:     var(--muted);
-        }
-        .ef-card-body { }
-
-        /* ── Revenue grid ─────────────────────────────────────── */
-        .ef-rev-grid {
-          display:               grid;
-          grid-template-columns: 1fr 1fr;
-        }
-        .ef-panel {
-          display:        flex;
-          flex-direction: column;
-          border-right:   1px solid var(--border);
-        }
-        .ef-panel:last-child { border-right: none; }
-
-        .ef-panel-head {
-          display:         flex;
-          align-items:     center;
-          gap:             7px;
-          padding:         10px 16px;
-          font-size:       .78rem;
-          font-weight:     700;
-          border-bottom:   1px solid var(--border);
-        }
-        .ef-panel-head em { font-style: italic; font-weight: 400; color: var(--muted); font-size: .72rem; }
-        .ef-panel-head--auto   { background: #F0FDF4; color: var(--rev); }
-        .ef-panel-head--manual { background: #FFFBEB; color: #92400E; }
-        .ef-panel-head-icon {
-          display:         flex;
-          align-items:     center;
-          justify-content: center;
-          width:           22px;
-          height:          22px;
-          border-radius:   6px;
-          background:      rgba(0,0,0,.06);
-        }
-        .ef-pill {
-          margin-left: auto;
-          font-size:   .58rem;
-          font-weight: 800;
-          padding:     2px 8px;
-          border-radius: 4px;
-          letter-spacing: .06em;
-        }
-        .ef-pill--auto   { background: rgba(10,138,85,.12); color: var(--rev); }
-        .ef-pill--manual { background: rgba(217,119,6,.12); color: #92400E; }
-
-        /* ── Table head ─────────────────────────────────────── */
-        .ef-table-head {
-          display:         flex;
-          justify-content: space-between;
-          padding:         7px 16px;
-          font-size:       .63rem;
-          font-weight:     700;
-          text-transform:  uppercase;
-          letter-spacing:  .07em;
-          color:           #9CA3AF;
-          background:      var(--bg);
-          border-bottom:   1px solid var(--border);
-        }
-        .ef-table-head--sm { padding: 6px 14px; }
-
-        /* ── Row ─────────────────────────────────────────────── */
-        .ef-row {
-          display:         flex;
-          align-items:     center;
-          justify-content: space-between;
-          padding:         9px 16px;
-          gap:             10px;
-          border-bottom:   1px solid #F3F4F6;
-          transition:      background .08s;
-        }
-        .ef-row:hover { background: #FAFAFA; }
-        .ef-row:last-of-type { border-bottom: none; }
-        .ef-row--auto   { background: #FAFFFE; }
-        .ef-row--extra  { background: #FFFDF5; }
-        .ef-row--sm     { padding: 8px 14px; }
-
-        .ef-label {
-          display:     flex;
-          align-items: center;
-          gap:         7px;
-          font-size:   .82rem;
-          color:       var(--text-2);
-          flex:        1;
-          cursor:      default;
-          min-width:   0;
-        }
-        .ef-label--sm { font-size: .78rem; }
-
-        .ef-row-ico    { font-size: .88rem; flex-shrink: 0; }
-        .ef-row-ico--sm { font-size: .78rem; }
-
-        .ef-label-edit {
-          flex:        1;
-          border:      none;
-          background:  transparent;
-          font-size:   .82rem;
-          color:       var(--text-2);
-          font-family: var(--font);
-          outline:     none;
-          min-width:   0;
-          border-bottom: 1.5px dashed #FCD34D;
-          padding-bottom: 1px;
-        }
-        .ef-label-edit:focus { border-bottom-color: #D97706; }
-
-        .ef-static-amt {
-          font-size:   .85rem;
-          font-weight: 600;
-          color:       var(--rev);
-          white-space: nowrap;
-          font-family: 'DM Mono', monospace;
-        }
-
-        .ef-add-row-btn {
-          display:     flex;
-          align-items: center;
-          gap:         5px;
-          width:       100%;
-          padding:     9px 16px;
-          border:      none;
-          border-top:  1px dashed #E5E7EB;
-          background:  transparent;
-          color:       #9CA3AF;
-          font-size:   .78rem;
-          font-family: var(--font);
-          cursor:      pointer;
-          transition:  color .12s, background .12s;
-        }
-        .ef-add-row-btn:hover { color: #D97706; background: rgba(217,119,6,.04); }
-
-        .ef-panel-total {
-          margin-top:      auto;
-          display:         flex;
-          justify-content: space-between;
-          align-items:     center;
-          padding:         10px 16px;
-          border-top:      1.5px solid #E5E7EB;
-          font-size:       .78rem;
-          font-weight:     700;
-        }
-        .ef-panel-total--green { background: #F0FDF4; color: var(--rev); }
-        .ef-panel-total span:last-child {
-          font-family: 'DM Mono', 'Courier New', monospace;
-          font-size:   .88rem;
-        }
-
-        /* ── Grand totals ───────────────────────────────────── */
-        .ef-grand-rev,
-        .ef-grand-exp {
-          display:         flex;
-          justify-content: space-between;
-          align-items:     center;
-          padding:         13px 18px;
-          font-size:       .78rem;
-          font-weight:     800;
-          letter-spacing:  .05em;
-          border-top:      2px solid transparent;
-        }
-        .ef-grand-rev {
-          background:   #F0FDF4;
-          border-color: #6EE7B7;
-          color:        #065F46;
-        }
-        .ef-grand-exp {
-          background:   #FFF7ED;
-          border-color: #FCD34D;
-          color:        #92400E;
-        }
-        .ef-grand-num {
-          font-family: 'DM Mono', 'Courier New', monospace;
-          font-size:   1.05rem;
-          font-weight: 800;
-        }
-
-        /* ── Expense columns ─────────────────────────────────── */
-        .ef-exp-grid {
-          display:               grid;
-          grid-template-columns: 1fr 1fr 1fr;
-        }
-        .ef-exp-col {
-          display:      flex;
-          flex-direction: column;
-          border-right: 1px solid var(--border);
-        }
-        .ef-exp-col:last-child { border-right: none; }
-
-        .ef-exp-col-head {
-          display:     flex;
-          align-items: center;
-          gap:         7px;
-          padding:     10px 14px;
-          font-size:   .66rem;
-          font-weight: 800;
-          letter-spacing: .07em;
-          text-transform: uppercase;
-          border-bottom: 1px solid var(--border);
-        }
-        .ef-exp-col--op  .ef-exp-col-head { background: var(--exp-op-l);  color: var(--exp-op);  border-bottom-color: var(--exp-op-m);  }
-        .ef-exp-col--fin .ef-exp-col-head { background: var(--exp-fin-l); color: var(--exp-fin); border-bottom-color: var(--exp-fin-m); }
-        .ef-exp-col--oth .ef-exp-col-head { background: var(--exp-oth-l); color: var(--exp-oth); border-bottom-color: var(--exp-oth-m); }
-        .ef-exp-col-ico { font-size: .95rem; }
-
-        .ef-exp-total {
-          margin-top:      auto;
-          display:         flex;
-          justify-content: space-between;
-          align-items:     center;
-          padding:         9px 14px;
-          border-top:      1.5px solid var(--border);
-          font-size:       .76rem;
-          font-weight:     800;
-          font-family:     'DM Mono', monospace;
-        }
-        .ef-exp-total--op  { background: var(--exp-op-l);  color: var(--exp-op);  border-top-color: var(--exp-op-m);  }
-        .ef-exp-total--fin { background: var(--exp-fin-l); color: var(--exp-fin); border-top-color: var(--exp-fin-m); }
-        .ef-exp-total--oth { background: var(--exp-oth-l); color: var(--exp-oth); border-top-color: var(--exp-oth-m); }
-
-        /* ── Amount input ─────────────────────────────────────── */
-        .ef-input-cell {
-          display:     flex;
-          align-items: center;
-          gap:         4px;
-          border:      1.5px solid #E5E7EB;
-          border-radius: 8px;
-          padding:     5px 9px;
-          background:  var(--bg);
-          transition:  border-color .15s, box-shadow .15s, background .1s;
-          flex-shrink: 0;
-          min-width:   120px;
-        }
-        .ef-input-cell[data-focused] {
-          border-color: var(--acc);
-          background:   #fff;
-          box-shadow:   0 0 0 3px color-mix(in srgb, var(--acc) 12%, transparent);
-        }
-        .ef-input-cell[data-has-value]:not([data-focused]) {
-          border-color: color-mix(in srgb, var(--acc) 35%, #E5E7EB);
-          background:   color-mix(in srgb, var(--acc) 3%, #fff);
-        }
-        .ef-input-cell input {
-          border:     none;
-          background: transparent;
-          width:      95px;
-          text-align: right;
-          font-size:  .82rem;
-          color:      var(--text);
-          font-family: 'DM Mono', 'Courier New', monospace;
-          outline:    none;
-        }
-        .ef-input-cell input::placeholder { color: #D1D5DB; font-style: italic; font-family: var(--font); }
-        .ef-unit { font-size: .68rem; color: #9CA3AF; flex-shrink: 0; }
-
-        /* ── Bottom layout ─────────────────────────────────── */
-        .ef-bottom {
-          display:               grid;
-          grid-template-columns: 1fr 360px;
-          gap:                   14px;
-          align-items:           start;
-        }
-
-        /* ── Shared costs ───────────────────────────────────── */
-        .ef-shared-wrap { display: flex; }
-        .ef-shared-main { flex: 1; padding: 14px 18px; }
-
-        .ef-shared-sub-head {
-          display:     flex;
-          align-items: center;
-          gap:         7px;
-          font-size:   .7rem;
-          font-weight: 800;
-          letter-spacing: .07em;
-          text-transform: uppercase;
-          color:       var(--shr);
-          margin-bottom: 10px;
-        }
-
-        .ef-shared-th {
-          display:     grid;
-          grid-template-columns: 1.8fr 1fr 1fr .6fr;
-          gap:         6px;
-          padding:     6px 0 6px 2px;
-          font-size:   .61rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: .06em;
-          color:       #9CA3AF;
-          border-bottom: 1px solid var(--border);
-        }
-        .ef-shared-row {
-          display:     grid;
-          grid-template-columns: 1.8fr 1fr 1fr .6fr;
-          gap:         6px;
-          align-items: center;
-          padding:     9px 0 9px 2px;
-          border-bottom: 1px solid #F3F4F6;
-          font-size:   .82rem;
-        }
-        .ef-shared-name {
-          display:     flex;
-          align-items: center;
-          gap:         6px;
-          color:       var(--text-2);
-        }
-        .ef-shared-sys {
-          font-family: 'DM Mono', monospace;
-          font-size:   .78rem;
-          color:       #4B5563;
-        }
-        .ef-shared-alloc {
-          font-family: 'DM Mono', monospace;
-          font-size:   .82rem;
-          font-weight: 700;
-          color:       var(--shr);
-        }
-        .ef-shared-pct {
-          font-size:  .75rem;
-          color:      #6B7280;
-          font-weight:500;
-        }
-
-        .ef-shared-total {
-          display:     grid;
-          grid-template-columns: 1.8fr 1fr 1fr .6fr;
-          gap:         6px;
-          padding:     10px 0 6px 2px;
-          border-top:  2px solid #D1FAE5;
-          font-size:   .78rem;
-          font-weight: 800;
-          color:       var(--shr);
-          margin-top:  2px;
-        }
-        .ef-shared-total-num {
-          font-family: 'DM Mono', monospace;
-          font-size:   .9rem;
-        }
-
-        .ef-link-btn {
-          display:     inline-flex;
-          align-items: center;
-          gap:         6px;
-          margin-top:  12px;
-          padding:     7px 14px;
-          border:      1px solid rgba(15,118,110,.2);
-          border-radius: 8px;
-          background:  rgba(15,118,110,.05);
-          color:       var(--shr);
-          font-size:   .75rem;
-          font-weight: 600;
-          font-family: var(--font);
-          cursor:      pointer;
-          transition:  background .12s;
-        }
-        .ef-link-btn:hover { background: rgba(15,118,110,.1); }
-
-        .ef-shared-info {
-          width:          200px;
-          flex-shrink:    0;
-          background:     var(--shr-light);
-          border-left:    1px solid var(--shr-mid);
-          padding:        16px 14px;
-          display:        flex;
-          flex-direction: column;
-          gap:            12px;
-        }
-        .ef-info-row {
-          display:     flex;
-          gap:         8px;
-          font-size:   .74rem;
-          color:       #374151;
-          line-height: 1.55;
-        }
-        .ef-info-dot {
-          color:      var(--shr);
-          font-size:  .82rem;
-          flex-shrink:0;
-          margin-top: 1px;
-        }
-        .ef-info-row strong { color: #0F766E; }
-
-        .ef-shared-footer {
-          padding:     10px 18px;
-          background:  var(--shr-light);
-          border-top:  1px solid var(--shr-mid);
-          display:     flex;
-          align-items: center;
-        }
-        .ef-locked-badge {
-          display:     inline-flex;
-          align-items: center;
-          gap:         5px;
-          font-size:   .7rem;
-          font-weight: 600;
-          color:       var(--shr);
-          background:  rgba(15,118,110,.08);
-          border:      1px solid rgba(15,118,110,.18);
-          border-radius: 99px;
-          padding:     3px 10px;
-        }
-
-        /* ── Right column ───────────────────────────────────── */
-        .ef-right {
-          display:        flex;
-          flex-direction: column;
-          gap:            12px;
-        }
-
-        /* ── Summary / formula ──────────────────────────────── */
-        .ef-summary {
-          background:   var(--surface);
-          border:       1.5px solid var(--border);
-          border-radius: 14px;
-          overflow:     hidden;
-          border-top:   3px solid #374151;
-        }
-        .ef-summary-head {
-          padding:        11px 16px;
-          font-size:      .65rem;
-          font-weight:    800;
-          letter-spacing: .09em;
-          text-transform: uppercase;
-          color:          #374151;
-          background:     var(--bg);
-          border-bottom:  1px solid var(--border);
-        }
-        .ef-formula {
-          display:     flex;
-          align-items: center;
-          flex-wrap:   wrap;
-          gap:         8px;
-          padding:     16px;
-        }
-        .ef-formula-block { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-        .ef-formula-block--result { flex: 1; }
-        .ef-formula-lbl {
-          font-size:      .57rem;
-          font-weight:    700;
-          text-transform: uppercase;
-          letter-spacing: .07em;
-          color:          #9CA3AF;
-        }
-        .ef-formula-val {
-          font-family: 'DM Mono', 'Courier New', monospace;
-          font-size:   .95rem;
-          font-weight: 700;
-          color:       var(--text);
-        }
-        .ef-formula-val--rev  { color: var(--rev); }
-        .ef-formula-val--exp  { color: #DC2626; }
-        .ef-formula-val--shr  { color: var(--shr); }
-        .ef-formula-val--profit { font-size: 1.1rem; color: var(--rev); }
-        .ef-formula-val--profit.neg { color: #DC2626; }
-        .ef-formula-op {
-          font-size:  1.2rem;
-          font-weight:700;
-          color:      #9CA3AF;
-          flex-shrink:0;
-        }
-        .ef-formula-op--eq { color: #374151; font-size: 1.4rem; }
-
-        /* ── Guide ──────────────────────────────────────────── */
-        .ef-guide {
-          background:   var(--surface);
-          border:       1.5px solid var(--border);
-          border-radius: 14px;
-          overflow:     hidden;
-        }
-        .ef-guide-head {
-          width:       100%;
-          display:     flex;
-          align-items: center;
-          justify-content: space-between;
-          padding:     12px 16px;
-          border:      none;
-          background:  none;
-          cursor:      pointer;
-          font-family: var(--font);
-          font-size:   .8rem;
-          font-weight: 700;
-          color:       var(--text-2);
-          border-bottom: 1px solid transparent;
-          transition:  background .1s;
-        }
-        .ef-guide-head > span:first-child {
-          display:     flex;
-          align-items: center;
-          gap:         7px;
-          color:       #374151;
-        }
-        .ef-guide-head:hover { background: var(--bg); }
-        .ef-guide-chevron { color: var(--muted); font-size: .75rem; }
-        .ef-guide-body {
-          padding:      2px 16px 14px;
-          border-top:   1px solid var(--border);
-          display:      flex;
-          flex-direction: column;
-        }
-        .ef-guide-item {
-          display:     flex;
-          align-items: flex-start;
-          gap:         8px;
-          padding:     8px 0;
-          border-bottom: 1px solid #F3F4F6;
-          font-size:   .78rem;
-          color:       #4B5563;
-          line-height: 1.5;
-        }
-        .ef-guide-item:last-of-type { border-bottom: none; }
-        .ef-guide-num {
-          width:       20px;
-          height:      20px;
-          border-radius: 50%;
-          background:  #F3F4F6;
-          color:       #374151;
-          font-size:   .65rem;
-          font-weight: 800;
-          display:     flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          margin-top:  1px;
-        }
-        .ef-guide-ico { flex-shrink: 0; font-size: .85rem; }
-        .ef-guide-cta {
-          margin-top:  10px;
-          display:     inline-flex;
-          align-items: center;
-          gap:         6px;
-          align-self:  flex-start;
-          padding:     7px 16px;
-          border:      1.5px solid var(--border);
-          border-radius: 8px;
-          background:  none;
-          color:       #374151;
-          font-size:   .75rem;
-          font-weight: 600;
-          font-family: var(--font);
-          cursor:      pointer;
-          transition:  background .12s;
-        }
-        .ef-guide-cta:hover { background: var(--bg); }
-
-        /* ── Footer ─────────────────────────────────────────── */
-        .ef-footer {
-          display:         flex;
-          justify-content: space-between;
-          align-items:     center;
-          gap:             10px;
-          padding:         13px 18px;
-          background:      var(--surface);
-          border:          1.5px solid var(--border);
-          border-radius:   12px;
-          flex-wrap:       wrap;
-        }
-        .ef-footer-r {
-          display:     flex;
-          align-items: center;
-          gap:         8px;
-        }
-        .ef-btn {
-          display:     inline-flex;
-          align-items: center;
-          gap:         6px;
-          padding:     8px 18px;
-          border-radius: 8px;
-          font-size:   .82rem;
-          font-weight: 600;
-          font-family: var(--font);
-          cursor:      pointer;
-          transition:  all .14s;
-        }
-        .ef-btn--ghost {
-          background: none;
-          border:     1.5px solid var(--border);
-          color:      var(--text-2);
-        }
-        .ef-btn--ghost:hover { background: var(--bg); }
-        .ef-btn--muted {
-          background: none;
-          border:     1.5px solid var(--border);
-          color:      var(--muted);
-        }
-        .ef-btn--muted:hover { background: var(--bg); }
-        .ef-btn--danger {
-          background: rgba(220,38,38,.06);
-          border:     1.5px solid rgba(220,38,38,.2);
-          color:      #B91C1C;
-        }
-        .ef-btn--danger:hover { background: rgba(220,38,38,.12); }
-        .ef-btn--primary {
-          background:  #111827;
-          border:      1.5px solid #111827;
-          color:       #fff;
-          padding:     9px 22px;
-          font-size:   .85rem;
-        }
-        .ef-btn--primary:hover:not(:disabled) { background: #1F2937; }
-        .ef-btn--primary:disabled { opacity: .6; cursor: not-allowed; }
-        .ef-btn--primary.saved { background: var(--rev); border-color: var(--rev); }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .spin { animation: spin .7s linear infinite; }
-
-        /* ── Responsive ─────────────────────────────────────── */
-        @media (max-width: 860px) {
-          .ef-rev-grid  { grid-template-columns: 1fr; }
-          .ef-panel     { border-right: none; border-bottom: 1px solid var(--border); }
-          .ef-exp-grid  { grid-template-columns: 1fr; }
-          .ef-exp-col   { border-right: none; border-bottom: 1px solid var(--border); }
-          .ef-bottom    { grid-template-columns: 1fr; }
-          .ef-shared-wrap { flex-direction: column; }
-          .ef-shared-info { width: 100%; border-left: none; border-top: 1px solid var(--shr-mid); }
-          .ef-formula   { gap: 5px; }
-        }
-      `}</style>
+      <style>{CSS}</style>
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────
+const CSS = `
+.ef {
+  --rev:         #0A6B44;
+  --rev-lt:      #EBF7F2;
+  --rev-bd:      #9FD9BF;
+  --exp:         #B45309;
+  --exp-lt:      #FEF3E2;
+  --exp-bd:      #F59E0B;
+  --shared:      #1A3A6B;
+  --shared-lt:   #EAF0FB;
+  --shared-bd:   #AABFE8;
+  --danger:      #B94C2A;
+  --muted:       #64748B;
+  --border:      rgba(0,0,0,.08);
+  --bg:          #F8FAFC;
+  --surface:     #fff;
+  --text:        #1A202C;
+  --radius:      12px;
+  --shadow:      0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.05);
+
+  display: flex; flex-direction: column; gap: 14px;
+  font-family: 'Be Vietnam Pro','Inter',system-ui,sans-serif;
+  font-size: .84rem; color: var(--text);
+}
+
+/* ── Banner ── */
+.ef-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+  background: linear-gradient(135deg,rgba(14,109,209,.06),rgba(14,109,209,.03));
+  border: 1px solid rgba(14,109,209,.2);
+  border-radius: var(--radius); padding: 14px 18px;
+}
+.ef-banner-left { display: flex; gap: 12px; align-items: flex-start; }
+.ef-banner-icon { font-size: 1.5rem; line-height: 1; }
+.ef-banner-title { font-weight: 700; font-size: .85rem; color: #1E40AF; margin-bottom: 3px; }
+.ef-banner-badge {
+  display: inline-block; font-size: .65rem; font-weight: 600;
+  background: rgba(14,109,209,.15); color: #1D4ED8; border-radius: 99px;
+  padding: 1px 8px; margin-left: 6px; letter-spacing: .03em;
+}
+.ef-banner-sub { font-size: .76rem; color: #3B5998; line-height: 1.5; }
+.ef-banner-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.ef-banner-time { font-size: .74rem; color: #64748B; }
+.ef-refresh-btn {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid rgba(14,109,209,.25); background: #fff;
+  color: #1D4ED8; font-size: 1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+}
+.ef-refresh-btn:hover { background: rgba(14,109,209,.08); }
+.ef-refresh-btn.spinning { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ef-banner-hint {
+  font-size: .74rem; color: #64748B;
+  background: rgba(0,0,0,.04); border-radius: 6px; padding: 3px 10px;
+}
+.ef-banner-hint kbd {
+  background: #1A202C; color: #fff; border-radius: 4px;
+  padding: 1px 5px; font-size: .7rem;
+}
+
+/* ── Grids ── */
+.ef-top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.ef-bot-grid { display: grid; grid-template-columns: 1fr 360px; gap: 14px; align-items: start; }
+
+/* ── Cards ── */
+.ef-card {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.ef-card-hd {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; font-size: .72rem; font-weight: 800;
+  letter-spacing: .09em; border-bottom: 1px solid var(--border);
+}
+.ef-card-num {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .72rem; font-weight: 800;
+}
+.ef-card-hd--rev    { background: var(--rev-lt);    color: var(--rev);    }
+.ef-card-num--rev   { background: var(--rev);    color: #fff; }
+.ef-card-hd--exp    { background: var(--exp-lt);    color: var(--exp);    }
+.ef-card-num--exp   { background: var(--exp);    color: #fff; }
+.ef-card-hd--shared { background: var(--shared-lt); color: var(--shared); }
+.ef-card-num--shared{ background: var(--shared); color: #fff; }
+.ef-shared-lock {
+  margin-left: auto; font-size: .68rem; font-weight: 500;
+  background: rgba(26,58,107,.1); border-radius: 99px;
+  padding: 2px 10px; letter-spacing: .02em;
+}
+
+/* ── Revenue grid ── */
+.ef-rev-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.ef-rev-col { border-right: 1px solid var(--border); }
+.ef-rev-col:last-child { border-right: none; }
+.ef-rev-col--manual { background: rgba(217,119,6,.02); }
+
+/* ── Column tag ── */
+.ef-col-tag {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 14px; font-size: .68rem; font-weight: 700;
+  letter-spacing: .1em; border-bottom: 1px solid var(--border);
+}
+.ef-col-tag-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.ef-col-tag--auto   { color: var(--rev); background: rgba(10,107,68,.04); }
+.ef-col-tag--auto .ef-col-tag-dot { background: var(--rev); }
+.ef-col-tag--manual { color: var(--exp); background: rgba(180,83,9,.04); }
+.ef-col-tag--manual .ef-col-tag-dot { background: var(--exp); }
+
+/* ── Table ── */
+.ef-tbl-head {
+  display: flex; justify-content: space-between;
+  padding: 6px 14px; font-size: .68rem; font-weight: 600;
+  color: var(--muted); background: rgba(0,0,0,.02);
+  border-bottom: 1px solid var(--border);
+}
+.ef-tbl-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; border-bottom: 1px solid rgba(0,0,0,.04); gap: 8px;
+}
+.ef-tbl-row:last-of-type { border-bottom: none; }
+.ef-tbl-row--auto   { background: rgba(0,0,0,.01); }
+.ef-tbl-row--extra  { gap: 6px; }
+.ef-tbl-name { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; font-size: .82rem; }
+.ef-tbl-fixed {
+  font-family: Georgia,serif; font-style: italic;
+  font-size: .84rem; color: var(--text); white-space: nowrap;
+  min-width: 80px; text-align: right;
+}
+
+/* Brand icon */
+.ef-brand {
+  width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .6rem; font-weight: 800; letter-spacing: -.02em;
+}
+.ef-icon { font-size: 1rem; line-height: 1; flex-shrink: 0; }
+.ef-auto-badge {
+  font-size: .6rem; background: var(--rev-lt); color: var(--rev);
+  border-radius: 4px; padding: 1px 5px; font-weight: 600;
+  border: 1px solid var(--rev-bd); margin-left: 3px;
+}
+
+/* Column subtotal */
+.ef-col-subtotal {
+  display: flex; justify-content: space-between;
+  padding: 9px 14px; font-size: .76rem; font-weight: 700;
+  border-top: 1px solid var(--border); background: rgba(0,0,0,.02);
+}
+.ef-col-subtotal--rev  { color: var(--rev);  }
+.ef-col-subtotal--manual { color: var(--exp); }
+
+/* Big total */
+.ef-big-total {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 13px 16px; font-size: .76rem; font-weight: 800;
+  letter-spacing: .05em; border-top: 2px solid;
+}
+.ef-big-total--rev { border-color: var(--rev-bd); background: var(--rev-lt); color: var(--rev); }
+.ef-big-total--exp { border-color: var(--exp-bd); background: var(--exp-lt); color: var(--exp); }
+.ef-big-total-val {
+  font-family: Georgia,serif; font-style: italic;
+  font-size: 1.05rem; letter-spacing: 0;
+}
+
+/* Extra row inputs */
+.ef-extra-lbl {
+  flex: 1; border: 1px solid var(--border); border-radius: 7px;
+  padding: 5px 8px; font-size: .78rem; color: var(--text);
+  background: rgba(0,0,0,.02); outline: none; min-width: 0;
+  font-family: inherit;
+}
+.ef-extra-lbl:focus { border-color: var(--exp); background: #fff; }
+.ef-add-btn {
+  width: 100%; padding: 8px; border: 1px dashed rgba(0,0,0,.15);
+  background: transparent; font-size: .76rem; color: var(--muted);
+  cursor: pointer; font-family: inherit; transition: all .15s;
+}
+.ef-add-btn:hover { background: rgba(0,0,0,.03); color: var(--text); }
+
+/* ── Expense grid ── */
+.ef-exp-grid { display: grid; }
+.ef-exp-grid--1 { grid-template-columns: 1fr; }
+.ef-exp-grid--2 { grid-template-columns: 1fr 1fr; }
+.ef-exp-grid--3 { grid-template-columns: 1fr 1fr 1fr; }
+.ef-exp-col { border-right: 1px solid var(--border); }
+.ef-exp-col:last-child { border-right: none; }
+.ef-exp-col-hd {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 14px; font-size: .68rem; font-weight: 800;
+  letter-spacing: .07em;
+}
+
+/* ── Smart input ── */
+.ef-inp {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 4px 8px; background: rgba(0,0,0,.025);
+  transition: all .15s; min-width: 0;
+}
+.ef-inp--focus { border-color: #3B82F6; background: #fff; box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
+.ef-inp input {
+  border: none; background: transparent; font-size: .82rem;
+  color: var(--text); width: 100px; text-align: right; outline: none; min-width: 0;
+  font-family: inherit;
+}
+.ef-inp-unit { font-size: .68rem; color: #94A3B8; flex-shrink: 0; }
+
+/* ── Shared section ── */
+.ef-shared-body { display: grid; grid-template-columns: 1fr 200px; }
+.ef-shared-main { border-right: 1px solid var(--border); }
+.ef-shared-grp { border-bottom: 1px solid rgba(0,0,0,.05); }
+.ef-shared-grp:last-child { border-bottom: none; }
+.ef-shared-grp-hd {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 16px; font-size: .68rem; font-weight: 800;
+  letter-spacing: .07em; color: var(--shared);
+  background: rgba(26,58,107,.04); border-bottom: 1px solid rgba(0,0,0,.05);
+}
+.ef-shared-grp-num {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--shared); color: #fff; font-size: .62rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.ef-shared-thead {
+  display: grid; grid-template-columns: 1.6fr 1fr 1fr .65fr;
+  padding: 6px 16px; font-size: .67rem; font-weight: 600; color: var(--muted);
+  background: rgba(0,0,0,.02); border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+.ef-shared-thead span:first-child { text-align: left; }
+.ef-shared-row {
+  display: grid; grid-template-columns: 1.6fr 1fr 1fr .65fr;
+  padding: 8px 16px; align-items: center; gap: 6px;
+  border-bottom: 1px solid rgba(0,0,0,.04);
+}
+.ef-shared-row--auto { background: rgba(0,0,0,.01); }
+.ef-shared-row .ef-inp { justify-self: end; }
+.ef-num-cell {
+  font-family: Georgia,serif; font-style: italic; font-size: .82rem;
+  text-align: right; color: var(--text);
+}
+.ef-num-cell--alloc { color: var(--rev); }
+.ef-num-cell--total { color: var(--shared); font-weight: 700; }
+.ef-pct-cell {
+  text-align: right; font-size: .74rem; font-weight: 700;
+  color: var(--shared); background: var(--shared-lt);
+  border-radius: 5px; padding: 2px 6px; justify-self: end;
+}
+.ef-shared-subtotal {
+  display: grid; grid-template-columns: 1.6fr 1fr 1fr .65fr;
+  padding: 10px 16px; background: rgba(26,58,107,.04);
+  border-top: 1px solid rgba(0,0,0,.06); font-size: .76rem; font-weight: 700;
+  color: var(--shared); align-items: center;
+}
+
+/* Shared info */
+.ef-shared-info {
+  padding: 14px; display: flex; flex-direction: column;
+  gap: 10px; justify-content: space-between;
+  background: rgba(14,109,209,.02);
+}
+.ef-info-list { display: flex; flex-direction: column; gap: 8px; }
+.ef-info-item { display: flex; gap: 7px; font-size: .74rem; color: #475569; line-height: 1.55; }
+.ef-info-i {
+  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(14,109,209,.15); color: #1D4ED8;
+  font-size: .65rem; font-style: italic; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.ef-alloc-pill {
+  background: rgba(10,107,68,.1); color: var(--rev);
+  border-radius: 8px; padding: 8px 10px;
+  font-size: .74rem; font-weight: 600; line-height: 1.6;
+}
+.ef-detail-btn {
+  width: 100%; padding: 8px; border: 1px solid rgba(26,58,107,.2);
+  border-radius: 8px; background: #fff; color: var(--shared);
+  font-size: .74rem; font-family: inherit; cursor: pointer;
+  transition: all .15s;
+}
+.ef-detail-btn:hover { background: var(--shared-lt); }
+
+/* ── Right panel ── */
+.ef-right { display: flex; flex-direction: column; gap: 14px; }
+
+/* Summary */
+.ef-summary {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.ef-summary-hd {
+  padding: 12px 16px; font-size: .72rem; font-weight: 800;
+  letter-spacing: .08em; color: var(--text);
+  background: rgba(0,0,0,.03); border-bottom: 1px solid var(--border);
+}
+.ef-formula {
+  display: flex; flex-direction: column; gap: 0;
+  padding: 6px 0;
+}
+.ef-formula-item { padding: 10px 16px; border-bottom: 1px solid rgba(0,0,0,.04); }
+.ef-formula-item:last-child { border-bottom: none; }
+.ef-formula-lbl { font-size: .67rem; font-weight: 600; color: var(--muted); letter-spacing: .05em; margin-bottom: 3px; text-transform: uppercase; }
+.ef-formula-val { font-family: Georgia,serif; font-style: italic; font-size: .92rem; font-weight: 600; }
+.ef-formula-val--rev    { color: var(--rev); }
+.ef-formula-val--exp    { color: var(--exp); }
+.ef-formula-val--shared { color: var(--shared); }
+.ef-formula-op {
+  padding: 0 16px; font-size: 1.1rem; font-weight: 300; color: #CBD5E0;
+  line-height: .8; text-align: right;
+}
+.ef-formula-result {
+  padding: 12px 16px; margin: 6px 10px; border-radius: 10px;
+  background: rgba(10,107,68,.07); border: 2px solid var(--rev-bd);
+}
+.ef-formula-result.negative { background: rgba(185,76,42,.07); border-color: #FCA5A5; }
+.ef-formula-big {
+  font-family: Georgia,serif; font-style: italic; font-size: 1.15rem;
+  font-weight: 700; color: var(--rev); margin-top: 4px;
+}
+.ef-formula-result.negative .ef-formula-big { color: var(--danger); }
+
+/* Guide */
+.ef-guide {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 14px 16px;
+}
+.ef-guide-hd {
+  font-size: .72rem; font-weight: 800; letter-spacing: .07em;
+  color: #475569; margin-bottom: 12px;
+}
+.ef-guide-item {
+  display: flex; gap: 10px; padding: 7px 0;
+  border-bottom: 1px solid rgba(0,0,0,.04); font-size: .78rem; line-height: 1.5;
+}
+.ef-guide-item:last-of-type { border-bottom: none; }
+.ef-guide-icon { font-size: .9rem; flex-shrink: 0; line-height: 1.5; }
+.ef-guide-text { color: #475569; }
+.ef-guide-cta {
+  width: 100%; margin-top: 12px; padding: 9px;
+  background: var(--shared-lt); border: 1px solid var(--shared-bd);
+  border-radius: 8px; color: var(--shared); font-size: .78rem;
+  font-weight: 600; font-family: inherit; cursor: pointer;
+  transition: all .15s;
+}
+.ef-guide-cta:hover { background: rgba(26,58,107,.12); }
+
+/* Empty hint */
+.ef-empty-hint {
+  padding: 20px 16px; text-align: center;
+  font-size: .8rem; color: var(--muted);
+  border: 1px dashed rgba(0,0,0,.1); border-radius: 8px; margin: 12px;
+}
+
+/* ── Footer ── */
+.ef-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 0 2px; border-top: 1px solid var(--border); gap: 8px; flex-wrap: wrap;
+}
+.ef-footer-r { display: flex; gap: 8px; align-items: center; }
+.ef-btn {
+  padding: 8px 16px; border-radius: 99px; font-size: .82rem;
+  font-family: inherit; cursor: pointer; transition: all .15s;
+  font-weight: 500; white-space: nowrap; border: 1px solid transparent;
+}
+.ef-btn--copy  { color: #475569; border-color: var(--border); background: #fff; }
+.ef-btn--copy:hover  { background: rgba(0,0,0,.04); }
+.ef-btn--ghost { color: var(--muted); background: transparent; border-color: transparent; }
+.ef-btn--reset { color: var(--exp); border-color: rgba(180,83,9,.25); background: rgba(180,83,9,.05); }
+.ef-btn--reset:hover { background: rgba(180,83,9,.12); }
+.ef-btn--save  { color: #fff; background: var(--shared); border-color: transparent; font-weight: 700; padding: 10px 24px; font-size: .85rem; }
+.ef-btn--save:hover:not(:disabled) { opacity: .88; }
+.ef-btn--save:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .ef-top-grid  { grid-template-columns: 1fr; }
+  .ef-bot-grid  { grid-template-columns: 1fr; }
+  .ef-rev-grid  { grid-template-columns: 1fr; }
+  .ef-exp-grid  { grid-template-columns: 1fr !important; }
+  .ef-shared-body { grid-template-columns: 1fr; }
+  .ef-shared-thead,
+  .ef-shared-row,
+  .ef-shared-subtotal { grid-template-columns: 1.6fr 1fr 1fr; }
+  .ef-shared-thead span:last-child,
+  .ef-shared-row   > :last-child,
+  .ef-shared-subtotal > :last-child { display: none; }
+}
+`;

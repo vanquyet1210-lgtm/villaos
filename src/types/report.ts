@@ -145,19 +145,36 @@ export interface MonthlyReport {
 
 export const DEFAULT_CATEGORIES: Omit<ReportCategory, 'id'|'ownerId'|'villaId'|'createdAt'>[] = [
   // ── Doanh thu ──
-  { name:'VillaOS',         type:'revenue', scope:'per_villa', groupName:'Doanh thu', icon:'🏡', color:'#178a5e', isAuto:true,  autoSource:'villaos_confirmed', fixedAmount:0, sortOrder:1,  isActive:true },
-  { name:'Agoda',           type:'revenue', scope:'per_villa', groupName:'Doanh thu', icon:'🅰️', color:'#3266ad', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:2,  isActive:true },
-  { name:'Booking.com',     type:'revenue', scope:'per_villa', groupName:'Doanh thu', icon:'🔵', color:'#d65a1e', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:3,  isActive:true },
-  { name:'Dịch vụ thêm',    type:'revenue', scope:'per_villa', groupName:'Doanh thu', icon:'✨', color:'#7f77dd', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:4,  isActive:true },
+  { name:'VillaOS',            type:'revenue', scope:'per_villa', groupName:'Doanh thu', icon:'🏡', color:'#178a5e', isAuto:true,  autoSource:'villaos_confirmed', fixedAmount:0, sortOrder:1,  isActive:true },
+  { name:'Agoda',              type:'revenue', scope:'per_villa', groupName:'Doanh thu', icon:'🅰️', color:'#1A73E8', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:2,  isActive:true },
+  { name:'Booking.com',        type:'revenue', scope:'per_villa', groupName:'Doanh thu', icon:'🔵', color:'#003580', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:3,  isActive:true },
+  { name:'Airbnb',             type:'revenue', scope:'per_villa', groupName:'Doanh thu', icon:'🏠', color:'#FF5A5F', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:4,  isActive:true },
+  { name:'Khách trực tiếp',    type:'revenue', scope:'per_villa', groupName:'Doanh thu', icon:'👤', color:'#7C3AED', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:5,  isActive:true },
+  { name:'Dịch vụ thêm',       type:'revenue', scope:'per_villa', groupName:'Doanh thu', icon:'✨', color:'#7f77dd', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:6,  isActive:true },
   // ── Chi phí vận hành (per_villa) ──
-  { name:'Điện',            type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'⚡', color:'#854F0B', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:5,  isActive:true },
-  { name:'Nước',            type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'💧', color:'#185FA5', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:6,  isActive:true },
-  { name:'Vệ sinh',         type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'🧹', color:'#5A6978', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:7,  isActive:true },
-  { name:'Internet',        type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'📶', color:'#5A6978', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:8,  isActive:true },
+  { name:'Điện',               type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'⚡', color:'#854F0B', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:7,  isActive:true },
+  { name:'Nước',               type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'💧', color:'#185FA5', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:8,  isActive:true },
+  { name:'Vệ sinh',            type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'🧹', color:'#5A6978', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:9,  isActive:true },
+  { name:'Internet',           type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'📶', color:'#5A6978', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:10, isActive:true },
+  { name:'Vật tư tiêu hao',    type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'🛒', color:'#92400E', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:11, isActive:true },
+  { name:'Bảo trì, sửa chữa',  type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'🔨', color:'#7C3A00', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:12, isActive:true },
+  { name:'Khác (vận hành)',     type:'expense', scope:'per_villa', groupName:'Vận hành',  icon:'📦', color:'#6B7280', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:13, isActive:true },
+  // ── Chi phí tài chính (per_villa) ──
+  { name:'Thuê mặt bằng',      type:'expense', scope:'per_villa', groupName:'Tài chính', icon:'🏢', color:'#374151', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:14, isActive:true },
+  { name:'Trả ngân hàng',      type:'expense', scope:'per_villa', groupName:'Tài chính', icon:'🏦', color:'#374151', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:15, isActive:true },
+  { name:'Thuế GTGT',          type:'expense', scope:'per_villa', groupName:'Tài chính', icon:'📋', color:'#4B5563', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:16, isActive:true },
+  { name:'Thuế TNDN',          type:'expense', scope:'per_villa', groupName:'Tài chính', icon:'📑', color:'#4B5563', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:17, isActive:true },
+  { name:'Thuế khác',          type:'expense', scope:'per_villa', groupName:'Tài chính', icon:'🗂️', color:'#6B7280', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:18, isActive:true },
+  // ── Chi phí khác (per_villa) ──
+  { name:'Marketing',          type:'expense', scope:'per_villa', groupName:'Khác',      icon:'📣', color:'#9333EA', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:19, isActive:true },
+  { name:'Văn phòng phẩm',     type:'expense', scope:'per_villa', groupName:'Khác',      icon:'🖊️', color:'#6B7280', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:20, isActive:true },
+  { name:'Phí dịch vụ',        type:'expense', scope:'per_villa', groupName:'Khác',      icon:'🔧', color:'#6B7280', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:21, isActive:true },
+  { name:'Phí ngân hàng',      type:'expense', scope:'per_villa', groupName:'Khác',      icon:'💳', color:'#374151', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:22, isActive:true },
+  { name:'Khác',               type:'expense', scope:'per_villa', groupName:'Khác',      icon:'📦', color:'#6B7280', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:23, isActive:true },
   // ── Chi phí nhân sự (shared) ──
-  { name:'Hoa hồng sale',   type:'expense', scope:'shared',    groupName:'Nhân sự',   icon:'🏷️', color:'#6B7280', isAuto:true,  autoSource:'commission',        fixedAmount:0, sortOrder:9,  isActive:true },
-  { name:'Lương nhân viên', type:'expense', scope:'shared',    groupName:'Nhân sự',   icon:'👤', color:'#6B7280', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:10, isActive:true },
-  // ── Chi phí cố định (shared) ──
-  { name:'Thuê mặt bằng',   type:'expense', scope:'shared',    groupName:'Cố định',   icon:'🏢', color:'#374151', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:11, isActive:true },
-  { name:'Trả ngân hàng',   type:'expense', scope:'shared',    groupName:'Cố định',   icon:'🏦', color:'#374151', isAuto:false, autoSource:null,                fixedAmount:0, sortOrder:12, isActive:true },
+  { name:'Hoa hồng sale',      type:'expense', scope:'shared',    groupName:'Nhân sự',   icon:'🏷️', color:'#6B7280', isAuto:true,  autoSource:'commission', fixedAmount:0, sortOrder:24, isActive:true },
+  { name:'Lương nhân viên',    type:'expense', scope:'shared',    groupName:'Nhân sự',   icon:'👤', color:'#1A3A6B', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:25, isActive:true },
+  { name:'Lễ tân',             type:'expense', scope:'shared',    groupName:'Nhân sự',   icon:'🛎️', color:'#1A3A6B', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:26, isActive:true },
+  { name:'Quản lý',            type:'expense', scope:'shared',    groupName:'Nhân sự',   icon:'👔', color:'#1A3A6B', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:27, isActive:true },
+  { name:'Bảo trì (chung)',    type:'expense', scope:'shared',    groupName:'Nhân sự',   icon:'🔩', color:'#374151', isAuto:false, autoSource:null, fixedAmount:0, sortOrder:28, isActive:true },
 ];
