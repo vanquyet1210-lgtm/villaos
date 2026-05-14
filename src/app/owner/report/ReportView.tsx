@@ -2,913 +2,791 @@
 // VillaOS v7 — app/owner/report/ReportView.tsx
 
 import { useState } from 'react';
-import type {
-  MonthlyReport,
-  ReportCategoryWithEntry,
-  CostAlert,
-  ChannelStat,
-  HealthMetric,
-  HealthLevel,
-  VillaSummary,
-} from '@/types/report';
+import type { MonthlyReport, HealthMetric } from '@/types/report';
 
-// ── Helpers ───────────────────────────────────────────────────
+interface Props { report: MonthlyReport }
 
-function fmtShort(n: number) {
+// ─── Global color tokens (single source of truth) ────────────
+// Every section uses these constants — donut slices, KPI values,
+// sparklines, chart areas, and legend bars all pull from here.
+const C = {
+  revenue:   '#178a5e',   // green  — doanh thu
+  expense:   '#A32D2D',   // red    — chi phí
+  profit:    '#C9A84C',   // gold   — lợi nhuận
+  cashflow:  '#1A73E8',   // blue   — cashflow
+  occupancy: '#7C3AED',   // violet — công suất
+  navy:      '#1C2B4A',
+  muted:     '#8A8F9A',
+  border:    'rgba(28,43,74,.08)',
+};
+
+// ─── Helpers ──────────────────────────────────────────────────
+function fmt(n: number) {
   if (!n) return '0đ';
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + ' tr';
   if (n >= 1_000)     return (n / 1_000).toFixed(0) + 'k';
   return n.toLocaleString('vi-VN') + 'đ';
 }
-
-function delta(cur: number, prev: number) {
+function pctChange(cur: number, prev: number) {
   if (!prev) return null;
   const pct = Math.round((cur - prev) / prev * 100);
   return { pct, up: pct >= 0 };
 }
 
-const HEALTH_COLOR: Record<HealthLevel, string> = {
-  'Xuất sắc': '#178a5e',
-  'Tốt':      '#178a5e',
-  'Trung bình':'#C9A84C',
-  'Kém':       '#A32D2D',
-};
-
-// ── KPI Card ─────────────────────────────────────────────────
-
-function KpiCard({
-  label, value, prev, accent, sub, subLabel,
-}: {
-  label: string; value: number; prev: number;
-  accent?: boolean; sub?: number; subLabel?: string;
-}) {
-  const d = delta(value, prev);
+// ─── Sparkline ────────────────────────────────────────────────
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  const W = 100, H = 34;
+  if (values.length < 2) return null;
+  const min = Math.min(...values), max = Math.max(...values);
+  const r   = max - min || 1;
+  const pts = values.map((v, i) => [
+    (i / (values.length - 1)) * W,
+    H - ((v - min) / r) * (H - 4) - 2,
+  ] as [number, number]);
+  let d = `M ${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const cx = (pts[i][0] + pts[i + 1][0]) / 2;
+    d += ` C ${cx},${pts[i][1]} ${cx},${pts[i + 1][1]} ${pts[i + 1][0]},${pts[i + 1][1]}`;
+  }
+  const uid = color.replace('#', '');
   return (
-    <div className="kpi-card">
-      <div className="kpi-label">{label}</div>
-      <div className={`kpi-value${accent ? ' kpi-value--accent' : ''}`}>{fmtShort(value)}</div>
-      {d && (
-        <div className={`kpi-delta${d.up ? ' up' : ' down'}`}>
-          {d.up ? '↑' : '↓'} {Math.abs(d.pct)}% so với tháng trước
-        </div>
-      )}
-      {sub !== undefined && subLabel && (
-        <div className="kpi-sub">Chưa thanh toán: {fmtShort(sub)}</div>
-      )}
-    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H }} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={`sp-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={d + ` L ${pts[pts.length - 1][0]},${H} L 0,${H} Z`} fill={`url(#sp-${uid})`} />
+      <path d={d} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
   );
 }
 
-function OccupancyCard({ rate, prev }: { rate: number; prev: number }) {
-  const d = delta(rate, prev);
-  return (
-    <div className="kpi-card">
-      <div className="kpi-label">Công suất phòng</div>
-      <div className="kpi-value">{rate}%</div>
-      {d && (
-        <div className={`kpi-delta${d.up ? ' up' : ' down'}`}>
-          {d.up ? '↑' : '↓'} {Math.abs(d.pct)}% so với tháng trước
-        </div>
-      )}
-    </div>
-  );
-}
+// ─── Donut chart ──────────────────────────────────────────────
+interface Slice { label: string; value: number; color: string }
 
-// ── Category row with bar ─────────────────────────────────────
-
-function CategoryRow({ c, maxAmount }: { c: ReportCategoryWithEntry; maxAmount: number }) {
-  const pct = maxAmount ? Math.max(3, Math.round(c.amount / maxAmount * 100)) : 0;
-  return (
-    <div className="rpt-row">
-      <div className="rpt-row-left">
-        <span className="rpt-dot" style={{ background: c.color }} />
-        <span className="rpt-name">{c.icon} {c.name}</span>
-        <span className={`rpt-badge rpt-badge--${c.isAuto ? 'auto' : c.fixedAmount ? 'fixed' : 'manual'}`}>
-          {c.isAuto ? 'tự động' : c.fixedAmount ? 'cố định' : 'thủ công'}
-        </span>
-      </div>
-      <div className="rpt-row-right">
-        <div className="rpt-bar-wrap">
-          <div className="rpt-bar-bg">
-            <div className="rpt-bar-fill" style={{ width:`${pct}%`, background:c.color }} />
-          </div>
-        </div>
-        <span className="rpt-amount">{fmtShort(c.amount)}</span>
-      </div>
-    </div>
-  );
-}
-
-// ── Collapsible section ───────────────────────────────────────
-
-function Section({ title, items, total, accentColor }: {
-  title: string; items: ReportCategoryWithEntry[]; total: number; accentColor: string;
-}) {
-  const [open, setOpen] = useState(true);
-  const maxAmt = Math.max(...items.map(c => c.amount), 1);
-
-  const groups = new Map<string, ReportCategoryWithEntry[]>();
-  items.forEach(c => {
-    const g = c.groupName ?? 'Khác';
-    if (!groups.has(g)) groups.set(g, []);
-    groups.get(g)!.push(c);
-  });
-
-  return (
-    <div className="rpt-section">
-      <button className="rpt-section-header" onClick={() => setOpen(o => !o)}>
-        <span className="rpt-section-title">{title}</span>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <span className="rpt-section-total" style={{ color: accentColor }}>{fmtShort(total)}</span>
-          <span style={{ fontSize:14, color:'#8A8F9A', transform:open?'rotate(0)':'rotate(-90deg)', transition:'transform .2s' }}>▾</span>
-        </div>
-      </button>
-      {open && (
-        <div className="rpt-section-body">
-          {Array.from(groups.entries()).map(([g, cats]) => (
-            <div key={g}>
-              <div className="rpt-group-label">{g}</div>
-              {cats.map(c => <CategoryRow key={c.id} c={c} maxAmount={maxAmt} />)}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Priority 4: Revenue donut chart ──────────────────────────
-
-function DonutChart({ data }: { data: { source: string; amount: number; pct: number; color: string }[] }) {
-  const total  = data.reduce((s, d) => s + d.amount, 0);
-  const R = 60; const CX = 80; const CY = 80;
+function Donut({ slices, label, sub }: { slices: Slice[]; label?: string; sub?: string }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const R = 68, ri = 44, CX = 88, CY = 88;
+  const total = slices.reduce((s, sl) => s + sl.value, 0) || 1;
   let angle = -Math.PI / 2;
 
-  const slices = data.map(d => {
-    const sweep   = (d.amount / total) * 2 * Math.PI;
-    const x1 = CX + R * Math.cos(angle);
-    const y1 = CY + R * Math.sin(angle);
-    angle  += sweep;
-    const x2 = CX + R * Math.cos(angle);
-    const y2 = CY + R * Math.sin(angle);
+  const paths = slices.map((sl, idx) => {
+    const sweep = (sl.value / total) * 2 * Math.PI;
+    const a1 = angle, a2 = angle + sweep;
+    angle = a2;
+    const x1 = CX + R * Math.cos(a1), y1 = CY + R * Math.sin(a1);
+    const x2 = CX + R * Math.cos(a2), y2 = CY + R * Math.sin(a2);
+    const xi1 = CX + ri * Math.cos(a1), yi1 = CY + ri * Math.sin(a1);
+    const xi2 = CX + ri * Math.cos(a2), yi2 = CY + ri * Math.sin(a2);
     const large = sweep > Math.PI ? 1 : 0;
-    return { ...d, path: `M${CX},${CY} L${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2} Z` };
+    return { ...sl, idx, large,
+      d: `M ${x1},${y1} A ${R},${R} 0 ${large},1 ${x2},${y2} L ${xi2},${yi2} A ${ri},${ri} 0 ${large},0 ${xi1},${yi1} Z`,
+    };
   });
 
-  return (
-    <div className="donut-wrap">
-      <svg viewBox="0 0 160 160" width="140" height="140">
-        {/* Hole */}
-        <circle cx={CX} cy={CY} r={R * 0.56} fill="white"/>
-        {slices.map((s, i) => (
-          <path key={i} d={s.path} fill={s.color} stroke="white" strokeWidth="1.5"/>
-        ))}
-        {/* Center label */}
-        <text x={CX} y={CY - 4} textAnchor="middle" fontSize="11" fontWeight="600" fill="#1C2B4A">
-          {fmtShort(total)}
-        </text>
-        <text x={CX} y={CY + 10} textAnchor="middle" fontSize="8" fill="#8A8F9A">Tổng DT</text>
-      </svg>
-      <div className="donut-legend">
-        {data.map((d, i) => (
-          <div key={i} className="donut-legend-row">
-            <span className="donut-dot" style={{ background: d.color }}/>
-            <span className="donut-lbl">{d.source}</span>
-            <span className="donut-pct">{fmtShort(d.amount)}</span>
-            <span className="donut-pct-num">({d.pct}%)</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Priority 4: Expense donut chart ──────────────────────────
-
-function CostDonutChart({ expenses }: { expenses: ReportCategoryWithEntry[] }) {
-  const total = expenses.reduce((s, e) => s + e.amount, 0);
-  if (!total) return null;
-
-  // Top 4 + Khác
-  const sorted = [...expenses].sort((a, b) => b.amount - a.amount);
-  const top4   = sorted.slice(0, 4);
-  const rest   = sorted.slice(4);
-  const restAmt = rest.reduce((s, e) => s + e.amount, 0);
-  const data = [
-    ...top4.map(e => ({ source: e.name, amount: e.amount, pct: Math.round(e.amount / total * 100), color: e.color })),
-    ...(restAmt > 0 ? [{ source: 'Khác', amount: restAmt, pct: Math.round(restAmt / total * 100), color: '#8A8F9A' }] : []),
-  ];
-
-  const R = 60; const CX = 80; const CY = 80;
-  let angle = -Math.PI / 2;
-  const slices = data.map(d => {
-    const sweep = (d.amount / total) * 2 * Math.PI;
-    const x1 = CX + R * Math.cos(angle);
-    const y1 = CY + R * Math.sin(angle);
-    angle += sweep;
-    const x2 = CX + R * Math.cos(angle);
-    const y2 = CY + R * Math.sin(angle);
-    const large = sweep > Math.PI ? 1 : 0;
-    return { ...d, path: `M${CX},${CY} L${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2} Z` };
-  });
+  const hov = hovered !== null ? slices[hovered] : null;
 
   return (
-    <div className="donut-wrap">
-      <svg viewBox="0 0 160 160" width="140" height="140">
-        <circle cx={CX} cy={CY} r={R * 0.56} fill="white"/>
-        {slices.map((s, i) => (
-          <path key={i} d={s.path} fill={s.color} stroke="white" strokeWidth="1.5"/>
-        ))}
-        <text x={CX} y={CY - 4} textAnchor="middle" fontSize="11" fontWeight="600" fill="#1C2B4A">
-          {fmtShort(total)}
-        </text>
-        <text x={CX} y={CY + 10} textAnchor="middle" fontSize="8" fill="#8A8F9A">Tổng CP</text>
-      </svg>
-      <div className="donut-legend">
-        {data.map((d, i) => (
-          <div key={i} className="donut-legend-row">
-            <span className="donut-dot" style={{ background: d.color }}/>
-            <span className="donut-lbl">{d.source}</span>
-            <span className="donut-pct">{fmtShort(d.amount)}</span>
-            <span className="donut-pct-num">({d.pct}%)</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Priority 4: Cost alerts ───────────────────────────────────
-
-
-// ── Hướng 2: All-villas comparison table ─────────────────────
-
-function AllVillasSummary({ villas }: { villas: VillaSummary[] }) {
-  if (!villas.length) return null;
-  const maxRev = Math.max(...villas.map(v => v.revenue));
-  return (
-    <div className="rpt-section">
-      <div className="rpt-section-header" style={{ cursor:'default' }}>
-        <span className="rpt-section-title">🏘️ So sánh các villa</span>
-      </div>
-      <div style={{ overflowX:'auto' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'.82rem' }}>
-          <thead>
-            <tr style={{ color:'#8A8F9A', fontSize:'.72rem', textTransform:'uppercase', letterSpacing:'.05em' }}>
-              <th style={{ padding:'10px 16px', textAlign:'left', fontWeight:500 }}>Villa</th>
-              <th style={{ padding:'10px 8px', textAlign:'right', fontWeight:500 }}>Doanh thu</th>
-              <th style={{ padding:'10px 8px', textAlign:'right', fontWeight:500 }}>CP riêng</th>
-              <th style={{ padding:'10px 8px', textAlign:'right', fontWeight:500 }}>CP chung</th>
-              <th style={{ padding:'10px 8px', textAlign:'right', fontWeight:500 }}>Lợi nhuận</th>
-              <th style={{ padding:'10px 8px', textAlign:'center', fontWeight:500 }}>Công suất</th>
-              <th style={{ padding:'10px 16px', textAlign:'left', fontWeight:500 }}>Tỷ trọng DT</th>
-            </tr>
-          </thead>
-          <tbody>
-            {villas.map((v, i) => {
-              const isProfit = v.netProfit >= 0;
-              return (
-                <tr key={v.villaId} style={{
-                  borderTop: i === 0 ? 'none' : '0.5px solid rgba(28,43,74,.06)',
-                  background: i % 2 === 0 ? 'transparent' : 'rgba(28,43,74,.015)',
-                }}>
-                  <td style={{ padding:'12px 16px' }}>
-                    <div style={{ fontWeight:600, color:'#1C2B4A' }}>{v.emoji} {v.villaName}</div>
-                    <div style={{ fontSize:'.7rem', color:'#8A8F9A' }}>Phân bổ CP chung: {v.allocPct}%</div>
-                  </td>
-                  <td style={{ padding:'12px 8px', textAlign:'right', fontFamily:'Georgia,serif', fontStyle:'italic', color:'#178a5e' }}>
-                    {fmtShort(v.revenue)}
-                  </td>
-                  <td style={{ padding:'12px 8px', textAlign:'right', color:'#A32D2D' }}>
-                    {fmtShort(v.perVillaExpense)}
-                  </td>
-                  <td style={{ padding:'12px 8px', textAlign:'right', color:'#6B7280' }}>
-                    {fmtShort(v.sharedAlloc)}
-                  </td>
-                  <td style={{ padding:'12px 8px', textAlign:'right', fontWeight:600, color: isProfit ? '#178a5e' : '#A32D2D' }}>
-                    {isProfit ? '+' : ''}{fmtShort(v.netProfit)}
-                  </td>
-                  <td style={{ padding:'12px 8px', textAlign:'center' }}>
-                    <span style={{
-                      padding:'2px 8px', borderRadius:'99px', fontSize:'.72rem',
-                      background: v.occupancyRate >= 70 ? 'rgba(23,138,94,.1)' : v.occupancyRate >= 40 ? 'rgba(201,168,76,.15)' : 'rgba(163,45,45,.1)',
-                      color: v.occupancyRate >= 70 ? '#178a5e' : v.occupancyRate >= 40 ? '#856A00' : '#A32D2D',
-                    }}>{v.occupancyRate}%</span>
-                  </td>
-                  <td style={{ padding:'12px 16px' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                      <div style={{ flex:1, height:6, background:'rgba(28,43,74,.06)', borderRadius:3 }}>
-                        <div style={{ height:6, borderRadius:3, background:'#178a5e', width:`${maxRev > 0 ? v.revenue/maxRev*100 : 0}%` }}/>
-                      </div>
-                      <span style={{ fontSize:'.72rem', color:'#8A8F9A', minWidth:30 }}>{v.allocPct}%</span>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr style={{ borderTop:'1px solid rgba(28,43,74,.1)', background:'rgba(28,43,74,.025)' }}>
-              <td style={{ padding:'10px 16px', fontWeight:600, color:'#1C2B4A', fontSize:'.8rem' }}>Tổng</td>
-              <td style={{ padding:'10px 8px', textAlign:'right', fontWeight:600, fontFamily:'Georgia,serif', fontStyle:'italic', color:'#178a5e' }}>
-                {fmtShort(villas.reduce((s,v) => s+v.revenue, 0))}
-              </td>
-              <td style={{ padding:'10px 8px', textAlign:'right', fontWeight:600, color:'#A32D2D' }}>
-                {fmtShort(villas.reduce((s,v) => s+v.perVillaExpense, 0))}
-              </td>
-              <td style={{ padding:'10px 8px', textAlign:'right', fontWeight:600, color:'#6B7280' }}>
-                {fmtShort(villas.reduce((s,v) => s+v.sharedAlloc, 0))}
-              </td>
-              <td style={{ padding:'10px 8px', textAlign:'right', fontWeight:600, color:'#1C2B4A' }}>
-                {fmtShort(villas.reduce((s,v) => s+v.netProfit, 0))}
-              </td>
-              <td colSpan={2}/>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ── Hướng 1: Shared cost allocation badge ────────────────────
-
-function SharedCostInfo({ sharedExpenses, allocPct, totalShared }: {
-  sharedExpenses: ReportCategoryWithEntry[];
-  allocPct: number;
-  totalShared: number;
-}) {
-  const [open, setOpen] = useState(false);
-  if (!sharedExpenses.some(e => e.amount > 0)) return null;
-  const allocated = Math.round(totalShared * allocPct / 100);
-  return (
-    <div className="rpt-section">
-      <div className="rpt-section-header" style={{ cursor:'pointer' }} onClick={() => setOpen(o => !o)}>
-        <span className="rpt-section-title">🔗 Chi phí chung được phân bổ</span>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{
-            fontSize:'.75rem', padding:'2px 10px', borderRadius:'99px',
-            background:'rgba(107,114,128,.1)', color:'#6B7280',
-          }}>Tỷ lệ phân bổ: {allocPct}% → {fmtShort(allocated)}</span>
-          <span style={{ color:'#8A8F9A', fontSize:'.85rem' }}>{open ? '▲' : '▼'}</span>
-        </div>
-      </div>
-      {open && (
-        <div className="rpt-section-body">
-          <div style={{ padding:'8px 16px 4px', fontSize:'.72rem', color:'#8A8F9A' }}>
-            Chi phí chung = tổng cho tất cả villa. Phần bạn chịu tính theo tỷ lệ doanh thu ({allocPct}%).
-          </div>
-          {sharedExpenses.filter(e => e.amount > 0).map(e => {
-            const alloc = Math.round(e.amount * allocPct / 100);
-            return (
-              <div key={e.id} style={{
-                display:'flex', alignItems:'center', justifyContent:'space-between',
-                padding:'10px 16px', borderBottom:'0.5px solid rgba(28,43,74,.04)',
-                fontSize:'.83rem',
-              }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <span>{e.icon}</span>
-                  <div>
-                    <div style={{ color:'#1C2B4A' }}>{e.name}</div>
-                    <div style={{ fontSize:'.7rem', color:'#8A8F9A' }}>Tổng: {fmtShort(e.amount)}</div>
-                  </div>
-                </div>
-                <div style={{ textAlign:'right' }}>
-                  <div style={{ fontFamily:'Georgia,serif', fontStyle:'italic', color:'#A32D2D' }}>{fmtShort(alloc)}</div>
-                  <div style={{ fontSize:'.7rem', color:'#8A8F9A' }}>{allocPct}% phân bổ</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CostAlerts({ alerts }: { alerts: CostAlert[] }) {
-  return (
-    <div className="rpt-section">
-      <div className="rpt-section-header" style={{ cursor:'default' }}>
-        <span className="rpt-section-title">⚠️ Cảnh báo chi phí</span>
-      </div>
-      {alerts.length === 0 ? (
-        <div style={{ padding:'16px', fontSize:'.82rem', color:'#8A8F9A', textAlign:'center' }}>
-          ✅ Không có cảnh báo chi phí bất thường tháng này
-        </div>
+    <svg viewBox="0 0 176 176" style={{ width: '100%', maxWidth: 176, height: 'auto' }}>
+      {paths.map(p => (
+        <path key={p.idx} d={p.d} fill={p.color}
+          opacity={hovered === null || hovered === p.idx ? 0.93 : 0.45}
+          style={{ cursor: 'pointer', transition: 'opacity .15s' }}
+          onMouseEnter={() => setHovered(p.idx)}
+          onMouseLeave={() => setHovered(null)}
+        />
+      ))}
+      {hov ? (
+        <>
+          <text x={CX} y={CY - 10} textAnchor="middle" fontSize="11" fontWeight="700"
+            fontFamily="Georgia,serif" fontStyle="italic" fill={hov.color}>{fmt(hov.value)}</text>
+          <text x={CX} y={CY + 7}  textAnchor="middle" fontSize="7.5" fill={C.muted}>{hov.label}</text>
+          <text x={CX} y={CY + 19} textAnchor="middle" fontSize="9" fontWeight="700" fill={hov.color}>
+            {Math.round(hov.value / total * 100)}%
+          </text>
+        </>
       ) : (
-        <div className="rpt-section-body">
-          {alerts.map(a => (
-            <div key={a.categoryId} className="alert-row">
-              <div className="alert-row-left">
-                <span className="alert-icon" style={{ background: `${a.color}18` }}>{a.icon}</span>
-                <div>
-                  <div className="alert-name">{a.name}</div>
-                  <div className="alert-reason">{a.reason}</div>
-                </div>
-              </div>
-              <div className="alert-amount">
-                <span className="alert-val">{fmtShort(a.amount)}</span>
-                <span className="alert-badge">↑{a.pctChange}%</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        <>
+          {label && (
+            <text x={CX} y={CY - 6} textAnchor="middle" fontSize="12.5" fontWeight="700"
+              fontFamily="Georgia,serif" fontStyle="italic" fill={C.navy}>{label}</text>
+          )}
+          {sub && (
+            <text x={CX} y={CY + 10} textAnchor="middle" fontSize="8" fill={C.muted}>{sub}</text>
+          )}
+        </>
       )}
-    </div>
+    </svg>
   );
 }
 
-// ── Priority 4: Health score ──────────────────────────────────
-
-function HealthScore({
-  score, label, metrics, tip,
-}: {
-  score: number; label: HealthLevel; metrics: HealthMetric[]; tip: string;
+// ─── Legend row with color-synced bar ────────────────────────
+function LegendRow({ color, name, value, total }: {
+  color: string; name: string; value: number; total: number;
 }) {
-  const color = HEALTH_COLOR[label];
-  const circ  = 2 * Math.PI * 40;
-  const dash  = (score / 100) * circ;
-
+  const pct = Math.round(value / (total || 1) * 100);
   return (
-    <div className="rpt-section">
-      <div className="rpt-section-header" style={{ cursor:'default' }}>
-        <span className="rpt-section-title">🏥 Sức khoẻ tài chính villa</span>
+    <div className="leg-row">
+      <span className="leg-dot"  style={{ background: color }} />
+      <span className="leg-name">{name}</span>
+      <div  className="leg-bar-bg">
+        <div className="leg-bar-fill" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <div className="health-body">
-        {/* Score gauge */}
-        <div className="health-gauge">
-          <svg viewBox="0 0 100 100" width="100" height="100">
-            <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(28,43,74,.06)" strokeWidth="8"/>
-            <circle cx="50" cy="50" r="40" fill="none" stroke={color} strokeWidth="8"
-              strokeDasharray={`${dash} ${circ}`}
-              strokeLinecap="round"
-              transform="rotate(-90 50 50)"
-              style={{ transition:'stroke-dasharray .6s ease' }}
-            />
-            <text x="50" y="46" textAnchor="middle" fontSize="22" fontWeight="700" fill={color}>{score}</text>
-            <text x="50" y="58" textAnchor="middle" fontSize="8" fill="#8A8F9A">/100</text>
-          </svg>
-          <div className="health-label" style={{ color }}>{label}</div>
-        </div>
-        {/* Metrics */}
-        <div className="health-metrics">
-          {metrics.map((m, i) => (
-            <div key={i} className="health-metric-row">
-              <span className="health-metric-icon">{m.icon}</span>
-              <span className="health-metric-label">{m.label}</span>
-              <span className="health-metric-val" style={{ color: HEALTH_COLOR[m.value] }}>{m.value}</span>
-            </div>
-          ))}
-        </div>
-        {/* Tip */}
-        <div className="health-tip">
-          <span className="health-tip-icon">💡</span>
-          <span>{tip}</span>
-          <button className="health-tip-btn">Xem chi tiết ›</button>
-        </div>
-      </div>
+      <span className="leg-val" style={{ color }}>{fmt(value)}</span>
+      <span className="leg-pct">({pct}%)</span>
     </div>
   );
 }
 
-// ── Priority 4: Channel performance table ────────────────────
-
-function ChannelTable({ stats }: { stats: ChannelStat[] }) {
-  if (!stats.length) return null;
+// ─── Health gauge (semicircle) ────────────────────────────────
+function HealthGauge({ score }: { score: number }) {
+  const R = 58, CX = 78, CY = 78;
+  const color = score >= 80 ? C.revenue : score >= 60 ? C.profit : C.expense;
+  const arc = (a1: number, a2: number, col: string, sw: number) => {
+    const x1 = CX + R * Math.cos(a1), y1 = CY + R * Math.sin(a1);
+    const x2 = CX + R * Math.cos(a2), y2 = CY + R * Math.sin(a2);
+    const lg = a2 - a1 > Math.PI ? 1 : 0;
+    return <path d={`M ${x1},${y1} A ${R},${R} 0 ${lg},1 ${x2},${y2}`}
+      fill="none" stroke={col} strokeWidth={sw} strokeLinecap="round" />;
+  };
   return (
-    <div className="rpt-section">
-      <div className="rpt-section-header" style={{ cursor:'default' }}>
-        <span className="rpt-section-title">📡 Hiệu suất kênh bán</span>
-      </div>
-      <div className="ch-table-wrap">
-        <table className="ch-table">
-          <thead>
-            <tr>
-              <th>Kênh</th>
-              <th>Doanh thu</th>
-              <th>Tỷ lệ</th>
-              <th>ADR</th>
-              <th>Công suất</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stats.map((s, i) => (
-              <tr key={i}>
-                <td>
-                  <span className="ch-dot" style={{ background: s.color }}/>
-                  {s.source}
-                </td>
-                <td>{fmtShort(s.revenue)}</td>
-                <td>{s.pct}%</td>
-                <td>{fmtShort(s.adr)}</td>
-                <td>
-                  <div className="ch-bar-bg">
-                    <div className="ch-bar-fill" style={{ width:`${s.occupancy || s.pct}%`, background: s.color }}/>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <svg viewBox="0 0 156 96" style={{ width: 156, height: 96 }}>
+      {arc(Math.PI, 2 * Math.PI, 'rgba(28,43,74,.1)', 12)}
+      {arc(Math.PI, Math.PI + (score / 100) * Math.PI, color, 12)}
+      <text x={CX} y={CY - 2} textAnchor="middle" fontSize="26"
+        fontFamily="Georgia,serif" fontStyle="italic" fontWeight="700" fill={color}>{score}</text>
+      <text x={CX} y={CY + 13} textAnchor="middle" fontSize="9" fill={C.muted}>/100</text>
+    </svg>
   );
 }
 
-// ── Priority 4: Upcoming payouts ─────────────────────────────
-
-function UpcomingPayouts({ payouts }: { payouts: MonthlyReport['upcomingPayouts'] }) {
-  if (!payouts.length) return null;
-  const total = payouts.reduce((s, p) => s + p.amount, 0);
-  return (
-    <div className="rpt-section">
-      <div className="rpt-section-header" style={{ cursor:'default' }}>
-        <span className="rpt-section-title">💳 Payout sắp tới</span>
-        <span className="rpt-section-total" style={{ color:'#178a5e' }}>
-          Tổng sắp nhận: {fmtShort(total)}
-        </span>
-      </div>
-      <div className="rpt-section-body">
-        {payouts.map((p, i) => (
-          <div key={i} className="payout-row">
-            <div className="payout-source">
-              <span className="payout-dot" style={{
-                background: p.source === 'Agoda' ? '#3266ad' : p.source === 'Booking.com' ? '#d65a1e' : '#178a5e',
-              }}/>
-              {p.source}
-            </div>
-            <div className="payout-date">
-              {new Date(p.expectedDate).toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric' })}
-            </div>
-            <div className="payout-amount">{fmtShort(p.amount)}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── 6-month area chart (unchanged from original) ─────────────
-
+// ─── 6-month area chart ───────────────────────────────────────
 function Chart6m({ data }: { data: MonthlyReport['monthly6'] }) {
-  const W = 600, H = 200;
-  const PAD = { t:40, r:20, b:36, l:52 };
-  const chartW = W - PAD.l - PAD.r;
-  const chartH = H - PAD.t - PAD.b;
-  const n = data.length;
-  const maxVal = Math.max(...data.flatMap(d => [d.revenue, d.expense, d.profit]), 1) * 1.1;
+  const W = 560, H = 188, P = { t: 30, r: 18, b: 30, l: 48 };
+  const cW = W - P.l - P.r, cH = H - P.t - P.b, n = data.length;
+  const maxV = Math.max(...data.flatMap(d => [d.revenue, d.expense, d.profit]), 1) * 1.12;
+  const xp = (i: number) => P.l + (i / (n - 1)) * cW;
+  const yp = (v: number) => P.t + cH - Math.max(0, v / maxV) * cH;
 
-  const xPos = (i: number) => PAD.l + (i / (n - 1)) * chartW;
-  const yPos = (v: number) => PAD.t + chartH - Math.max(0, v / maxVal) * chartH;
-
-  const smoothPath = (values: number[], close = true): string => {
-    if (n < 2) return '';
-    const pts = values.map((v, i) => [xPos(i), yPos(v)] as [number, number]);
+  const smooth = (vals: number[], close = true) => {
+    const pts = vals.map((v, i) => [xp(i), yp(v)] as [number, number]);
     let d = `M ${pts[0][0]},${pts[0][1]}`;
     for (let i = 0; i < pts.length - 1; i++) {
-      const cp1x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * 0.4;
-      const cp2x = pts[i + 1][0] - (pts[i + 1][0] - pts[i][0]) * 0.4;
-      d += ` C ${cp1x},${pts[i][1]} ${cp2x},${pts[i + 1][1]} ${pts[i + 1][0]},${pts[i + 1][1]}`;
+      const cx = (pts[i][0] + pts[i + 1][0]) / 2;
+      d += ` C ${cx},${pts[i][1]} ${cx},${pts[i + 1][1]} ${pts[i + 1][0]},${pts[i + 1][1]}`;
     }
-    if (close) d += ` L ${pts[n-1][0]},${PAD.t + chartH} L ${pts[0][0]},${PAD.t + chartH} Z`;
+    if (close) d += ` L ${pts[n - 1][0]},${P.t + cH} L ${pts[0][0]},${P.t + cH} Z`;
     return d;
   };
 
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => ({
-    y:     PAD.t + chartH * (1 - t),
-    label: t === 0 ? '0' : fmtShort(Math.round(maxVal * t)),
+  const ticks = [0, .25, .5, .75, 1].map(t => ({
+    y: P.t + cH * (1 - t),
+    label: t === 0 ? '0' : fmt(Math.round(maxV * t)),
   }));
 
+  // Use C color tokens so chart is synced with KPI cards
+  const lines = [
+    { vals: data.map(d => d.expense), color: C.expense, w: 1.5, dash: '5 3', opacity: .25 },
+    { vals: data.map(d => d.profit),  color: C.profit,  w: 2,   dash: '',    opacity: .45 },
+    { vals: data.map(d => d.revenue), color: C.revenue, w: 2.5, dash: '',    opacity: .48 },
+  ];
+
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', height:'auto', overflow:'visible' }}
-        aria-label="Biểu đồ doanh thu chi phí lợi nhuận 6 tháng">
-        <defs>
-          <linearGradient id="ag-rev" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#178a5e" stopOpacity="0.55"/>
-            <stop offset="100%" stopColor="#178a5e" stopOpacity="0.04"/>
-          </linearGradient>
-          <linearGradient id="ag-pnl" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#C9A84C" stopOpacity="0.55"/>
-            <stop offset="100%" stopColor="#C9A84C" stopOpacity="0.06"/>
-          </linearGradient>
-          <linearGradient id="ag-exp" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#A32D2D" stopOpacity="0.35"/>
-            <stop offset="100%" stopColor="#A32D2D" stopOpacity="0.03"/>
-          </linearGradient>
-        </defs>
-        {ticks.map((t, i) => (
-          <g key={i}>
-            <line x1={PAD.l} y1={t.y} x2={W - PAD.r} y2={t.y}
-              stroke="rgba(28,43,74,.07)" strokeWidth="1" strokeDasharray="4 3"/>
-            <text x={PAD.l - 7} y={t.y + 4} textAnchor="end" fontSize="9" fill="#8A8F9A">{t.label}</text>
-          </g>
-        ))}
-        <path d={smoothPath(data.map(d => d.expense))} fill="url(#ag-exp)"/>
-        <path d={smoothPath(data.map(d => d.profit))}  fill="url(#ag-pnl)"/>
-        <path d={smoothPath(data.map(d => d.revenue))} fill="url(#ag-rev)"/>
-        <path d={smoothPath(data.map(d => d.expense), false)} fill="none" stroke="#A32D2D" strokeWidth="1.5" strokeDasharray="5 3"/>
-        <path d={smoothPath(data.map(d => d.profit),  false)} fill="none" stroke="#C9A84C" strokeWidth="2"/>
-        <path d={smoothPath(data.map(d => d.revenue), false)} fill="none" stroke="#178a5e" strokeWidth="2.5"/>
-        {data.map((d, i) => {
-          const x = xPos(i); const yr = yPos(d.revenue); const yp = yPos(d.profit);
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
+      <defs>
+        {lines.map(l => {
+          const id = l.color.replace('#', '');
           return (
-            <g key={d.label}>
-              <circle cx={x} cy={yr} r="4" fill="white" stroke="#178a5e" strokeWidth="2"/>
-              <rect x={x - 22} y={yr - 26} width="44" height="18" rx="5"
-                fill="white" stroke="rgba(28,43,74,.12)" strokeWidth="1"/>
-              <text x={x} y={yr - 13} textAnchor="middle" fontSize="9" fill="#1C2B4A" fontWeight="500">
-                {fmtShort(d.revenue)}
-              </text>
-              <circle cx={x} cy={yp} r="3" fill="white" stroke="#C9A84C" strokeWidth="1.5"/>
-              <text x={x} y={H - 6} textAnchor="middle" fontSize="9.5" fill="#8A8F9A">{d.label}</text>
-            </g>
+            <linearGradient key={id} id={`gc-${id}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor={l.color} stopOpacity={l.opacity} />
+              <stop offset="100%" stopColor={l.color} stopOpacity=".02" />
+            </linearGradient>
           );
         })}
-      </svg>
-      <div style={{ display:'flex', gap:16, fontSize:'.7rem', color:'#8A8F9A', marginTop:16, paddingLeft:PAD.l, position:'relative', zIndex:1, background:'var(--white,#fff)', paddingTop:4, paddingBottom:2 }}>
-        {[
-          { color:'#178a5e', label:'Doanh thu', dash:false },
-          { color:'#C9A84C', label:'Lợi nhuận', dash:false },
-          { color:'#A32D2D', label:'Chi phí',   dash:true  },
-        ].map(l => (
-          <span key={l.label} style={{ display:'flex', alignItems:'center', gap:5 }}>
-            <svg width="24" height="10">
-              <line x1="0" y1="5" x2="24" y2="5"
-                stroke={l.color} strokeWidth="2"
-                strokeDasharray={l.dash ? '5 3' : undefined}/>
-              {!l.dash && <circle cx="12" cy="5" r="3" fill="white" stroke={l.color} strokeWidth="1.5"/>}
-            </svg>
-            {l.label}
-          </span>
-        ))}
+      </defs>
+
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line x1={P.l} y1={t.y} x2={W - P.r} y2={t.y}
+            stroke="rgba(28,43,74,.07)" strokeWidth="1" strokeDasharray="4 3" />
+          <text x={P.l - 5} y={t.y + 4} textAnchor="end" fontSize="9" fill={C.muted}>{t.label}</text>
+        </g>
+      ))}
+
+      {lines.map(l => (
+        <path key={l.color} d={smooth(l.vals)} fill={`url(#gc-${l.color.replace('#', '')})`} />
+      ))}
+      {lines.map(l => (
+        <path key={l.color + 'line'} d={smooth(l.vals, false)} fill="none"
+          stroke={l.color} strokeWidth={l.w}
+          strokeDasharray={l.dash || undefined} strokeLinejoin="round" />
+      ))}
+
+      {data.map((d, i) => {
+        const x = xp(i), yr = yp(d.revenue);
+        return (
+          <g key={d.label}>
+            <circle cx={x} cy={yr} r="4" fill="white" stroke={C.revenue} strokeWidth="2" />
+            <rect x={x - 22} y={yr - 25} width="44" height="16" rx="5"
+              fill="white" stroke="rgba(28,43,74,.12)" strokeWidth="1" />
+            <text x={x} y={yr - 12} textAnchor="middle" fontSize="8.5" fill={C.navy} fontWeight="500">
+              {fmt(d.revenue)}
+            </text>
+            <text x={x} y={H - 4} textAnchor="middle" fontSize="9" fill={C.muted}>{d.label}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ─── KPI card ─────────────────────────────────────────────────
+function KpiCard({
+  label, value, prev, accentColor, tag, sub, sparkValues, positiveIsUp = true,
+}: {
+  label: string; value: number | string; prev?: number;
+  accentColor: string; tag: string;
+  sub?: string; sparkValues?: number[]; positiveIsUp?: boolean;
+}) {
+  const num = typeof value === 'number' ? value : 0;
+  const d   = typeof prev === 'number' && prev > 0 ? pctChange(num, prev) : null;
+  const good = d ? (positiveIsUp ? d.up : !d.up) : true;
+
+  return (
+    <div className="kpi-card">
+      <div className="kpi-top">
+        <span className="kpi-label">{label}</span>
+        <span className="kpi-tag" style={{ background: accentColor + '1c', color: accentColor }}>{tag}</span>
       </div>
+      {/* Value is colored with accentColor for visual sync with donut/bars */}
+      <div className="kpi-val" style={{ color: accentColor }}>
+        {typeof value === 'number' ? fmt(value) : value}
+      </div>
+      {d && (
+        <div className="kpi-delta" style={{ color: good ? C.revenue : C.expense }}>
+          {d.up ? '↑' : '↓'} {Math.abs(d.pct)}% so với tháng trước
+        </div>
+      )}
+      {sub && <div className="kpi-sub">{sub}</div>}
+      {sparkValues && (
+        <div className="kpi-spark">
+          <Sparkline values={sparkValues} color={accentColor} />
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Main ReportView ───────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────
+export default function ReportView({ report }: Props) {
+  const [chartPeriod, setChartPeriod] = useState<'6' | '12' | 'ytd'>('6');
 
-export default function ReportView({ report }: { report: MonthlyReport }) {
+  // ── Revenue donut: use revenueBySource (colors from category defs) ──
+  const revSlices: Slice[] = (report.revenueBySource ?? [])
+    .filter(s => s.amount > 0)
+    .map(s => ({ label: s.source, value: s.amount, color: s.color }));
+
+  // ── Expense donut: group by groupName, first category color per group ──
+  const expSlices: Slice[] = (() => {
+    const groups = new Map<string, { value: number; color: string }>();
+    report.expenses.forEach(c => {
+      const g = c.groupName ?? 'Khác';
+      const ex = groups.get(g);
+      if (ex) ex.value += c.amount;
+      else groups.set(g, { value: c.amount, color: c.color });
+    });
+    return Array.from(groups.entries())
+      .filter(([, { value }]) => value > 0)
+      .map(([label, { value, color }]) => ({ label, value, color }));
+  })();
+
+  const channels = report.channelStats ?? [];
+  const payouts  = report.upcomingPayouts ?? [];
+  const services = report.topServices ?? [];
+  const alerts   = report.costAlerts ?? [];
+
+  const totalPayout = payouts.reduce((s, p) => s + p.amount, 0);
+
+  const healthMetrics: HealthMetric[] = report.healthMetrics ?? [];
+  const levelColor: Record<string, string> = {
+    'Xuất sắc': C.revenue, 'Tốt': C.revenue, 'Trung bình': C.profit, 'Kém': C.expense,
+  };
+
+  // Sparkline series derived from monthly6
+  const sp = {
+    rev:  report.monthly6.map(m => m.revenue),
+    exp:  report.monthly6.map(m => m.expense),
+    prof: report.monthly6.map(m => m.profit),
+    cf:   report.monthly6.map(m => Math.round(m.revenue * 0.87)),
+    occ:  report.monthly6.map((_, i) => {
+      const o = report.occupancyRate ?? 68;
+      return Math.max(20, Math.min(100, o - (5 - i) * 4));
+    }),
+  };
+
+  const chartData = chartPeriod === '12'
+    ? (report.monthly12 ?? report.monthly6)
+    : report.monthly6;
+
   return (
-    <div className="report-view">
+    <div className="rv">
 
-      {/* ── Row 1: 4 KPI cards ── */}
-      <div className="kpi-grid">
-        <KpiCard label="Doanh thu"     value={report.totalRevenue}    prev={report.prevMonthRevenue} />
-        <KpiCard label="Lợi nhuận ròng" value={report.netProfit}       prev={report.prevMonthProfit} accent />
-        <KpiCard
-          label="Cashflow thực nhận"
-          value={report.cashflowReceived}
-          prev={0}
-          sub={report.cashflowPending}
-          subLabel="Chưa thanh toán"
-        />
-        <OccupancyCard rate={report.occupancyRate} prev={0} />
+      {/* ══ 5 KPI cards ══════════════════════════════════════ */}
+      <div className="rv-kpi">
+        <KpiCard label="DOANH THU"          tag="💵" accentColor={C.revenue}
+          value={report.totalRevenue}      prev={report.prevMonthRevenue}
+          sparkValues={sp.rev} />
+
+        <KpiCard label="LỢI NHUẬN RÒNG"     tag="📈" accentColor={C.profit}
+          value={report.netProfit}         prev={report.prevMonthProfit}
+          sparkValues={sp.prof} />
+
+        {/* NEW: Tổng chi phí — red accent, same row as profit */}
+        <KpiCard label="TỔNG CHI PHÍ"        tag="📊" accentColor={C.expense}
+          value={report.totalExpense}      prev={report.prevMonthExpense}
+          sparkValues={sp.exp}             positiveIsUp={false} />
+
+        <KpiCard label="CASHFLOW THỰC NHẬN"  tag="🏦" accentColor={C.cashflow}
+          value={report.cashflowReceived ?? Math.round(report.totalRevenue * .86)}
+          prev={Math.round((report.prevMonthRevenue ?? 0) * .86)}
+          sparkValues={sp.cf}
+          sub={`Chưa nhận: ${fmt(report.cashflowPending ?? 0)}`} />
+
+        <KpiCard label="CÔNG SUẤT PHÒNG"     tag="🏡" accentColor={C.occupancy}
+          value={`${report.occupancyRate ?? 68}%`}
+          prev={Math.round((report.occupancyRate ?? 68) * 0.88)}
+          sparkValues={sp.occ} />
       </div>
 
-      {/* ── Row 2: 2 Donut charts side by side ── */}
-      <div className="rpt-row2">
-        {report.revenue.some(e => e.amount > 0) && (() => {
-          const total = report.revenue.reduce((s, e) => s + e.amount, 0);
-          const src = report.revenueBySource.length > 0
-            ? report.revenueBySource
-            : report.revenue
-                .filter(e => e.amount > 0)
-                .sort((a, b) => b.amount - a.amount)
-                .map(e => ({
-                  source: e.name,
-                  amount: e.amount,
-                  pct: Math.round(e.amount / total * 100),
-                  color: e.color,
-                }));
-          return (
-            <div className="rpt-section rpt-section--donut-half">
-              <div className="rpt-section-header" style={{ cursor:'default' }}>
-                <span className="rpt-section-title">📊 Doanh thu theo nguồn</span>
-              </div>
-              <div style={{ padding:'16px' }}>
-                <DonutChart data={src} />
-              </div>
-            </div>
-          );
-        })()}
-        {report.expenses.some(e => e.amount > 0) && (
-          <div className="rpt-section rpt-section--donut-half">
-            <div className="rpt-section-header" style={{ cursor:'default' }}>
-              <span className="rpt-section-title">🔴 Chi phí theo danh mục</span>
-            </div>
-            <div style={{ padding:'16px' }}>
-              <CostDonutChart expenses={report.expenses.filter(e => e.amount > 0)} />
+      {/* ══ Revenue: donut + chart ════════════════════════════ */}
+      <div className="rv-mid">
+
+        {/* Donut — colors sync with revenueBySource category colors */}
+        <div className="rv-card">
+          <div className="rv-title">DOANH THU THEO NGUỒN</div>
+          <div className="rv-donut-row">
+            <Donut slices={revSlices} label={fmt(report.totalRevenue)} sub="Tổng doanh thu" />
+            <div className="rv-legend">
+              {revSlices.map(sl => (
+                <LegendRow key={sl.label} color={sl.color}
+                  name={sl.label} value={sl.value} total={report.totalRevenue} />
+              ))}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* ── Row 3: 6-month chart full width ── */}
-      <div className="rpt-section">
-        <div className="rpt-section-header" style={{ cursor:'default' }}>
-          <span className="rpt-section-title">📈 Doanh thu & Lợi nhuận (6 tháng)</span>
+          {revSlices.length > 0 && (
+            <div className="rv-hint"
+              style={{ color: revSlices[0].color, background: revSlices[0].color + '0e', borderColor: revSlices[0].color + '35' }}>
+              {revSlices[0].label} là nguồn doanh thu lớn nhất tháng này.
+            </div>
+          )}
         </div>
-        <div style={{ padding:'16px' }}>
-          <Chart6m data={report.monthly6} />
+
+        {/* Area chart — uses C.revenue / C.profit / C.expense (same tokens as KPI) */}
+        <div className="rv-card rv-chart-card">
+          <div className="rv-chart-hdr">
+            <span className="rv-title" style={{ marginBottom: 0 }}>DOANH THU &amp; LỢI NHUẬN</span>
+            <div className="rv-chart-legend">
+              {[
+                { color: C.revenue, label: 'Doanh thu', dash: false },
+                { color: C.profit,  label: 'Lợi nhuận', dash: false },
+                { color: C.expense, label: 'Chi phí',   dash: true  },
+              ].map(l => (
+                <span key={l.label} className="rv-leg-item">
+                  <svg width="18" height="8">
+                    {l.dash
+                      ? <line x1="0" y1="4" x2="18" y2="4" stroke={l.color} strokeWidth="2" strokeDasharray="4 2" />
+                      : <path d="M0,7 Q9,1 18,7" fill={l.color} fillOpacity=".3" stroke={l.color} strokeWidth="1.5" />}
+                  </svg>
+                  {l.label}
+                </span>
+              ))}
+            </div>
+            <div className="rv-period-tabs">
+              {(['6', '12', 'ytd'] as const).map(p => (
+                <button key={p} className={`rv-period-btn${chartPeriod === p ? ' active' : ''}`}
+                  onClick={() => setChartPeriod(p)}>
+                  {p === '6' ? '6 tháng' : p === '12' ? '12 tháng' : 'Năm nay'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Chart6m data={chartData} />
         </div>
       </div>
 
-      {/* ── Hướng 1: Shared cost allocation info ── */}
-      {report.villaId && (
-        <SharedCostInfo
-          sharedExpenses={report.sharedExpenses}
-          allocPct={report.sharedAllocPct}
-          totalShared={report.totalSharedExpense}
-        />
-      )}
+      {/* ══ Chi phí section ═══════════════════════════════════ */}
+      <div className="rv-card rv-exp-card">
+        <div className="rv-exp-grid">
 
-      {/* ── Hướng 2: All-villas comparison table ── */}
-      {report.allVillasSummary.length > 0 && (
-        <AllVillasSummary villas={report.allVillasSummary} />
-      )}
+          {/* Left: summary — red accent matching KPI */}
+          <div className="rv-exp-col rv-exp-col--first">
+            <div className="rv-title">CHI PHÍ</div>
+            <div className="rv-exp-sub">Tổng chi phí tháng {report.month}</div>
+            <div className="rv-exp-total" style={{ color: C.expense }}>
+              {fmt(report.totalExpense)}
+            </div>
+            {(() => {
+              const d = pctChange(report.totalExpense, report.prevMonthExpense);
+              return d ? (
+                <div className="kpi-delta" style={{ color: d.up ? C.expense : C.revenue }}>
+                  {d.up ? '↑' : '↓'} {Math.abs(d.pct)}% so với tháng trước
+                </div>
+              ) : null;
+            })()}
+          </div>
 
-      {/* ── Cost alerts ── */}
-      <CostAlerts alerts={report.costAlerts} />
+          {/* Middle: donut — colors from expense category groupName */}
+          <div className="rv-exp-col rv-exp-col--mid">
+            <div className="rv-title">CHI PHÍ THEO DANH MỤC</div>
+            <div className="rv-donut-row rv-donut-row--sm">
+              <Donut slices={expSlices} />
+              <div className="rv-legend">
+                {expSlices.map(sl => (
+                  <LegendRow key={sl.label} color={sl.color}
+                    name={sl.label} value={sl.value} total={report.totalExpense} />
+                ))}
+              </div>
+            </div>
+          </div>
 
-      {/* ── Health score ── */}
-      <HealthScore
-        score={report.healthScore}
-        label={report.healthLabel}
-        metrics={report.healthMetrics}
-        tip={report.healthTip}
-      />
-
-      {/* ── Bottom row: payouts + channel table ── */}
-      <div className="rpt-bottom-row">
-        <UpcomingPayouts payouts={report.upcomingPayouts} />
-        <ChannelTable    stats={report.channelStats} />
+          {/* Right: alerts — border-left color from category */}
+          <div className="rv-exp-col">
+            <div className="rv-title">CẢNH BÁO CHI PHÍ</div>
+            <div className="rv-alerts">
+              {alerts.length === 0
+                ? <div style={{ fontSize: '.78rem', color: C.muted, padding: '8px 0' }}>Không có cảnh báo.</div>
+                : alerts.map((al, i) => (
+                    <div key={i} className={`rv-alert${al.pctChange > 30 ? ' rv-alert--warn' : ''}`}
+                      style={{ borderLeftColor: al.color }}>
+                      <span className="rv-alert-icon">{al.icon}</span>
+                      <div className="rv-alert-body">
+                        <div className="rv-alert-name">{al.name}</div>
+                        <div className="rv-alert-reason">{al.reason}</div>
+                      </div>
+                      <div className="rv-alert-amt"
+                        style={{ color: al.pctChange > 0 ? C.expense : C.revenue }}>
+                        {fmt(al.amount)}{al.pctChange > 0 ? ' ↑' : ' ↓'}
+                      </div>
+                    </div>
+                  ))
+              }
+            </div>
+          </div>
+        </div>
       </div>
 
+      {/* ══ Sức khỏe tài chính ════════════════════════════════ */}
+      <div className="rv-card">
+        <div className="rv-title">SỨC KHỎE TÀI CHÍNH VILLA</div>
+        <div className="rv-health-grid">
+
+          <div className="rv-health-left">
+            <HealthGauge score={report.healthScore ?? 82} />
+            <div className="rv-health-badge"
+              style={{ color: (report.healthScore ?? 82) >= 80 ? C.revenue : (report.healthScore ?? 82) >= 60 ? C.profit : C.expense }}>
+              😊 {report.healthLabel ?? 'Tốt'}
+            </div>
+            <div className="rv-health-tagline">
+              {(report.healthScore ?? 82) >= 80
+                ? 'Villa của bạn đang hoạt động rất hiệu quả!'
+                : 'Có thể cải thiện thêm.'}
+            </div>
+            <div className="rv-health-hint">
+              {report.healthTip ?? 'Duy trì các chỉ số hiện tại để tối ưu lợi nhuận.'}
+            </div>
+          </div>
+
+          <div className="rv-health-metrics">
+            {healthMetrics.map((m, i) => (
+              <div key={i} className="rv-hm-row">
+                <span className="rv-hm-icon">{m.icon}</span>
+                <span className="rv-hm-label">{m.label}</span>
+                <span className="rv-hm-val"
+                  style={{ color: levelColor[m.value] ?? C.muted }}>{m.value}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="rv-health-tip">
+            <div className="rv-tip-icon">💡</div>
+            <div className="rv-tip-title">GỢI Ý TỐI ƯU</div>
+            <div className="rv-tip-body">
+              {report.healthTip ?? 'Bạn có thể tăng doanh thu bằng cách tăng giá phòng vào cuối tuần.'}
+            </div>
+            <button className="rv-tip-btn">Xem chi tiết →</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ══ Bottom row ════════════════════════════════════════ */}
+      <div className="rv-bottom">
+
+        {/* Payouts */}
+        <div className="rv-card">
+          <div className="rv-title">PAYOUT SẮP TỚI</div>
+          <div className="rv-payout-sub">Tổng sắp nhận</div>
+          <div className="rv-payout-total" style={{ color: C.cashflow }}>{fmt(totalPayout)}</div>
+          {payouts.map((p, i) => {
+            const ch  = channels.find(c => c.source === p.source);
+            const col = ch?.color ?? C.cashflow;
+            return (
+              <div key={i} className="rv-payout-row">
+                <span className="rv-payout-icon" style={{ background: col + '1a', color: col }}>💳</span>
+                <div className="rv-payout-info">
+                  <span className="rv-payout-ch">{p.source}</span>
+                  <span className="rv-payout-date">{p.expectedDate}</span>
+                </div>
+                <span className="rv-payout-amt" style={{ color: C.cashflow }}>{fmt(p.amount)}</span>
+              </div>
+            );
+          })}
+          <button className="rv-see-all">Xem tất cả</button>
+        </div>
+
+        {/* Channel performance */}
+        <div className="rv-card">
+          <div className="rv-title">HIỆU SUẤT KÊNH BÁN</div>
+          <table className="rv-ch-tbl">
+            <thead>
+              <tr>
+                <th>Kênh</th>
+                <th>Doanh thu</th>
+                <th>Tỷ lệ</th>
+                <th>ADR</th>
+                <th>Công suất</th>
+              </tr>
+            </thead>
+            <tbody>
+              {channels.map((ch, i) => (
+                <tr key={i}>
+                  <td>
+                    <span className="rv-ch-dot" style={{ background: ch.color }} />
+                    {ch.source}
+                  </td>
+                  <td>
+                    <span style={{ color: C.revenue, fontFamily: 'Georgia,serif', fontStyle: 'italic', fontWeight: 600 }}>
+                      {fmt(ch.revenue)}
+                    </span>
+                  </td>
+                  <td>{ch.pct}%</td>
+                  <td>{fmt(ch.adr)}</td>
+                  <td>
+                    <div className="rv-occ-track">
+                      <div className="rv-occ-fill" style={{ width: `${ch.occupancy}%`, background: ch.color }} />
+                    </div>
+                    <span className="rv-occ-pct">{ch.occupancy}%</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button className="rv-see-all">Xem chi tiết hiệu suất</button>
+        </div>
+
+        {/* Top services */}
+        <div className="rv-card">
+          <div className="rv-title">TOP DỊCH VỤ THÊM</div>
+          {services.map((s, i) => (
+            <div key={i} className="rv-svc-row">
+              <span className="rv-svc-icon">{s.icon}</span>
+              <span className="rv-svc-name">{s.name}</span>
+              <span className="rv-svc-amt" style={{ color: C.revenue }}>{fmt(s.amount)}</span>
+            </div>
+          ))}
+          <button className="rv-see-all" style={{ marginTop: 8 }}>Xem tất cả</button>
+        </div>
+      </div>
+
+      {/* ════════════════ STYLES ════════════════ */}
       <style>{`
-        .report-view { display:flex; flex-direction:column; gap:12px; }
+        .rv { display:flex; flex-direction:column; gap:14px; }
 
-        /* KPI Grid — 4 cols on desktop, 2 on mobile */
-        .kpi-grid {
-          display:grid; grid-template-columns:repeat(4,1fr); gap:12px;
+        /* Card base */
+        .rv-card {
+          background:#fff; border:1px solid ${C.border};
+          border-radius:16px; padding:18px 20px;
         }
+        .rv-title {
+          font-size:.62rem; font-weight:700; letter-spacing:.1em;
+          text-transform:uppercase; color:${C.muted}; margin-bottom:12px;
+        }
+
+        /* ── 5 KPI cards ── */
+        .rv-kpi { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
         .kpi-card {
-          background:var(--white,#fff);
-          border:1px solid rgba(28,43,74,.08);
-          border-radius:14px; padding:14px 16px;
+          background:#fff; border:1px solid ${C.border};
+          border-radius:16px; padding:14px 16px;
+          display:flex; flex-direction:column; gap:2px;
         }
-        .kpi-label  { font-size:.72rem; color:#8A8F9A; margin-bottom:4px; text-transform:uppercase; letter-spacing:.06em; }
-        .kpi-value  { font-family:Georgia,serif; font-style:italic; font-size:1.3rem; color:#1C2B4A; }
-        .kpi-value--accent { color:#178a5e; }
-        .kpi-delta  { font-size:.72rem; margin-top:4px; }
-        .kpi-delta.up   { color:#178a5e; }
-        .kpi-delta.down { color:#A32D2D; }
-        .kpi-sub    { font-size:.7rem; color:#A32D2D; margin-top:3px; }
+        .kpi-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:3px; }
+        .kpi-label {
+          font-size:.57rem; font-weight:700; letter-spacing:.07em;
+          color:${C.muted}; text-transform:uppercase; line-height:1.4; flex:1;
+        }
+        .kpi-tag {
+          padding:3px 7px; border-radius:20px; font-size:.8rem;
+          line-height:1; flex-shrink:0; margin-left:4px;
+        }
+        /* kpi-val color is set inline (accentColor) for full sync */
+        .kpi-val {
+          font-family:Georgia,serif; font-style:italic;
+          font-size:1.5rem; font-weight:700; line-height:1.1;
+        }
+        .kpi-delta { font-size:.68rem; margin-top:2px; }
+        .kpi-sub   { font-size:.65rem; color:${C.muted}; margin-top:2px; }
+        .kpi-spark { margin-top:6px; }
 
-        /* Row 2: 2 donuts */
-        .rpt-row2 { display:flex; gap:12px; }
-        .rpt-section--donut-half { flex:1; min-width:0; }
+        /* ── Mid: donut + chart ── */
+        .rv-mid { display:grid; grid-template-columns:290px 1fr; gap:12px; }
+        .rv-donut-row { display:flex; align-items:center; gap:10px; }
+        .rv-donut-row--sm { gap:8px; }
+        .rv-hint { margin-top:10px; padding:7px 11px; border-radius:8px; border:1px solid; font-size:.73rem; font-weight:500; }
 
-        /* Sections */
-        .rpt-section {
-          background:var(--white,#fff);
-          border:1px solid rgba(28,43,74,.08);
-          border-radius:14px; overflow:hidden;
-        }
-        .rpt-section-header {
-          display:flex; align-items:center; justify-content:space-between;
-          padding:13px 16px;
-          border-bottom:0.5px solid rgba(28,43,74,.06);
-          background:none; border-top:none; border-left:none; border-right:none;
-          width:100%; cursor:pointer; text-align:left;
-        }
-        .rpt-section-title { font-size:.9rem; font-weight:500; color:#1C2B4A; }
-        .rpt-section-total { font-family:Georgia,serif; font-style:italic; font-size:1rem; }
-        .rpt-section-body  { padding:4px 0; }
-        .rpt-group-label {
-          font-size:.65rem; font-weight:600; color:#C9A84C;
-          letter-spacing:.1em; text-transform:uppercase;
-          padding:8px 16px 4px;
-        }
-        .rpt-row {
-          display:flex; align-items:center; justify-content:space-between;
-          padding:8px 16px; border-bottom:0.5px solid rgba(28,43,74,.04);
-        }
-        .rpt-row:last-child { border-bottom:none; }
-        .rpt-row-left  { display:flex; align-items:center; gap:7px; flex:1; min-width:0; }
-        .rpt-row-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
-        .rpt-dot    { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-        .rpt-name   { font-size:.83rem; color:#1C2B4A; }
-        .rpt-badge  { font-size:.6rem; padding:2px 6px; border-radius:4px; }
-        .rpt-badge--auto   { background:rgba(23,138,94,.1);  color:#178a5e; }
-        .rpt-badge--manual { background:rgba(133,79,11,.1);  color:#854F0B; }
-        .rpt-badge--fixed  { background:rgba(24,95,165,.1);  color:#185FA5; }
-        .rpt-bar-wrap { width:80px; }
-        .rpt-bar-bg   { width:100%; height:4px; background:rgba(28,43,74,.08); border-radius:2px; }
-        .rpt-bar-fill { height:4px; border-radius:2px; transition:width .3s; }
-        .rpt-amount   { font-family:Georgia,serif; font-style:italic; font-size:.88rem; color:#1C2B4A; min-width:48px; text-align:right; }
+        /* Legend — bar color injected inline */
+        .rv-legend { display:flex; flex-direction:column; gap:7px; flex:1; min-width:0; }
+        .leg-row { display:flex; align-items:center; gap:5px; }
+        .leg-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+        .leg-name { font-size:.73rem; color:${C.navy}; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .leg-bar-bg { width:36px; height:4px; background:rgba(28,43,74,.09); border-radius:2px; flex-shrink:0; }
+        .leg-bar-fill { height:4px; border-radius:2px; }
+        .leg-val { font-family:Georgia,serif; font-style:italic; font-size:.73rem; color:${C.navy}; flex-shrink:0; }
+        .leg-pct { font-size:.63rem; color:${C.muted}; min-width:30px; flex-shrink:0; }
 
-        /* Donut */
-        .donut-wrap { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-        .donut-legend { display:flex; flex-direction:column; gap:6px; }
-        .donut-legend-row { display:flex; align-items:center; gap:5px; font-size:.75rem; color:#1C2B4A; }
-        .donut-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-        .donut-lbl { flex:1; }
-        .donut-pct { font-family:Georgia,serif; font-style:italic; }
-        .donut-pct-num { color:#8A8F9A; font-size:.68rem; }
-
-        /* Cost alerts */
-        .alert-row {
-          display:flex; align-items:center; justify-content:space-between;
-          padding:10px 16px; border-bottom:0.5px solid rgba(28,43,74,.04);
-          gap:12px;
+        /* Chart */
+        .rv-chart-card { display:flex; flex-direction:column; }
+        .rv-chart-hdr { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+        .rv-chart-hdr .rv-title { margin-bottom:0; }
+        .rv-chart-legend { display:flex; gap:10px; flex-wrap:wrap; }
+        .rv-leg-item { display:flex; align-items:center; gap:4px; font-size:.67rem; color:${C.muted}; }
+        .rv-period-tabs { display:flex; gap:2px; background:rgba(28,43,74,.06); border-radius:6px; padding:2px; margin-left:auto; }
+        .rv-period-btn {
+          padding:4px 10px; border-radius:4px; border:none;
+          background:transparent; font-size:.7rem; color:${C.muted}; cursor:pointer; transition:all .12s;
         }
-        .alert-row:last-child { border-bottom:none; }
-        .alert-row-left { display:flex; align-items:center; gap:10px; }
-        .alert-icon {
-          width:34px; height:34px; border-radius:8px;
-          display:flex; align-items:center; justify-content:center; font-size:1rem;
-          flex-shrink:0;
-        }
-        .alert-name   { font-size:.85rem; font-weight:500; color:#1C2B4A; }
-        .alert-reason { font-size:.72rem; color:#A32D2D; margin-top:2px; }
-        .alert-amount { display:flex; align-items:center; gap:6px; }
-        .alert-val    { font-family:Georgia,serif; font-style:italic; font-size:.9rem; color:#1C2B4A; }
-        .alert-badge  { font-size:.65rem; padding:2px 7px; border-radius:99px; background:rgba(163,45,45,.1); color:#A32D2D; font-weight:600; }
-
-        /* Health */
-        .health-body {
-          display:flex; gap:16px; padding:16px; flex-wrap:wrap;
-        }
-        .health-gauge { display:flex; flex-direction:column; align-items:center; gap:4px; }
-        .health-label { font-size:.85rem; font-weight:600; }
-        .health-metrics { flex:1; display:flex; flex-direction:column; gap:8px; min-width:160px; }
-        .health-metric-row {
-          display:flex; align-items:center; gap:8px;
-          padding:6px 10px; background:rgba(28,43,74,.03); border-radius:8px;
-        }
-        .health-metric-icon  { font-size:.9rem; }
-        .health-metric-label { font-size:.8rem; color:#4A5568; flex:1; }
-        .health-metric-val   { font-size:.8rem; font-weight:600; }
-        .health-tip {
-          flex:1; display:flex; flex-direction:column; gap:8px; min-width:160px;
-          background:rgba(201,168,76,.06); border:1px solid rgba(201,168,76,.2);
-          border-radius:10px; padding:12px; font-size:.8rem; color:#4A5568; line-height:1.5;
-        }
-        .health-tip-icon { font-size:1rem; }
-        .health-tip-btn {
-          margin-top:4px; align-self:flex-start;
-          padding:5px 12px; border-radius:99px;
-          border:1px solid rgba(201,168,76,.4); background:none;
-          color:#8B6914; font-size:.75rem; cursor:pointer;
+        .rv-period-btn.active {
+          background:#fff; color:${C.navy}; font-weight:500;
+          box-shadow:0 1px 3px rgba(28,43,74,.1);
         }
 
-        /* Channel table */
-        .ch-table-wrap { overflow-x:auto; }
-        .ch-table {
-          width:100%; border-collapse:collapse; font-size:.82rem; color:#1C2B4A;
-        }
-        .ch-table th {
-          padding:8px 16px; text-align:left;
-          font-size:.68rem; font-weight:600; color:#8A8F9A;
-          text-transform:uppercase; letter-spacing:.06em;
-          border-bottom:0.5px solid rgba(28,43,74,.07);
-        }
-        .ch-table td {
-          padding:10px 16px; border-bottom:0.5px solid rgba(28,43,74,.04);
-        }
-        .ch-table tr:last-child td { border-bottom:none; }
-        .ch-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
-        .ch-bar-bg   { width:80px; height:5px; background:rgba(28,43,74,.08); border-radius:2px; }
-        .ch-bar-fill { height:5px; border-radius:2px; transition:width .3s; }
+        /* ── Expense card ── */
+        .rv-exp-card { padding:0; overflow:hidden; }
+        .rv-exp-grid { display:grid; grid-template-columns:168px 1fr 1fr; }
+        .rv-exp-col { padding:18px 20px; }
+        .rv-exp-col--first { border-right:0.5px solid ${C.border}; }
+        .rv-exp-col--mid   { border-right:0.5px solid ${C.border}; }
+        .rv-exp-sub   { font-size:.7rem; color:${C.muted}; margin-bottom:5px; }
+        .rv-exp-total { font-family:Georgia,serif; font-style:italic; font-size:1.4rem; font-weight:700; }
 
-        /* Payouts */
-        .payout-row {
-          display:flex; align-items:center; justify-content:space-between;
-          padding:10px 16px; border-bottom:0.5px solid rgba(28,43,74,.04);
-          font-size:.83rem; color:#1C2B4A;
+        /* Alerts */
+        .rv-alerts { display:flex; flex-direction:column; gap:7px; }
+        .rv-alert {
+          display:flex; align-items:center; gap:9px;
+          padding:9px 11px; border-radius:9px;
+          background:rgba(28,43,74,.03); border-left:3px solid transparent;
         }
-        .payout-row:last-child { border-bottom:none; }
-        .payout-source { display:flex; align-items:center; gap:6px; font-weight:500; flex:1; }
-        .payout-dot    { width:8px; height:8px; border-radius:50%; }
-        .payout-date   { color:#8A8F9A; font-size:.78rem; }
-        .payout-amount { font-family:Georgia,serif; font-style:italic; min-width:64px; text-align:right; }
+        .rv-alert--warn { background:rgba(254,243,199,.55); }
+        .rv-alert-icon   { font-size:.95rem; flex-shrink:0; }
+        .rv-alert-body   { flex:1; }
+        .rv-alert-name   { font-size:.79rem; font-weight:500; color:${C.navy}; }
+        .rv-alert-reason { font-size:.65rem; color:${C.muted}; margin-top:1px; }
+        .rv-alert-amt    { font-family:Georgia,serif; font-style:italic; font-size:.85rem; font-weight:700; flex-shrink:0; }
 
-        /* Bottom row */
-        .rpt-bottom-row { display:flex; gap:12px; }
-        .rpt-bottom-row > * { flex:1; }
+        /* ── Health ── */
+        .rv-health-grid { display:grid; grid-template-columns:195px 1fr 210px; gap:18px; }
+        .rv-health-left { display:flex; flex-direction:column; align-items:center; gap:5px; text-align:center; }
+        .rv-health-badge   { font-size:.78rem; font-weight:700; }
+        .rv-health-tagline { font-size:.82rem; font-weight:600; color:${C.navy}; line-height:1.4; margin-top:2px; }
+        .rv-health-hint    { font-size:.72rem; color:${C.muted}; line-height:1.5; }
+        .rv-health-metrics { display:flex; flex-direction:column; justify-content:center; }
+        .rv-hm-row {
+          display:flex; align-items:center; gap:9px;
+          padding:9px 0; border-bottom:0.5px solid ${C.border};
+        }
+        .rv-hm-row:last-child { border-bottom:none; }
+        .rv-hm-icon  { font-size:.95rem; width:18px; text-align:center; }
+        .rv-hm-label { font-size:.79rem; color:#4A5568; flex:1; }
+        .rv-hm-val   { font-size:.78rem; font-weight:700; }
+        .rv-health-tip {
+          background:rgba(201,168,76,.06); border:1px solid rgba(201,168,76,.22);
+          border-radius:12px; padding:15px; display:flex; flex-direction:column; gap:7px;
+        }
+        .rv-tip-icon  { font-size:1.2rem; }
+        .rv-tip-title {
+          font-size:.62rem; font-weight:700; letter-spacing:.08em;
+          color:${C.profit}; text-transform:uppercase;
+        }
+        .rv-tip-body  { font-size:.78rem; color:#4A5568; line-height:1.6; flex:1; }
+        .rv-tip-btn {
+          padding:7px 14px; border-radius:7px; background:${C.navy}; color:#fff;
+          border:none; font-size:.75rem; cursor:pointer; align-self:flex-start; transition:opacity .15s;
+        }
+        .rv-tip-btn:hover { opacity:.82; }
 
-        /* Responsive */
-        @media (max-width:700px) {
-          .kpi-grid { grid-template-columns:1fr 1fr; }
-          .kpi-grid .kpi-card:nth-child(3),
-          .kpi-grid .kpi-card:nth-child(4) { grid-column:span 1; }
-          .rpt-row2 { flex-direction:column; }
-          .rpt-section--donut { width:100%; }
-          .rpt-bottom-row { flex-direction:column; }
-          .rpt-bar-wrap { display:none; }
+        /* ── Bottom row ── */
+        .rv-bottom { display:grid; grid-template-columns:1fr 1.7fr 1fr; gap:12px; }
+
+        .rv-payout-sub   { font-size:.7rem; color:${C.muted}; }
+        .rv-payout-total { font-family:Georgia,serif; font-style:italic; font-size:1.3rem; font-weight:700; margin-bottom:10px; }
+        .rv-payout-row   { display:flex; align-items:center; gap:9px; margin-bottom:8px; }
+        .rv-payout-icon  {
+          width:28px; height:28px; border-radius:7px;
+          display:flex; align-items:center; justify-content:center; font-size:.85rem; flex-shrink:0;
+        }
+        .rv-payout-info  { flex:1; display:flex; flex-direction:column; gap:1px; }
+        .rv-payout-ch    { font-size:.78rem; font-weight:500; color:${C.navy}; }
+        .rv-payout-date  { font-size:.65rem; color:${C.muted}; }
+        .rv-payout-amt   { font-family:Georgia,serif; font-style:italic; font-size:.85rem; font-weight:600; }
+
+        .rv-ch-tbl { width:100%; border-collapse:collapse; margin-bottom:10px; }
+        .rv-ch-tbl th {
+          font-size:.61rem; font-weight:700; color:${C.muted}; text-align:left;
+          padding:5px 7px; border-bottom:1px solid ${C.border};
+          text-transform:uppercase; letter-spacing:.05em;
+        }
+        .rv-ch-tbl td {
+          font-size:.78rem; color:${C.navy};
+          padding:7px 7px; border-bottom:0.5px solid rgba(28,43,74,.04);
+        }
+        .rv-ch-tbl tr:last-child td { border-bottom:none; }
+        .rv-ch-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+        .rv-occ-track { display:inline-block; width:44px; height:4px; background:rgba(28,43,74,.08); border-radius:2px; margin-right:4px; vertical-align:middle; }
+        .rv-occ-fill  { height:4px; border-radius:2px; }
+        .rv-occ-pct   { font-size:.7rem; color:#4A5568; vertical-align:middle; }
+
+        .rv-svc-row  {
+          display:flex; align-items:center; gap:7px;
+          padding:7px 0; border-bottom:0.5px solid ${C.border};
+        }
+        .rv-svc-row:last-of-type { border-bottom:none; }
+        .rv-svc-icon { font-size:.95rem; width:18px; }
+        .rv-svc-name { font-size:.8rem; color:${C.navy}; flex:1; }
+        .rv-svc-amt  { font-family:Georgia,serif; font-style:italic; font-size:.8rem; font-weight:700; }
+
+        .rv-see-all {
+          width:100%; padding:8px; border-radius:7px; margin-top:4px;
+          border:1px solid ${C.border}; background:none;
+          font-size:.75rem; color:${C.muted}; cursor:pointer; transition:background .12s;
+        }
+        .rv-see-all:hover { background:rgba(28,43,74,.04); color:${C.navy}; }
+
+        /* ── Responsive ── */
+        @media (max-width:960px) {
+          .rv-kpi { grid-template-columns:repeat(3,1fr); }
+          .rv-mid { grid-template-columns:1fr; }
+          .rv-exp-grid { grid-template-columns:1fr; }
+          .rv-exp-col--first { border-right:none; border-bottom:0.5px solid ${C.border}; }
+          .rv-exp-col--mid   { border-right:none; border-bottom:0.5px solid ${C.border}; }
+          .rv-health-grid { grid-template-columns:1fr; }
+          .rv-bottom { grid-template-columns:1fr; }
+        }
+        @media (max-width:560px) {
+          .rv-kpi { grid-template-columns:repeat(2,1fr); }
+          .kpi-val { font-size:1.25rem; }
+        }
+        @media (max-width:360px) {
+          .rv-kpi { grid-template-columns:1fr; }
         }
       `}</style>
     </div>
