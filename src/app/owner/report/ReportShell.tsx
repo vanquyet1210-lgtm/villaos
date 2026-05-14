@@ -97,7 +97,17 @@ export default function ReportShell({
 
       {/* Report tab */}
       {tab === 'report' && report && !isPending && (
-        <ReportView report={report} />
+        <ReportView
+          report={report}
+          onSaveSharedEntry={async (categoryId, amount, note) => {
+            await upsertReportEntry(categoryId, null, year, month, amount, note);
+            loadReport(year, month, villaId);
+          }}
+          onSaveAllocPct={async (_pct) => {
+            // wire to your allocPct persistence layer here
+            loadReport(year, month, villaId);
+          }}
+        />
       )}
       {tab === 'report' && !report && !isPending && (
         <div className="report-empty">Chưa có dữ liệu tháng này.</div>

@@ -4,7 +4,11 @@
 import { useState } from 'react';
 import type { MonthlyReport, HealthMetric } from '@/types/report';
 
-interface Props { report: MonthlyReport }
+interface Props {
+  report: MonthlyReport;
+  onSaveSharedEntry?: (categoryId: string, amount: number, note: string | null) => Promise<void>;
+  onSaveAllocPct?: (pct: number) => Promise<void>;
+}
 
 // ─── Global color tokens (single source of truth) ────────────
 // Every section uses these constants — donut slices, KPI values,
@@ -244,23 +248,22 @@ function Chart6m({ data }: { data: MonthlyReport['monthly6'] }) {
 
 // ─── KPI card ─────────────────────────────────────────────────
 function KpiCard({
-  label, value, prev, accentColor, tag, sub, sparkValues, positiveIsUp = true,
+  label, value, prev, accentColor, tag, sub, positiveIsUp = true,
 }: {
   label: string; value: number | string; prev?: number;
   accentColor: string; tag: string;
-  sub?: string; sparkValues?: number[]; positiveIsUp?: boolean;
+  sub?: string; positiveIsUp?: boolean;
 }) {
   const num = typeof value === 'number' ? value : 0;
   const d   = typeof prev === 'number' && prev > 0 ? pctChange(num, prev) : null;
   const good = d ? (positiveIsUp ? d.up : !d.up) : true;
 
   return (
-    <div className="kpi-card">
+    <div className="kpi-card" style={{ borderTop: `3px solid ${accentColor}`, background: accentColor + '08' }}>
       <div className="kpi-top">
         <span className="kpi-label">{label}</span>
-        <span className="kpi-tag" style={{ background: accentColor + '1c', color: accentColor }}>{tag}</span>
+        <span className="kpi-tag" style={{ background: accentColor + '22', color: accentColor }}>{tag}</span>
       </div>
-      {/* Value is colored with accentColor for visual sync with donut/bars */}
       <div className="kpi-val" style={{ color: accentColor }}>
         {typeof value === 'number' ? fmt(value) : value}
       </div>
@@ -270,18 +273,21 @@ function KpiCard({
         </div>
       )}
       {sub && <div className="kpi-sub">{sub}</div>}
-      {sparkValues && (
-        <div className="kpi-spark">
-          <Sparkline values={sparkValues} color={accentColor} />
-        </div>
-      )}
     </div>
   );
 }
 
 // ─── Main ─────────────────────────────────────────────────────
-export default function ReportView({ report }: Props) {
+export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }: Props) {
   const [chartPeriod, setChartPeriod] = useState<'6' | '12' | 'ytd'>('6');
+
+  // ── Shared expenses edit state ──
+  const [sharedAmounts, setSharedAmounts] = useState<Record<string, string>>(
+    () => Object.fromEntries((report.sharedExpenses ?? []).map(c => [c.id, String(c.amount)]))
+  );
+  const [allocPct, setAllocPct]     = useState(String(report.sharedAllocPct ?? 0));
+  const [savingShared, setSaving]   = useState(false);
+  const [savedShared,  setSaved]    = useState(false);
 
   // ── Revenue donut: use revenueBySource (colors from category defs) ──
   const revSlices: Slice[] = (report.revenueBySource ?? [])
@@ -314,18 +320,6 @@ export default function ReportView({ report }: Props) {
     'Xuất sắc': C.revenue, 'Tốt': C.revenue, 'Trung bình': C.profit, 'Kém': C.expense,
   };
 
-  // Sparkline series derived from monthly6
-  const sp = {
-    rev:  report.monthly6.map(m => m.revenue),
-    exp:  report.monthly6.map(m => m.expense),
-    prof: report.monthly6.map(m => m.profit),
-    cf:   report.monthly6.map(m => Math.round(m.revenue * 0.87)),
-    occ:  report.monthly6.map((_, i) => {
-      const o = report.occupancyRate ?? 68;
-      return Math.max(20, Math.min(100, o - (5 - i) * 4));
-    }),
-  };
-
   const chartData = report.monthly6;
 
 
@@ -335,28 +329,23 @@ export default function ReportView({ report }: Props) {
       {/* ══ 5 KPI cards ══════════════════════════════════════ */}
       <div className="rv-kpi">
         <KpiCard label="DOANH THU"          tag="💵" accentColor={C.revenue}
-          value={report.totalRevenue}      prev={report.prevMonthRevenue}
-          sparkValues={sp.rev} />
+          value={report.totalRevenue}      prev={report.prevMonthRevenue} />
 
         <KpiCard label="LỢI NHUẬN RÒNG"     tag="📈" accentColor={C.profit}
-          value={report.netProfit}         prev={report.prevMonthProfit}
-          sparkValues={sp.prof} />
+          value={report.netProfit}         prev={report.prevMonthProfit} />
 
-        {/* NEW: Tổng chi phí — red accent, same row as profit */}
         <KpiCard label="TỔNG CHI PHÍ"        tag="📊" accentColor={C.expense}
           value={report.totalExpense}      prev={report.prevMonthExpense}
-          sparkValues={sp.exp}             positiveIsUp={false} />
+          positiveIsUp={false} />
 
         <KpiCard label="CASHFLOW THỰC NHẬN"  tag="🏦" accentColor={C.cashflow}
           value={report.cashflowReceived ?? Math.round(report.totalRevenue * .86)}
           prev={Math.round((report.prevMonthRevenue ?? 0) * .86)}
-          sparkValues={sp.cf}
           sub={`Chưa nhận: ${fmt(report.cashflowPending ?? 0)}`} />
 
         <KpiCard label="CÔNG SUẤT PHÒNG"     tag="🏡" accentColor={C.occupancy}
           value={`${report.occupancyRate ?? 68}%`}
-          prev={Math.round((report.occupancyRate ?? 68) * 0.88)}
-          sparkValues={sp.occ} />
+          prev={Math.round((report.occupancyRate ?? 68) * 0.88)} />
       </div>
 
       {/* ══ Revenue: donut + chart ════════════════════════════ */}
@@ -475,6 +464,117 @@ export default function ReportView({ report }: Props) {
           </div>
         </div>
       </div>
+
+      {/* ══ Chi phí chung (Shared) editable ══════════════════ */}
+      {(report.sharedExpenses ?? []).length > 0 && (
+        <div className="rv-card rv-shared-card">
+          {/* Header */}
+          <div className="rv-shared-hdr">
+            <div>
+              <div className="rv-title" style={{ marginBottom: 2 }}>CHI PHÍ CHUNG</div>
+              <div className="rv-shared-sub">
+                Tổng chung: <strong style={{ color: C.navy, fontFamily: 'Georgia,serif', fontStyle: 'italic' }}>
+                  {fmt(report.totalSharedExpense)}
+                </strong>
+                &nbsp;·&nbsp;Phân bổ cho villa này:&nbsp;
+                <strong style={{ color: C.expense, fontFamily: 'Georgia,serif', fontStyle: 'italic' }}>
+                  {fmt(Math.round(report.totalSharedExpense * (Number(allocPct) || 0) / 100))}
+                </strong>
+              </div>
+            </div>
+
+            {/* Alloc % editor */}
+            <div className="rv-alloc-box">
+              <span className="rv-alloc-label">Tỷ lệ phân bổ</span>
+              <div className="rv-alloc-input-wrap">
+                <input
+                  type="number" min="0" max="100" step="0.5"
+                  className="rv-alloc-input"
+                  value={allocPct}
+                  onChange={e => setAllocPct(e.target.value)}
+                />
+                <span className="rv-alloc-pct-sym">%</span>
+              </div>
+              {/* Visual allocation bar */}
+              <div className="rv-alloc-bar-bg">
+                <div className="rv-alloc-bar-fill"
+                  style={{ width: `${Math.min(100, Math.max(0, Number(allocPct) || 0))}%`, background: C.navy }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Expense rows */}
+          <div className="rv-shared-rows">
+            {(report.sharedExpenses ?? []).map(cat => {
+              const raw      = sharedAmounts[cat.id] ?? String(cat.amount);
+              const amt      = Number(raw) || 0;
+              const allocAmt = Math.round(amt * (Number(allocPct) || 0) / 100);
+              return (
+                <div key={cat.id} className="rv-shared-row">
+                  <span className="rv-shared-icon">{cat.icon}</span>
+                  <span className="rv-shared-name">{cat.name}</span>
+                  {cat.groupName && (
+                    <span className="rv-shared-group">{cat.groupName}</span>
+                  )}
+                  <div className="rv-shared-inputs">
+                    <div className="rv-shared-field">
+                      <span className="rv-shared-field-lbl">Tổng</span>
+                      <div className="rv-shared-input-wrap">
+                        <input
+                          type="number" min="0" step="1000"
+                          className="rv-shared-input"
+                          value={raw}
+                          onChange={e => setSharedAmounts(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                        />
+                        <span className="rv-shared-currency">đ</span>
+                      </div>
+                    </div>
+                    <div className="rv-shared-alloc-badge" style={{ background: C.navy + '12', color: C.navy }}>
+                      → Villa: <strong style={{ fontFamily: 'Georgia,serif', fontStyle: 'italic' }}>{fmt(allocAmt)}</strong>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Save button */}
+          <div className="rv-shared-footer">
+            {savedShared && (
+              <span className="rv-shared-saved">✓ Đã lưu</span>
+            )}
+            <button
+              className="rv-shared-save-btn"
+              disabled={savingShared}
+              onClick={async () => {
+                if (!onSaveSharedEntry && !onSaveAllocPct) return;
+                setSaving(true);
+                setSaved(false);
+                try {
+                  const tasks: Promise<void>[] = [];
+                  if (onSaveSharedEntry) {
+                    (report.sharedExpenses ?? []).forEach(cat => {
+                      const amt = Number(sharedAmounts[cat.id] ?? cat.amount) || 0;
+                      tasks.push(onSaveSharedEntry(cat.id, amt, cat.note ?? null));
+                    });
+                  }
+                  if (onSaveAllocPct) {
+                    tasks.push(onSaveAllocPct(Number(allocPct) || 0));
+                  }
+                  await Promise.all(tasks);
+                  setSaved(true);
+                  setTimeout(() => setSaved(false), 3000);
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              style={{ opacity: (!onSaveSharedEntry && !onSaveAllocPct) ? 0.4 : 1 }}
+            >
+              {savingShared ? 'Đang lưu...' : '💾 Lưu chi phí chung'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ══ Sức khỏe tài chính ════════════════════════════════ */}
       <div className="rv-card">
@@ -635,7 +735,6 @@ export default function ReportView({ report }: Props) {
         }
         .kpi-delta { font-size:.68rem; margin-top:2px; }
         .kpi-sub   { font-size:.65rem; color:${C.muted}; margin-top:2px; }
-        .kpi-spark { margin-top:6px; }
 
         /* ── Mid: donut + chart ── */
         .rv-mid { display:grid; grid-template-columns:290px 1fr; gap:12px; }
@@ -770,7 +869,81 @@ export default function ReportView({ report }: Props) {
         }
         .rv-see-all:hover { background:rgba(28,43,74,.04); color:${C.navy}; }
 
-        /* ── Responsive ── */
+        /* ── Shared expenses editable ── */
+        .rv-shared-card { display:flex; flex-direction:column; gap:0; padding:0; overflow:hidden; }
+        .rv-shared-hdr {
+          display:flex; align-items:flex-start; justify-content:space-between;
+          gap:16px; flex-wrap:wrap;
+          padding:18px 20px 14px; border-bottom:1px solid ${C.border};
+        }
+        .rv-shared-sub { font-size:.75rem; color:${C.muted}; margin-top:2px; }
+
+        .rv-alloc-box { display:flex; flex-direction:column; gap:5px; min-width:160px; }
+        .rv-alloc-label { font-size:.62rem; font-weight:700; letter-spacing:.07em; color:${C.muted}; text-transform:uppercase; }
+        .rv-alloc-input-wrap { display:flex; align-items:center; gap:4px; }
+        .rv-alloc-input {
+          width:70px; padding:5px 9px; border:1.5px solid rgba(28,43,74,.18);
+          border-radius:7px; font-size:.92rem; font-family:Georgia,serif; font-style:italic;
+          font-weight:700; color:${C.navy}; text-align:right;
+          transition:border-color .15s;
+        }
+        .rv-alloc-input:focus { outline:none; border-color:${C.navy}; }
+        .rv-alloc-pct-sym { font-size:.85rem; font-weight:600; color:${C.navy}; }
+        .rv-alloc-bar-bg { height:4px; background:rgba(28,43,74,.08); border-radius:2px; width:160px; }
+        .rv-alloc-bar-fill { height:4px; border-radius:2px; transition:width .3s; }
+
+        .rv-shared-rows { display:flex; flex-direction:column; }
+        .rv-shared-row {
+          display:flex; align-items:center; gap:9px;
+          padding:11px 20px; border-bottom:0.5px solid ${C.border};
+          transition:background .12s;
+        }
+        .rv-shared-row:hover { background:rgba(28,43,74,.02); }
+        .rv-shared-row:last-child { border-bottom:none; }
+        .rv-shared-icon { font-size:1rem; width:20px; text-align:center; flex-shrink:0; }
+        .rv-shared-name { font-size:.82rem; font-weight:500; color:${C.navy}; flex:1; }
+        .rv-shared-group {
+          font-size:.65rem; padding:2px 7px; border-radius:20px;
+          background:rgba(28,43,74,.07); color:${C.muted};
+          white-space:nowrap; flex-shrink:0;
+        }
+        .rv-shared-inputs { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+        .rv-shared-field { display:flex; flex-direction:column; gap:2px; }
+        .rv-shared-field-lbl { font-size:.6rem; color:${C.muted}; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+        .rv-shared-input-wrap { display:flex; align-items:center; gap:3px; }
+        .rv-shared-input {
+          width:110px; padding:5px 8px; border:1.5px solid rgba(28,43,74,.16);
+          border-radius:7px; font-size:.85rem; font-family:Georgia,serif; font-style:italic;
+          font-weight:600; color:${C.navy}; text-align:right;
+          transition:border-color .15s;
+        }
+        .rv-shared-input:focus { outline:none; border-color:${C.navy}; box-shadow:0 0 0 2px ${C.navy}18; }
+        .rv-shared-currency { font-size:.75rem; color:${C.muted}; }
+        .rv-shared-alloc-badge {
+          padding:4px 10px; border-radius:20px; font-size:.75rem;
+          white-space:nowrap; flex-shrink:0;
+        }
+        .rv-shared-footer {
+          display:flex; align-items:center; justify-content:flex-end; gap:12px;
+          padding:12px 20px; border-top:1px solid ${C.border};
+          background:rgba(28,43,74,.015);
+        }
+        .rv-shared-saved { font-size:.78rem; color:${C.revenue}; font-weight:600; }
+        .rv-shared-save-btn {
+          padding:8px 20px; border-radius:99px;
+          background:${C.navy}; color:#fff;
+          border:none; font-size:.8rem; font-family:inherit;
+          font-weight:600; cursor:pointer; transition:opacity .15s;
+        }
+        .rv-shared-save-btn:hover:not(:disabled) { opacity:.85; }
+        .rv-shared-save-btn:disabled { opacity:.5; cursor:not-allowed; }
+
+        @media (max-width:600px) {
+          .rv-shared-hdr { flex-direction:column; }
+          .rv-shared-row { flex-wrap:wrap; }
+          .rv-shared-inputs { width:100%; justify-content:flex-end; }
+        }
+
         @media (max-width:960px) {
           .rv-kpi { grid-template-columns:repeat(3,1fr); }
           .rv-mid { grid-template-columns:1fr; }
