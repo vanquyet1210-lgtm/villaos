@@ -141,6 +141,12 @@ export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
   const [refresh, setRefresh] = useState(false);
   const [expTab,  setExpTab] = useState(0);
 
+  // Per-villa editable allocation percentages
+  const [villaAllocPcts, setVAP] = useState<Record<string,number>>(
+    () => Object.fromEntries((report.allVillasSummary ?? []).map(v => [v.villaId, v.allocPct ?? 0]))
+  );
+  const setVillaPct = (villaId: string, pct: number) => setVAP(p => ({ ...p, [villaId]: Math.min(100, Math.max(0, pct)) }));
+
   const va = (id: string, v: number) => setVA(p => ({ ...p, [id]: v }));
   const sa = (id: string, v: number) => setSA(p => ({ ...p, [id]: v }));
 
@@ -310,107 +316,101 @@ export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
         <div className="ef-mv-wrap">
           <table className="ef-mv-tbl">
             <thead>
+              {/* ── Row 1: group headers ── */}
               <tr className="ef-mv-hdr-row">
-                <th className="ef-mv-th ef-mv-th--name" rowSpan={2}>Khoản chi</th>
+                <th className="ef-mv-th ef-mv-th--name" rowSpan={2}>KHOẢN CHI</th>
                 <th className="ef-mv-th ef-mv-th--all" colSpan={2}>
-                  <span className="ef-mv-villa-badge ef-mv-villa-badge--all">🌐 Toàn hệ thống</span>
+                  ALL (TỔNG HỆ THỐNG)
                 </th>
                 {allVillas.map(v => (
                   <th key={v.villaId} className="ef-mv-th ef-mv-th--villa" colSpan={2}>
-                    <span className="ef-mv-villa-badge">{v.emoji} {v.villaName}</span>
+                    {v.emoji} {v.villaName.toUpperCase()}
                   </th>
                 ))}
               </tr>
+              {/* ── Row 2: sub-column labels ── */}
               <tr className="ef-mv-sub-row">
-                <th className="ef-mv-sub">Số tiền (đ)</th>
-                <th className="ef-mv-sub">%</th>
+                <th className="ef-mv-sub">SỐ TIỀN (VND)</th>
+                <th className="ef-mv-sub ef-mv-sub--100">100%</th>
                 {allVillas.map(v => (
                   <>
-                    <th key={v.villaId+'a'} className="ef-mv-sub">Số tiền (đ)</th>
-                    <th key={v.villaId+'p'} className="ef-mv-sub ef-mv-sub--pct">% phân bổ</th>
+                    <th key={v.villaId+'a'} className="ef-mv-sub">SỐ TIỀN (VND)</th>
+                    <th key={v.villaId+'p'} className="ef-mv-sub ef-mv-sub--pct">% PHÂN BỔ</th>
                   </>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {Object.entries(sharedGrps).map(([gName, items]) => (
-                <>
-                  <tr key={`g-${gName}`} className="ef-mv-grp-row">
-                    <td colSpan={2 + allVillas.length * 2} className="ef-mv-grp-cell">
-                      CHI PHÍ {gName.toUpperCase()} (CHUNG)
+              {/* ── Group rows ── */}
+              {[
+                ...sharedAuto.map(c => ({ ...c, isAutoItem: true })),
+                ...sharedExp,
+              ].map((c: any) => {
+                const full = c.isAutoItem ? c.amount : (sharedAmts[c.id] ?? 0);
+                return (
+                  <tr key={c.id} className={`ef-mv-row${c.isAutoItem ? ' ef-mv-row--auto' : ''}`}>
+                    {/* Khoản chi */}
+                    <td className="ef-mv-td-name">
+                      <span className="ef-mv-cat-icon">{c.icon}</span>
+                      <span>{c.name}</span>
+                      {c.isAutoItem && <span className="ef-auto-badge">auto</span>}
                     </td>
-                  </tr>
-                  {sharedAuto.filter(c=>(c.groupName??'Nhân sự')===gName).map(c => (
-                    <tr key={c.id} className="ef-mv-row ef-mv-row--auto">
-                      <td className="ef-mv-td-name">
-                        <span className="ef-icon">{c.icon}</span><span>{c.name}</span>
-                        <span className="ef-auto-badge">auto</span>
-                      </td>
-                      <td className="ef-mv-td-num">{c.amount ? fmt(c.amount) : '—'}</td>
-                      <td className="ef-mv-td-pct">100%</td>
-                      {allVillas.map(v => (
+                    {/* ALL: số tiền editable | 100% */}
+                    <td className="ef-mv-td-input">
+                      {c.isAutoItem
+                        ? <span className="ef-mv-num">{full ? full.toLocaleString('vi-VN') : '—'}</span>
+                        : <AmtInput value={full} onChange={v => sa(c.id, v)}/>}
+                    </td>
+                    <td className="ef-mv-td-100">100%</td>
+                    {/* Per-villa: alloc amount | editable % */}
+                    {allVillas.map(v => {
+                      const pct   = villaAllocPcts[v.villaId] ?? 0;
+                      const alloc = full ? Math.round(full * pct / 100) : 0;
+                      return (
                         <>
-                          <td key={v.villaId+'a'} className="ef-mv-td-num ef-mv-td-alloc">
-                            {c.amount ? fmt(Math.round(c.amount * (v.allocPct??0) / 100)) : '—'}
+                          <td key={v.villaId+'a'} className="ef-mv-td-alloc">
+                            {alloc ? alloc.toLocaleString('vi-VN') : '—'}
                           </td>
-                          <td key={v.villaId+'p'} className="ef-mv-td-pct-badge">
-                            <span className="ef-pct-cell">{v.allocPct??0}%</span>
+                          <td key={v.villaId+'p'} className="ef-mv-td-pct-edit">
+                            <div className="ef-pct-input-wrap">
+                              <input
+                                type="number" min="0" max="100" step="1"
+                                className="ef-pct-input"
+                                value={pct === 0 ? '' : pct}
+                                placeholder="0"
+                                onChange={e => setVillaPct(v.villaId, Number(e.target.value) || 0)}
+                              />
+                              <span className="ef-pct-sym">%</span>
+                            </div>
                           </td>
                         </>
-                      ))}
-                    </tr>
-                  ))}
-                  {items.map(c => {
-                    const full = sharedAmts[c.id]??0;
-                    return (
-                      <tr key={c.id} className="ef-mv-row">
-                        <td className="ef-mv-td-name">
-                          <span className="ef-icon">{c.icon}</span><span>{c.name}</span>
-                        </td>
-                        <td className="ef-mv-td-input"><AmtInput value={full} onChange={v=>sa(c.id,v)}/></td>
-                        <td className="ef-mv-td-pct">100%</td>
-                        {allVillas.map(v => (
-                          <>
-                            <td key={v.villaId+'a'} className="ef-mv-td-num ef-mv-td-alloc">
-                              {full ? fmt(Math.round(full * (v.allocPct??0) / 100)) : '—'}
-                            </td>
-                            <td key={v.villaId+'p'} className="ef-mv-td-pct-badge">
-                              <span className="ef-pct-cell">{v.allocPct??0}%</span>
-                            </td>
-                          </>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                  {(() => {
-                    const groupTotal = [...items.map(c=>sharedAmts[c.id]??0), ...sharedAuto.filter(c=>(c.groupName??'Nhân sự')===gName).map(c=>c.amount)].reduce((a,b)=>a+b,0);
-                    return (
-                      <tr key={`sub-${gName}`} className="ef-mv-subtotal-row">
-                        <td className="ef-mv-subtotal-lbl">Tổng {gName.toLowerCase()}</td>
-                        <td className="ef-mv-subtotal-val" colSpan={2}>{money(groupTotal)}</td>
-                        {allVillas.map(v => (
-                          <td key={v.villaId} className="ef-mv-subtotal-val" colSpan={2}>
-                            {money(Math.round(groupTotal * (v.allocPct??0) / 100))}
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })()}
-                </>
-              ))}
+                      );
+                    })}
+                  </tr>
+                );
+              })}
               {sharedExp.length === 0 && sharedAuto.length === 0 && (
-                <tr><td colSpan={2 + allVillas.length * 2} className="ef-empty-hint">Chưa có danh mục chi phí chung.</td></tr>
+                <tr><td colSpan={3 + allVillas.length * 2} className="ef-empty-hint">Chưa có danh mục chi phí chung.</td></tr>
               )}
             </tbody>
+            {/* ── Footer: TỔNG row ── */}
             <tfoot>
               <tr className="ef-mv-footer-row">
-                <td className="ef-mv-footer-lbl">TỔNG CHI PHÍ CHUNG</td>
-                <td className="ef-mv-footer-val" colSpan={2}>{money(totalSharedFull)}</td>
-                {allVillas.map(v => (
-                  <td key={v.villaId} className="ef-mv-footer-val" colSpan={2}>
-                    {money(Math.round(totalSharedFull * (v.allocPct??0) / 100))}
-                  </td>
-                ))}
+                <td className="ef-mv-footer-lbl">TỔNG</td>
+                <td className="ef-mv-footer-num">{totalSharedFull ? totalSharedFull.toLocaleString('vi-VN') : '—'}</td>
+                <td className="ef-mv-footer-100">100%</td>
+                {allVillas.map(v => {
+                  const pct   = villaAllocPcts[v.villaId] ?? 0;
+                  const total = Math.round(totalSharedFull * pct / 100);
+                  return (
+                    <>
+                      <td key={v.villaId+'a'} className="ef-mv-footer-num">
+                        {total ? total.toLocaleString('vi-VN') : '—'}
+                      </td>
+                      <td key={v.villaId+'p'} className="ef-mv-footer-pct">{pct}%</td>
+                    </>
+                  );
+                })}
               </tr>
             </tfoot>
           </table>
@@ -709,51 +709,115 @@ const CSS = `
 .ef-inp-unit { font-size: .65rem; color: #94A3B8; flex-shrink: 0; }
 
 /* ── Shared section ── */
-.ef-shared-body { display: grid; grid-template-columns: 1fr 180px; }
-.ef-shared-main { border-right: 1px solid var(--border); overflow-x: auto; }
-.ef-shared-grp { border-bottom: 1px solid rgba(0,0,0,.05); }
-.ef-shared-grp:last-child { border-bottom: none; }
-.ef-shared-grp-hd {
-  display: flex; align-items: center; gap: 7px;
-  padding: 8px 14px; font-size: .67rem; font-weight: 800;
-  letter-spacing: .07em; color: var(--shared);
-  background: rgba(26,58,107,.04); border-bottom: 1px solid rgba(0,0,0,.05);
+/* ── Multi-villa shared cost table ── */
+.ef-mv-wrap { overflow-x: auto; }
+.ef-mv-tbl {
+  width: 100%; border-collapse: collapse;
+  font-size: .79rem; min-width: 700px;
 }
-.ef-shared-grp-num {
-  width: 18px; height: 18px; border-radius: 50%;
-  background: var(--shared); color: #fff; font-size: .62rem; font-weight: 800;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+
+/* Header rows */
+.ef-mv-hdr-row th, .ef-mv-sub-row th {
+  padding: 0; border: 1px solid rgba(26,58,107,.15);
+  text-align: center; white-space: nowrap;
 }
-.ef-shared-thead {
-  display: grid; grid-template-columns: 1.8fr 90px 90px 54px;
-  padding: 5px 14px; font-size: .64rem; font-weight: 600; color: var(--muted);
-  background: rgba(0,0,0,.02); border-bottom: 1px solid var(--border);
-  text-align: right;
+.ef-mv-th {
+  font-size: .7rem; font-weight: 800; letter-spacing: .06em;
+  padding: 9px 12px; text-transform: uppercase;
 }
-.ef-shared-thead span:first-child { text-align: left; }
-.ef-shared-row {
-  display: grid; grid-template-columns: 1.8fr 90px 90px 54px;
-  padding: 6px 14px; align-items: center; gap: 4px;
-  border-bottom: 1px solid rgba(0,0,0,.04);
+.ef-mv-th--name {
+  background: #1A3A6B; color: #fff;
+  text-align: left; min-width: 180px; max-width: 220px;
 }
-.ef-shared-row--auto { background: rgba(0,0,0,.01); }
-.ef-shared-row .ef-inp { justify-self: end; }
-.ef-num-cell {
-  font-family: Georgia,serif; font-style: italic; font-size: .79rem;
-  text-align: right; color: var(--text);
+.ef-mv-th--all {
+  background: #2D4A7A; color: #fff;
+  border-left: 2px solid rgba(255,255,255,.25);
 }
-.ef-num-cell--alloc { color: var(--rev); }
-.ef-num-cell--total { color: var(--shared); font-weight: 700; }
-.ef-pct-cell {
-  text-align: right; font-size: .72rem; font-weight: 700;
-  color: var(--shared); background: var(--shared-lt);
-  border-radius: 5px; padding: 2px 5px; justify-self: end;
+.ef-mv-th--villa {
+  background: #374151; color: #fff;
+  border-left: 2px solid rgba(255,255,255,.2);
 }
-.ef-shared-subtotal {
-  display: grid; grid-template-columns: 1.8fr 90px 90px 54px;
-  padding: 8px 14px; background: rgba(26,58,107,.04);
-  border-top: 1px solid rgba(0,0,0,.06); font-size: .74rem; font-weight: 700;
-  color: var(--shared); align-items: center;
+/* Alternate villa header colors */
+.ef-mv-th--villa:nth-child(3) { background: #3B5998; }
+.ef-mv-th--villa:nth-child(4) { background: #2D6A4F; }
+.ef-mv-th--villa:nth-child(5) { background: #6B3A2A; }
+
+/* Sub-headers */
+.ef-mv-sub-row { background: #F1F5F9; }
+.ef-mv-sub {
+  font-size: .62rem; font-weight: 700; letter-spacing: .05em;
+  color: #374151; padding: 6px 10px;
+  background: #EEF2F7;
+}
+.ef-mv-sub--100, .ef-mv-sub--pct {
+  background: #E8EDF5; color: #1A3A6B;
+}
+
+/* Body rows */
+.ef-mv-row { border-bottom: 1px solid rgba(0,0,0,.06); transition: background .1s; }
+.ef-mv-row:hover { background: rgba(26,58,107,.025); }
+.ef-mv-row--auto { background: rgba(0,0,0,.012); }
+.ef-mv-row td { padding: 7px 10px; border: 1px solid rgba(0,0,0,.06); vertical-align: middle; }
+
+/* Name cell */
+.ef-mv-td-name {
+  display: flex; align-items: center; gap: 6px;
+  min-width: 180px; max-width: 220px;
+  font-size: .78rem; color: #1A202C;
+}
+.ef-mv-cat-icon { font-size: .9rem; flex-shrink: 0; }
+
+/* ALL column: editable input */
+.ef-mv-td-input { text-align: right; min-width: 120px; }
+.ef-mv-num { font-family: Georgia,serif; font-style: italic; color: #1A202C; }
+
+/* 100% cell */
+.ef-mv-td-100 {
+  text-align: center; font-size: .7rem; font-weight: 700;
+  color: #6B7280; background: rgba(0,0,0,.02);
+  width: 44px;
+}
+
+/* Villa alloc amount */
+.ef-mv-td-alloc {
+  text-align: right; min-width: 110px;
+  font-family: Georgia,serif; font-style: italic;
+  color: #1A3A6B; font-weight: 600; font-size: .79rem;
+}
+
+/* Villa % input cell */
+.ef-mv-td-pct-edit { text-align: center; width: 72px; padding: 4px 6px !important; }
+.ef-pct-input-wrap {
+  display: flex; align-items: center; justify-content: center; gap: 2px;
+}
+.ef-pct-input {
+  width: 38px; padding: 3px 4px; text-align: right;
+  border: 1.5px solid rgba(26,58,107,.25); border-radius: 5px;
+  font-size: .78rem; font-weight: 700; color: #1A3A6B;
+  font-family: inherit; background: #fff;
+  transition: border-color .15s;
+  /* hide number spinners */
+  -moz-appearance: textfield;
+}
+.ef-pct-input::-webkit-outer-spin-button,
+.ef-pct-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.ef-pct-input:focus { outline: none; border-color: #1A3A6B; background: #EAF0FB; }
+.ef-pct-sym { font-size: .72rem; font-weight: 700; color: #1A3A6B; }
+
+/* Footer */
+.ef-mv-footer-row { background: #1A3A6B; }
+.ef-mv-footer-row td {
+  padding: 9px 10px; border: 1px solid rgba(255,255,255,.12);
+  font-weight: 700; color: #fff;
+}
+.ef-mv-footer-lbl { font-size: .75rem; letter-spacing: .07em; min-width: 180px; }
+.ef-mv-footer-num {
+  text-align: right; font-family: Georgia,serif; font-style: italic;
+  font-size: .82rem; min-width: 110px;
+}
+.ef-mv-footer-100, .ef-mv-footer-pct {
+  text-align: center; font-size: .72rem; opacity: .8;
+  width: 44px;
 }
 
 /* Shared info */
@@ -775,13 +839,6 @@ const CSS = `
   border-radius: 8px; padding: 8px 10px;
   font-size: .74rem; font-weight: 600; line-height: 1.6;
 }
-.ef-detail-btn {
-  width: 100%; padding: 8px; border: 1px solid rgba(26,58,107,.2);
-  border-radius: 8px; background: #fff; color: var(--shared);
-  font-size: .74rem; font-family: inherit; cursor: pointer;
-  transition: all .15s;
-}
-.ef-detail-btn:hover { background: var(--shared-lt); }
 
 /* ── Right panel ── */
 .ef-right { display: flex; flex-direction: column; gap: 14px; }
@@ -879,7 +936,7 @@ const CSS = `
   .ef-summary-guide-row { grid-template-columns: 1fr; }
   .ef-rev-grid  { grid-template-columns: 1fr; }
   .ef-exp-grid  { grid-template-columns: 1fr !important; }
-  .ef-shared-body { grid-template-columns: 1fr; }
+  .ef-mv-tbl { min-width: 500px; font-size: .72rem; }
   .ef-shared-thead,
   .ef-shared-row,
   .ef-shared-subtotal { grid-template-columns: 1.6fr 1fr 1fr; }
