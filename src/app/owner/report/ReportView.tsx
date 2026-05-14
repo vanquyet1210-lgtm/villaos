@@ -326,7 +326,9 @@ export default function ReportView({ report }: Props) {
     }),
   };
 
-  const chartData = report.monthly6;
+  const chartData = chartPeriod === '12'
+    ? (report.monthly12 ?? report.monthly6)
+    : report.monthly6;
 
   return (
     <div className="rv">
