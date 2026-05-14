@@ -100,7 +100,7 @@ export default function ReportShell({
         <ReportView
           report={report}
           onSaveSharedEntry={async (categoryId, amount, note) => {
-            await upsertReportEntry(categoryId, null, year, month, amount, note);
+            await upsertReportEntry(categoryId, null, year, month, amount, note ?? undefined);
             loadReport(year, month, villaId);
           }}
           onSaveAllocPct={async (_pct) => {
