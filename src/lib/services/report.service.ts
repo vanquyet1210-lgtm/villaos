@@ -9,7 +9,7 @@ import type { ReportCategory, ReportEntry, MonthlyReport, ReportCategoryWithEntr
 function mapCat(r: any): ReportCategory {
   return {
     id: r.id, ownerId: r.owner_id, villaId: r.villa_id,
-    name: r.name, type: r.type, groupName: r.group_name,
+    name: r.name, type: r.type, scope: r.scope ?? 'per_villa', groupName: r.group_name,
     icon: r.icon, color: r.color, isAuto: r.is_auto,
     autoSource: r.auto_source, fixedAmount: r.fixed_amount ?? 0,
     sortOrder: r.sort_order ?? 0, isActive: r.is_active,
@@ -38,6 +38,7 @@ export async function getOrInitCategories(villaId?: string): Promise<ReportCateg
     villa_id:     null,
     name:         c.name,
     type:         c.type,
+    scope:        c.scope,
     group_name:   c.groupName,
     icon:         c.icon,
     color:        c.color,
@@ -193,7 +194,7 @@ export async function upsertReportEntry(
 // ── Tạo / cập nhật category ───────────────────────────────────
 export async function upsertCategory(data: {
   id?: string; name: string; type: 'revenue'|'expense';
-  groupName?: string; icon?: string; color?: string;
+  scope?: 'shared'|'per_villa'; groupName?: string; icon?: string; color?: string;
   isAuto?: boolean; autoSource?: string;
   fixedAmount?: number; sortOrder?: number; villaId?: string;
 }): Promise<{ error?: string }> {
@@ -206,6 +207,7 @@ export async function upsertCategory(data: {
     villa_id:     data.villaId ?? null,
     name:         data.name,
     type:         data.type,
+    scope:        data.scope ?? 'per_villa',
     group_name:   data.groupName ?? null,
     icon:         data.icon ?? '💰',
     color:        data.color ?? '#178a5e',
