@@ -119,9 +119,19 @@ function getGroupMeta(name: string, idx: number) {
 export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: Props) {
   const now = new Date().toLocaleString('vi-VN', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' });
 
-  // Revenue
-  const autoRev   = report.revenue.filter(c => c.isAuto);
-  const manualRev = report.revenue.filter(c => !c.isAuto);
+  // Revenue — sorted by preferred order + separated into auto and manual
+  const REVENUE_ORDER = ['VillaOS', 'Agoda', 'Booking.com', 'Airbnb', 'Khách trực tiếp', 'Dịch vụ thêm'];
+  const sortedRevenue = [...report.revenue].sort((a, b) => {
+    const aIdx = REVENUE_ORDER.indexOf(a.name);
+    const bIdx = REVENUE_ORDER.indexOf(b.name);
+    const aSort = aIdx >= 0 ? aIdx : 999;
+    const bSort = bIdx >= 0 ? bIdx : 999;
+    return aSort - bSort;
+  });
+  
+  const autoRev   = sortedRevenue.filter(c => c.isAuto && c.name !== 'VillaOS'); // VillaOS is editable even if auto
+  const villaOS   = sortedRevenue.find(c => c.name === 'VillaOS'); // Separate VillaOS
+  const manualRev = sortedRevenue.filter(c => !c.isAuto || c.name === 'VillaOS'); // Include VillaOS as editable
 
   // Per-villa expenses grouped
   const pvExp      = report.expenses.filter(c => c.scope !== 'shared' && !c.isAuto);
@@ -251,7 +261,27 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
                 <span className="ef-tbl-fixed">{c.amount ? fmt(c.amount) : '—'}</span>
               </div>
             ))}
-            {manualRev.map(c => (
+            <div className="ef-col-subtotal ef-col-subtotal--rev">
+              <span>Tổng doanh thu tự động</span>
+              <span>{money(autoRev.reduce((s,c) => s + c.amount, 0))}</span>
+            </div>
+          </div>
+
+          {/* MANUAL - includes VillaOS */}
+          <div className="ef-rev-col ef-rev-col--manual">
+            <div className="ef-col-tag ef-col-tag--manual"><span className="ef-col-tag-dot"/>MANUAL</div>
+            <div className="ef-tbl-head"><span>Nguồn doanh thu nhập tay</span><span>Số tiền (đ)</span></div>
+            {villaOS && (
+              <div key={villaOS.id} className="ef-tbl-row">
+                <div className="ef-tbl-name">
+                  <BrandIcon name={villaOS.name} icon={villaOS.icon}/>
+                  <span>{villaOS.name}</span>
+                  {villaOS.isAuto && <span className="ef-auto-badge">auto</span>}
+                </div>
+                <AmtInput value={villaAmts[villaOS.id]??0} onChange={v=>va(villaOS.id,v)} placeholder="Nhập số tiền"/>
+              </div>
+            )}
+            {manualRev.filter(c => c.name !== 'VillaOS').map(c => (
               <div key={c.id} className="ef-tbl-row">
                 <div className="ef-tbl-name">
                   <BrandIcon name={c.name} icon={c.icon}/><span>{c.name}</span>
@@ -259,18 +289,8 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
                 <AmtInput value={villaAmts[c.id]??0} onChange={v=>va(c.id,v)} placeholder="Nhập số tiền"/>
               </div>
             ))}
-            <div className="ef-col-subtotal ef-col-subtotal--rev">
-              <span>Tổng doanh thu tự động</span>
-              <span>{money(totalAutoRev + totalManRev)}</span>
-            </div>
-          </div>
-
-          {/* MANUAL */}
-          <div className="ef-rev-col ef-rev-col--manual">
-            <div className="ef-col-tag ef-col-tag--manual"><span className="ef-col-tag-dot"/>MANUAL</div>
-            <div className="ef-tbl-head"><span>Nguồn doanh thu bổ sung</span><span>Số tiền (đ)</span></div>
             {extraRows.map((row, i) => (
-              <div key={i} className="ef-tbl-row ef-tbl-row--extra">
+              <div key={`extra-${i}`} className="ef-tbl-row ef-tbl-row--extra">
                 <input className="ef-extra-lbl" value={row.label}
                   placeholder={`Doanh thu khác ${i + 1}`}
                   onChange={e => setER(r => r.map((x,j) => j===i ? {...x,label:e.target.value} : x))}
@@ -281,7 +301,8 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
             ))}
             <button className="ef-add-btn" onClick={() => setER(r => [...r,{label:'',amount:0}])}>＋ Thêm dòng</button>
             <div className="ef-col-subtotal ef-col-subtotal--manual">
-              <span>Tổng nhập tay bổ sung</span><span>{money(totalExtraRev)}</span>
+              <span>Tổng nhập tay bổ sung</span>
+              <span>{money(manualRev.filter(c => c.name !== 'VillaOS').reduce((s,c) => s + (villaAmts[c.id]??0), 0) + extraRows.reduce((s,r) => s + r.amount, 0))}</span>
             </div>
           </div>
         </div>
@@ -642,13 +663,13 @@ const CSS = `
 }
 .ef-card-hd {
   display: flex; align-items: center; gap: 10px;
-  padding: 12px 16px; font-size: .72rem; font-weight: 800;
+  padding: 12px 16px; font-size: .88rem; font-weight: 800;
   letter-spacing: .09em; border-bottom: 1px solid var(--border);
 }
 .ef-card-num {
-  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: .72rem; font-weight: 800;
+  font-size: .75rem; font-weight: 800;
 }
 .ef-card-hd--rev    { background: var(--rev-lt);    color: var(--rev);    }
 .ef-card-num--rev   { background: var(--rev);    color: #fff; }
