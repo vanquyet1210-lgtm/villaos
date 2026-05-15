@@ -143,27 +143,38 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
   const [expTab,  setExpTab] = useState(0);
 
   // Per-villa editable allocation percentages — initialized from allVillasSummary or equal split
+  // Per-cell allocation % — keyed by `${villaId}_${catId}` so each cell is independent
+  const allSharedCats = [
+    ...(report.sharedExpenses ?? []).filter(c => c.isAuto),
+    ...(report.sharedExpenses ?? []).filter(c => !c.isAuto),
+  ];
   const initVillaAllocPcts = () => {
     const summary = report.allVillasSummary ?? [];
-    if (summary.length > 0) {
-      return Object.fromEntries(summary.map(v => [v.villaId, v.allocPct ?? 0]));
-    }
-    // Equal split fallback
-    const eq = villas.length > 0 ? Math.round(100 / villas.length) : 0;
-    const pcts = Object.fromEntries(villas.map(v => [v.id, eq]));
-    // Fix rounding so total = 100
-    if (villas.length > 0) {
-      const total = Object.values(pcts).reduce((a, b) => a + b, 0);
-      pcts[villas[villas.length - 1].id] += (100 - total);
-    }
-    return pcts;
+    const defaultPct = (villaId: string) => {
+      const s = summary.find(x => x.villaId === villaId);
+      if (s) return s.allocPct ?? 0;
+      return villas.length > 0 ? Math.round(100 / villas.length) : 0;
+    };
+    const m: Record<string, number> = {};
+    villas.forEach(v => {
+      allSharedCats.forEach(c => {
+        m[`${v.id}_${c.id}`] = defaultPct(v.id);
+      });
+    });
+    return m;
   };
   const [villaAllocPcts, setVAP] = useState<Record<string,number>>(initVillaAllocPcts);
-  const setVillaPct = (villaId: string, raw: number) => {
+  // Each cell is independent — changing one does NOT affect others
+  const setVillaPct = (villaId: string, catId: string, raw: number) => {
     const pct = Math.min(100, Math.max(0, raw));
-    setVAP(p => ({ ...p, [villaId]: pct }));
+    setVAP(p => ({ ...p, [`${villaId}_${catId}`]: pct }));
   };
-  const totalAllocPct = villas.reduce((s, v) => s + (villaAllocPcts[v.id] ?? 0), 0);
+  // For display: show column total % as average across rows (informational only)
+  const villaColPct = (villaId: string) => {
+    const vals = allSharedCats.map(c => villaAllocPcts[`${villaId}_${c.id}`] ?? 0);
+    return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0) / vals.length) : 0;
+  };
+  const totalAllocPct = villas.reduce((s, v) => s + villaColPct(v.id), 0);
   const allocOk = totalAllocPct === 100;
 
   const va = (id: string, v: number) => setVA(p => ({ ...p, [id]: v }));
@@ -403,8 +414,9 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
                     </td>
                     <td className="ef-mv-td-100">100%</td>
                     {allVillas.map(v => {
-                      const pct   = villaAllocPcts[v.id] ?? 0;
-                      const alloc = full && pct ? Math.round(full * pct / 100) : 0;
+                      const cellKey = `${v.id}_${c.id}`;
+                      const pct     = villaAllocPcts[cellKey] ?? 0;
+                      const alloc   = full && pct ? Math.round(full * pct / 100) : 0;
                       return (
                         <>
                           <td key={v.id+'a'} className="ef-mv-td-alloc">
@@ -414,10 +426,10 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
                             <div className="ef-pct-input-wrap">
                               <input
                                 type="number" min="0" max="100" step="1"
-                                className={`ef-pct-input${!allocOk ? ' ef-pct-input--warn' : ''}`}
-                                value={villaAllocPcts[v.id] ?? ''}
+                                className="ef-pct-input"
+                                value={villaAllocPcts[cellKey] ?? 0}
                                 placeholder="0"
-                                onChange={e => setVillaPct(v.id, Number(e.target.value) || 0)}
+                                onChange={e => setVillaPct(v.id, c.id, Number(e.target.value) || 0)}
                               />
                               <span className="ef-pct-sym">%</span>
                             </div>
@@ -438,14 +450,19 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
                 <td className="ef-mv-footer-num">{totalSharedFull ? totalSharedFull.toLocaleString('vi-VN') : '—'}</td>
                 <td className="ef-mv-footer-100">100%</td>
                 {allVillas.map(v => {
-                  const pct   = villaAllocPcts[v.id] ?? 0;
-                  const total = totalSharedFull && pct ? Math.round(totalSharedFull * pct / 100) : 0;
+                  // Sum actual allocations per villa across all rows
+                  const totalVillaAlloc = allSharedCats.reduce((s, cat) => {
+                    const full2 = cat.isAuto ? cat.amount : (sharedAmts[cat.id] ?? 0);
+                    const pct2  = villaAllocPcts[`${v.id}_${cat.id}`] ?? 0;
+                    return s + (full2 && pct2 ? Math.round(full2 * pct2 / 100) : 0);
+                  }, 0);
+                  const avgPct = villaColPct(v.id);
                   return (
                     <>
                       <td key={v.id+'a'} className="ef-mv-footer-num">
-                        {total ? total.toLocaleString('vi-VN') : '—'}
+                        {totalVillaAlloc ? totalVillaAlloc.toLocaleString('vi-VN') : '—'}
                       </td>
-                      <td key={v.id+'p'} className="ef-mv-footer-pct">{pct}%</td>
+                      <td key={v.id+'p'} className="ef-mv-footer-pct">~{avgPct}%</td>
                     </>
                   );
                 })}
@@ -458,7 +475,7 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
                   <>
                     <td key={v.id+'a'}></td>
                     <td key={v.id+'p'} className="ef-mv-pct-total-cell">
-                      {villaAllocPcts[v.id] ?? 0}%
+                      ~{villaColPct(v.id)}%
                     </td>
                   </>
                 ))}
@@ -468,11 +485,8 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
         </div>
       </div>
 
-      {/* ══ SECTION 4: TỔNG KẾT + HƯỚNG DẪN ══ */}
-      <div className="ef-summary-guide-row">
-
-        {/* Summary */}
-        <div className="ef-card ef-summary">
+      {/* ══ SECTION 4: TỔNG KẾT ══ */}
+      <div className="ef-card ef-summary ef-summary--full">
           <div className="ef-summary-hd">TỔNG KẾT THÁNG {report.month}/{report.year}</div>
           <div className="ef-formula">
             <div className="ef-formula-item">
@@ -495,32 +509,32 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
               <div className="ef-formula-big">{money(Math.abs(netProfit))}</div>
             </div>
           </div>
-        </div>
+      </div>
 
-        {/* Detailed Guide */}
-        <div className="ef-card ef-guide">
-          <div className="ef-guide-hd">📋 HƯỚNG DẪN CHI TIẾT</div>
+      {/* ══ SECTION 5: HƯỚNG DẪN ══ */}
+      <div className="ef-card ef-guide ef-guide--full">
+          <div className="ef-guide-hd">📋 HƯỚNG DẪN NHANH</div>
+          <div className="ef-guide-grid">
           {[
             { icon:'☁️', step:'Bước 1', title:'Dữ liệu tự động',
-              text:'VillaOS tự lấy doanh thu từ hệ thống booking (VillaOS, Agoda, Booking.com...). Hiển thị ở cột AUTO. Bạn có thể sửa nếu số liệu chưa đúng.' },
-            { icon:'✏️', step:'Bước 2', title:'Bổ sung doanh thu thủ công',
-              text:'Nhập thêm các khoản thu chưa có trong hệ thống (khách vãng lai, thanh toán trực tiếp, dịch vụ phát sinh...) vào cột MANUAL.' },
-            { icon:'🏠', step:'Bước 3', title:'Chi phí riêng theo villa',
-              text:'Điện, nước, vệ sinh, internet... là chi phí của từng villa. Nhập chính xác theo từng nhóm. Dữ liệu chỉ ảnh hưởng villa đang chọn.' },
-            { icon:'🔗', step:'Bước 4', title:'Chi phí chung toàn hệ thống',
-              text:'Lương nhân viên, hoa hồng, quản lý... được chia sẻ giữa các villa. Hệ thống tự phân bổ theo tỷ lệ doanh thu. Không cần nhập lại khi đổi villa.' },
+              text:'VillaOS tự lấy doanh thu từ hệ thống booking. Hiển thị ở cột AUTO. Bạn có thể sửa nếu cần.' },
+            { icon:'✏️', step:'Bước 2', title:'Bổ sung thủ công',
+              text:'Nhập thêm các khoản thu chưa có trong hệ thống vào cột MANUAL.' },
+            { icon:'🏠', step:'Bước 3', title:'Chi phí riêng villa',
+              text:'Điện, nước, vệ sinh... là chi phí từng villa. Nhập theo từng nhóm.' },
+            { icon:'🔗', step:'Bước 4', title:'Chi phí chung hệ thống',
+              text:'Lương, hoa hồng... chia sẻ giữa các villa. Điều chỉnh % phân bổ theo từng khoản.' },
             { icon:'💾', step:'Bước 5', title:'Lưu dữ liệu',
-              text:'Nhấn "💾 Lưu dữ liệu" để lưu toàn bộ. Dữ liệu sẽ cập nhật vào báo cáo tháng và dashboard ngay lập tức.' },
+              text:'Nhấn "Lưu dữ liệu" để cập nhật vào báo cáo tháng và dashboard ngay lập tức.' },
           ].map((s, i) => (
             <div key={i} className="ef-guide-item">
-              <div className="ef-guide-step-badge">{s.icon}<span>{s.step}</span></div>
-              <div className="ef-guide-content">
-                <div className="ef-guide-title">{s.title}</div>
-                <div className="ef-guide-text">{s.text}</div>
-              </div>
+              <div className="ef-guide-icon">{s.icon}</div>
+              <div className="ef-guide-step-badge"><span>{s.step}</span></div>
+              <div className="ef-guide-title">{s.title}</div>
+              <div className="ef-guide-text">{s.text}</div>
             </div>
           ))}
-        </div>
+          </div>
       </div>
 
       {/* ── Footer ── */}
@@ -612,8 +626,14 @@ const CSS = `
 
 /* ef-top-grid and ef-bot-grid removed — sections are now full-width stacked rows */
 
-/* Summary + guide side by side */
-.ef-summary-guide-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+/* Summary — full width, bold highlight */
+.ef-summary-guide-row { display: flex; flex-direction: column; gap: 14px; }
+.ef-summary--full {
+  border-top: 4px solid var(--rev) !important;
+}
+.ef-guide--full {
+  border-top: 4px solid var(--shared) !important;
+}
 
 /* ── Cards ── */
 .ef-card {
@@ -928,56 +948,83 @@ const CSS = `
   box-shadow: var(--shadow); overflow: hidden;
 }
 .ef-summary-hd {
-  padding: 12px 16px; font-size: .72rem; font-weight: 800;
-  letter-spacing: .08em; color: var(--text);
-  background: rgba(0,0,0,.03); border-bottom: 1px solid var(--border);
+  padding: 13px 18px; font-size: .78rem; font-weight: 900;
+  letter-spacing: .1em; color: var(--rev);
+  background: rgba(10,107,68,.06); border-bottom: 2px solid var(--rev-bd);
+  display: flex; align-items: center; gap: 8px;
 }
 .ef-formula {
-  display: flex; flex-direction: column; gap: 0;
-  padding: 6px 0;
+  display: flex; align-items: stretch; flex-wrap: wrap; gap: 0;
+  padding: 14px 16px; background: rgba(10,107,68,.03);
 }
-.ef-formula-item { padding: 10px 16px; border-bottom: 1px solid rgba(0,0,0,.04); }
-.ef-formula-item:last-child { border-bottom: none; }
-.ef-formula-lbl { font-size: .67rem; font-weight: 600; color: var(--muted); letter-spacing: .05em; margin-bottom: 3px; text-transform: uppercase; }
-.ef-formula-val { font-family: Georgia,serif; font-style: italic; font-size: .92rem; font-weight: 600; }
+.ef-formula-item {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 10px 16px; min-width: 130px; flex: 1;
+  border-right: 1px solid rgba(0,0,0,.06);
+}
+.ef-formula-item:last-child { border-right: none; }
+.ef-formula-lbl { font-size: .64rem; font-weight: 700; color: var(--muted); letter-spacing: .06em; margin-bottom: 5px; text-transform: uppercase; }
+.ef-formula-val { font-family: Georgia,serif; font-style: italic; font-size: 1.05rem; font-weight: 700; }
 .ef-formula-val--rev    { color: var(--rev); }
 .ef-formula-val--exp    { color: var(--exp); }
 .ef-formula-val--shared { color: var(--shared); }
 .ef-formula-op {
-  padding: 0 16px; font-size: 1.1rem; font-weight: 300; color: #CBD5E0;
-  line-height: .8; text-align: right;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 8px; font-size: 1.4rem; font-weight: 300; color: #CBD5E0;
+  flex-shrink: 0; align-self: center;
 }
 .ef-formula-result {
-  padding: 12px 16px; margin: 6px 10px; border-radius: 10px;
-  background: rgba(10,107,68,.07); border: 2px solid var(--rev-bd);
+  flex: 1.5; padding: 10px 20px;
+  background: rgba(10,107,68,.08); border-left: 4px solid var(--rev) !important;
+  display: flex; flex-direction: column; justify-content: center;
+  border-right: none !important;
 }
-.ef-formula-result.negative { background: rgba(185,76,42,.07); border-color: #FCA5A5; }
+.ef-formula-result.negative { background: rgba(185,76,42,.08); border-left-color: var(--danger) !important; }
 .ef-formula-big {
-  font-family: Georgia,serif; font-style: italic; font-size: 1.15rem;
-  font-weight: 700; color: var(--rev); margin-top: 4px;
+  font-family: Georgia,serif; font-style: italic; font-size: 1.45rem;
+  font-weight: 800; color: var(--rev); margin-top: 4px;
 }
 .ef-formula-result.negative .ef-formula-big { color: var(--danger); }
 
 /* Guide */
 .ef-guide {
   background: var(--surface); border-radius: var(--radius);
-  box-shadow: var(--shadow); padding: 14px 16px;
+  box-shadow: var(--shadow); overflow: hidden;
 }
+.ef-guide--full { }
 .ef-guide-hd {
-  font-size: .72rem; font-weight: 800; letter-spacing: .07em;
-  color: #475569; margin-bottom: 12px;
+  padding: 13px 18px; font-size: .78rem; font-weight: 900;
+  letter-spacing: .1em; color: var(--shared);
+  background: var(--shared-lt); border-bottom: 2px solid var(--shared-bd);
+}
+/* Horizontal 5-column grid for guide steps */
+.ef-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  padding: 0;
 }
 .ef-guide-item {
-  display: flex; gap: 10px; padding: 7px 0;
-  border-bottom: 1px solid rgba(0,0,0,.04); font-size: .78rem; line-height: 1.5;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 16px 16px 18px;
+  border-right: 1px solid rgba(0,0,0,.06);
+  font-size: .78rem; line-height: 1.5;
 }
-.ef-guide-item:last-of-type { border-bottom: none; }
-.ef-guide-icon { font-size: .9rem; flex-shrink: 0; line-height: 1.5; }
-.ef-guide-text { color: #475569; }
+.ef-guide-item:last-child { border-right: none; }
+.ef-guide-icon { font-size: 1.4rem; }
+.ef-guide-step-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .62rem; font-weight: 800; color: var(--shared);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.ef-guide-title {
+  font-size: .8rem; font-weight: 700; color: var(--text);
+}
+.ef-guide-text { color: #475569; font-size: .75rem; }
 .ef-guide-cta {
-  width: 100%; margin-top: 12px; padding: 9px;
-  background: var(--shared-lt); border: 1px solid var(--shared-bd);
-  border-radius: 8px; color: var(--shared); font-size: .78rem;
+  width: 100%; padding: 10px;
+  background: var(--shared-lt); border: none; border-top: 1px solid var(--shared-bd);
+  color: var(--shared); font-size: .78rem;
   font-weight: 600; font-family: inherit; cursor: pointer;
   transition: all .15s;
 }
@@ -1012,7 +1059,8 @@ const CSS = `
 
 /* Responsive */
 @media (max-width: 900px) {
-  .ef-summary-guide-row { grid-template-columns: 1fr; }
+  .ef-summary-guide-row { flex-direction: column; }
+  .ef-guide-grid { grid-template-columns: 1fr 1fr !important; }
   .ef-rev-grid  { grid-template-columns: 1fr; }
   .ef-exp-grid  { grid-template-columns: 1fr !important; }
   .ef-mv-tbl { min-width: 500px; font-size: .72rem; }
