@@ -285,14 +285,32 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
   const [sharedAmounts, setSharedAmounts] = useState<Record<string, string>>(
     () => Object.fromEntries((report.sharedExpenses ?? []).map(c => [c.id, String(c.amount)]))
   );
-  const [allocPct, setAllocPct]     = useState(String(report.sharedAllocPct ?? 0));
+  // Per-row allocation % — each row is independent
+  const [rowAllocPcts, setRowAllocPcts] = useState<Record<string, string>>(
+    () => Object.fromEntries(
+      (report.sharedExpenses ?? []).map(c => [c.id, String(report.sharedAllocPct ?? 0)])
+    )
+  );
+  // Keep a single computed total alloc for the header display
+  const totalAllocAmt = (report.sharedExpenses ?? []).reduce((sum, cat) => {
+    const amt = Number(sharedAmounts[cat.id] ?? cat.amount) || 0;
+    const pct = Number(rowAllocPcts[cat.id] ?? report.sharedAllocPct ?? 0);
+    return sum + Math.round(amt * pct / 100);
+  }, 0);
   const [savingShared, setSaving]   = useState(false);
   const [savedShared,  setSaved]    = useState(false);
 
-  // ── Revenue donut: use revenueBySource (colors from category defs) ──
-  const revSlices: Slice[] = (report.revenueBySource ?? [])
-    .filter(s => s.amount > 0)
-    .map(s => ({ label: s.source, value: s.amount, color: s.color }));
+  // ── Revenue donut: prefer revenueBySource, fallback to report.revenue ──
+  const revSlices: Slice[] = (() => {
+    const fromSource = (report.revenueBySource ?? [])
+      .filter(s => s.amount > 0)
+      .map(s => ({ label: s.source, value: s.amount, color: s.color }));
+    if (fromSource.length > 0) return fromSource;
+    // Fallback: build directly from revenue categories (auto + manual)
+    return (report.revenue ?? [])
+      .filter(c => c.amount > 0)
+      .map(c => ({ label: c.name, value: c.amount, color: c.color }));
+  })();
 
   // ── Expense donut: group by groupName, first category color per group ──
   const expSlices: Slice[] = (() => {
@@ -466,27 +484,19 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
                 </strong>
                 &nbsp;·&nbsp;Phân bổ cho villa này:&nbsp;
                 <strong style={{ color: C.expense, fontFamily: 'Georgia,serif', fontStyle: 'italic' }}>
-                  {fmt(Math.round(report.totalSharedExpense * (Number(allocPct) || 0) / 100))}
+                  {fmt(totalAllocAmt)}
                 </strong>
               </div>
             </div>
 
-            {/* Alloc % editor */}
+            {/* Header shows total allocated amount across all rows */}
             <div className="rv-alloc-box">
-              <span className="rv-alloc-label">Tỷ lệ phân bổ</span>
-              <div className="rv-alloc-input-wrap">
-                <input
-                  type="number" min="0" max="100" step="0.5"
-                  className="rv-alloc-input"
-                  value={allocPct}
-                  onChange={e => setAllocPct(e.target.value)}
-                />
-                <span className="rv-alloc-pct-sym">%</span>
+              <span className="rv-alloc-label">Tổng phân bổ cho villa</span>
+              <div className="rv-alloc-total" style={{ fontFamily:'Georgia,serif', fontStyle:'italic', fontSize:'1.1rem', color:C.navy, fontWeight:700 }}>
+                {fmt(totalAllocAmt)}
               </div>
-              {/* Visual allocation bar */}
-              <div className="rv-alloc-bar-bg">
-                <div className="rv-alloc-bar-fill"
-                  style={{ width: `${Math.min(100, Math.max(0, Number(allocPct) || 0))}%`, background: C.navy }} />
+              <div className="rv-alloc-hint" style={{ fontSize:'.68rem', color:C.muted, marginTop:2 }}>
+                Điều chỉnh % riêng từng khoản bên dưới
               </div>
             </div>
           </div>
@@ -496,7 +506,8 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
             {(report.sharedExpenses ?? []).map(cat => {
               const raw      = sharedAmounts[cat.id] ?? String(cat.amount);
               const amt      = Number(raw) || 0;
-              const allocAmt = Math.round(amt * (Number(allocPct) || 0) / 100);
+              const rowPct   = Number(rowAllocPcts[cat.id] ?? report.sharedAllocPct ?? 0);
+              const allocAmt = Math.round(amt * rowPct / 100);
               return (
                 <div key={cat.id} className="rv-shared-row">
                   <span className="rv-shared-icon">{cat.icon}</span>
@@ -505,8 +516,9 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
                     <span className="rv-shared-group">{cat.groupName}</span>
                   )}
                   <div className="rv-shared-inputs">
+                    {/* Tổng hệ thống */}
                     <div className="rv-shared-field">
-                      <span className="rv-shared-field-lbl">Tổng</span>
+                      <span className="rv-shared-field-lbl">Tổng hệ thống</span>
                       <div className="rv-shared-input-wrap">
                         <input
                           type="number" min="0" step="1000"
@@ -517,8 +529,23 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
                         <span className="rv-shared-currency">đ</span>
                       </div>
                     </div>
+                    {/* Per-row % — independent, does not affect other rows */}
+                    <div className="rv-shared-field">
+                      <span className="rv-shared-field-lbl">% phân bổ</span>
+                      <div className="rv-shared-input-wrap">
+                        <input
+                          type="number" min="0" max="100" step="1"
+                          className="rv-shared-input rv-shared-input--pct"
+                          value={rowAllocPcts[cat.id] ?? report.sharedAllocPct ?? 0}
+                          title="Thay đổi % này chỉ áp dụng riêng khoản này"
+                          onChange={e => setRowAllocPcts(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                        />
+                        <span className="rv-shared-currency">%</span>
+                      </div>
+                    </div>
+                    {/* Allocated result */}
                     <div className="rv-shared-alloc-badge" style={{ background: C.navy + '12', color: C.navy }}>
-                      → Villa: <strong style={{ fontFamily: 'Georgia,serif', fontStyle: 'italic' }}>{fmt(allocAmt)}</strong>
+                      Villa: <strong style={{ fontFamily: 'Georgia,serif', fontStyle: 'italic' }}>{fmt(allocAmt)}</strong>
                     </div>
                   </div>
                 </div>
@@ -547,7 +574,10 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
                     });
                   }
                   if (onSaveAllocPct) {
-                    tasks.push(onSaveAllocPct(Number(allocPct) || 0));
+                    // Save average alloc pct across rows as the global default
+                    const pcts = Object.values(rowAllocPcts).map(Number).filter(Boolean);
+                    const avg  = pcts.length ? Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length) : 0;
+                    tasks.push(onSaveAllocPct(avg));
                   }
                   await Promise.all(tasks);
                   setSaved(true);
@@ -836,6 +866,9 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
         }
         .rv-shared-input:focus { outline:none; border-color:${C.navy}; box-shadow:0 0 0 2px ${C.navy}18; }
         .rv-shared-currency { font-size:.75rem; color:${C.muted}; }
+        .rv-shared-input--pct { width:58px !important; }
+        .rv-alloc-hint { }
+        .rv-alloc-total { }
         .rv-shared-alloc-badge {
           padding:4px 10px; border-radius:20px; font-size:.75rem;
           white-space:nowrap; flex-shrink:0;
