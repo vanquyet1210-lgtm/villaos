@@ -234,3 +234,22 @@ export async function deactivateCategory(id: string): Promise<{ error?: string }
     .eq('owner_id', session.profile.id);
   return error ? { error: error.message } : {};
 }
+
+// ── Cập nhật sort order cho categories ────────────────────────
+export async function updateCategorySortOrders(
+  updates: Array<{ id: string; sortOrder: number }>,
+): Promise<{ error?: string }> {
+  const session = await getServerSession();
+  if (!session) return { error: 'Chưa đăng nhập' };
+  const sb = await createSupabaseServerClient();
+
+  for (const { id, sortOrder } of updates) {
+    const { error } = await (sb as any).from('report_categories')
+      .update({ sort_order: sortOrder })
+      .eq('id', id)
+      .eq('owner_id', session.profile.id);
+    if (error) return { error: error.message };
+  }
+
+  return {};
+}
