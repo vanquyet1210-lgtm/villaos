@@ -13,6 +13,7 @@ export interface SaveEntry {
 
 interface Props {
   report:           MonthlyReport;
+  villas:           { id: string; name: string; emoji: string }[];
   onSave:           (entries: SaveEntry[]) => Promise<void>;
   onCopyPrevMonth?: () => void;
 }
@@ -115,7 +116,7 @@ function getGroupMeta(name: string, idx: number) {
 }
 
 // ── Main ──────────────────────────────────────────────────────
-export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
+export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: Props) {
   const now = new Date().toLocaleString('vi-VN', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' });
 
   // Revenue
@@ -141,11 +142,29 @@ export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
   const [refresh, setRefresh] = useState(false);
   const [expTab,  setExpTab] = useState(0);
 
-  // Per-villa editable allocation percentages
-  const [villaAllocPcts, setVAP] = useState<Record<string,number>>(
-    () => Object.fromEntries((report.allVillasSummary ?? []).map(v => [v.villaId, v.allocPct ?? 0]))
-  );
-  const setVillaPct = (villaId: string, pct: number) => setVAP(p => ({ ...p, [villaId]: Math.min(100, Math.max(0, pct)) }));
+  // Per-villa editable allocation percentages — initialized from allVillasSummary or equal split
+  const initVillaAllocPcts = () => {
+    const summary = report.allVillasSummary ?? [];
+    if (summary.length > 0) {
+      return Object.fromEntries(summary.map(v => [v.villaId, v.allocPct ?? 0]));
+    }
+    // Equal split fallback
+    const eq = villas.length > 0 ? Math.round(100 / villas.length) : 0;
+    const pcts = Object.fromEntries(villas.map(v => [v.id, eq]));
+    // Fix rounding so total = 100
+    if (villas.length > 0) {
+      const total = Object.values(pcts).reduce((a, b) => a + b, 0);
+      pcts[villas[villas.length - 1].id] += (100 - total);
+    }
+    return pcts;
+  };
+  const [villaAllocPcts, setVAP] = useState<Record<string,number>>(initVillaAllocPcts);
+  const setVillaPct = (villaId: string, raw: number) => {
+    const pct = Math.min(100, Math.max(0, raw));
+    setVAP(p => ({ ...p, [villaId]: pct }));
+  };
+  const totalAllocPct = villas.reduce((s, v) => s + (villaAllocPcts[v.id] ?? 0), 0);
+  const allocOk = totalAllocPct === 100;
 
   const va = (id: string, v: number) => setVA(p => ({ ...p, [id]: v }));
   const sa = (id: string, v: number) => setSA(p => ({ ...p, [id]: v }));
@@ -178,8 +197,8 @@ export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
     setTimeout(() => setRefresh(false), 800);
   };
 
-  // Villas for shared cost multi-villa table
-  const allVillas = report.allVillasSummary ?? [];
+  // All villas from prop (always available regardless of selected villa)
+  const allVillas = villas;
 
   return (
     <div className="ef">
@@ -306,6 +325,7 @@ export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
         </div>
       </div>
 
+
       {/* ══ SECTION 3: CHI PHÍ CHUNG — multi-villa table ══ */}
       <div className="ef-card">
         <div className="ef-card-hd ef-card-hd--shared">
@@ -313,72 +333,91 @@ export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
           <span>CHI PHÍ CHUNG (TOÀN HỆ THỐNG)</span>
           <span className="ef-shared-lock">🔒 Cố định · Không đổi theo Villa</span>
         </div>
+
+        {/* % allocation validation bar */}
+        <div className={`ef-alloc-bar${allocOk ? ' ef-alloc-bar--ok' : ' ef-alloc-bar--warn'}`}>
+          <span className="ef-alloc-bar-label">
+            {allocOk ? '✅' : '⚠️'} Tổng % phân bổ:&nbsp;
+            <strong>{totalAllocPct}%</strong>
+            {!allocOk && (
+              <span className="ef-alloc-bar-hint">
+                &nbsp;— tổng các villa phải đúng 100%&nbsp;
+                ({totalAllocPct < 100 ? `thiếu ${100 - totalAllocPct}%` : `thừa ${totalAllocPct - 100}%`})
+              </span>
+            )}
+          </span>
+          <div className="ef-alloc-bar-track">
+            {allVillas.map((v, i) => {
+              const pct = villaAllocPcts[v.id] ?? 0;
+              const COLORS = ['#3B5998','#2D6A4F','#92400E','#6D28D9','#B91C1C'];
+              return pct > 0 ? (
+                <div key={v.id} className="ef-alloc-bar-seg"
+                  style={{ width:`${Math.min(pct, 100)}%`, background: COLORS[i % COLORS.length] }}
+                  title={`${v.emoji} ${v.name}: ${pct}%`}
+                />
+              ) : null;
+            })}
+          </div>
+        </div>
+
         <div className="ef-mv-wrap">
           <table className="ef-mv-tbl">
             <thead>
-              {/* ── Row 1: group headers ── */}
               <tr className="ef-mv-hdr-row">
                 <th className="ef-mv-th ef-mv-th--name" rowSpan={2}>KHOẢN CHI</th>
-                <th className="ef-mv-th ef-mv-th--all" colSpan={2}>
-                  ALL (TỔNG HỆ THỐNG)
-                </th>
-                {allVillas.map(v => (
-                  <th key={v.villaId} className="ef-mv-th ef-mv-th--villa" colSpan={2}>
-                    {v.emoji} {v.villaName.toUpperCase()}
+                <th className="ef-mv-th ef-mv-th--all" colSpan={2}>ALL (TỔNG HỆ THỐNG)</th>
+                {allVillas.map((v, i) => (
+                  <th key={v.id} className={`ef-mv-th ef-mv-th--villa ef-mv-th--v${i % 5}`} colSpan={2}>
+                    {v.emoji} {v.name.toUpperCase()}
                   </th>
                 ))}
               </tr>
-              {/* ── Row 2: sub-column labels ── */}
               <tr className="ef-mv-sub-row">
                 <th className="ef-mv-sub">SỐ TIỀN (VND)</th>
                 <th className="ef-mv-sub ef-mv-sub--100">100%</th>
                 {allVillas.map(v => (
                   <>
-                    <th key={v.villaId+'a'} className="ef-mv-sub">SỐ TIỀN (VND)</th>
-                    <th key={v.villaId+'p'} className="ef-mv-sub ef-mv-sub--pct">% PHÂN BỔ</th>
+                    <th key={v.id+'a'} className="ef-mv-sub">SỐ TIỀN (VND)</th>
+                    <th key={v.id+'p'} className="ef-mv-sub ef-mv-sub--pct">% PHÂN BỔ</th>
                   </>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {/* ── Group rows ── */}
               {[
-                ...sharedAuto.map(c => ({ ...c, isAutoItem: true })),
+                ...sharedAuto.map(c => ({ ...c, isAutoItem: true as const })),
                 ...sharedExp,
               ].map((c: any) => {
-                const full = c.isAutoItem ? c.amount : (sharedAmts[c.id] ?? 0);
+                const full = c.isAutoItem ? (c.amount as number) : (sharedAmts[c.id] ?? 0);
                 return (
                   <tr key={c.id} className={`ef-mv-row${c.isAutoItem ? ' ef-mv-row--auto' : ''}`}>
-                    {/* Khoản chi */}
                     <td className="ef-mv-td-name">
                       <span className="ef-mv-cat-icon">{c.icon}</span>
                       <span>{c.name}</span>
                       {c.isAutoItem && <span className="ef-auto-badge">auto</span>}
                     </td>
-                    {/* ALL: số tiền editable | 100% */}
                     <td className="ef-mv-td-input">
                       {c.isAutoItem
                         ? <span className="ef-mv-num">{full ? full.toLocaleString('vi-VN') : '—'}</span>
                         : <AmtInput value={full} onChange={v => sa(c.id, v)}/>}
                     </td>
                     <td className="ef-mv-td-100">100%</td>
-                    {/* Per-villa: alloc amount | editable % */}
                     {allVillas.map(v => {
-                      const pct   = villaAllocPcts[v.villaId] ?? 0;
-                      const alloc = full ? Math.round(full * pct / 100) : 0;
+                      const pct   = villaAllocPcts[v.id] ?? 0;
+                      const alloc = full && pct ? Math.round(full * pct / 100) : 0;
                       return (
                         <>
-                          <td key={v.villaId+'a'} className="ef-mv-td-alloc">
+                          <td key={v.id+'a'} className="ef-mv-td-alloc">
                             {alloc ? alloc.toLocaleString('vi-VN') : '—'}
                           </td>
-                          <td key={v.villaId+'p'} className="ef-mv-td-pct-edit">
+                          <td key={v.id+'p'} className="ef-mv-td-pct-edit">
                             <div className="ef-pct-input-wrap">
                               <input
                                 type="number" min="0" max="100" step="1"
-                                className="ef-pct-input"
-                                value={pct === 0 ? '' : pct}
+                                className={`ef-pct-input${!allocOk ? ' ef-pct-input--warn' : ''}`}
+                                value={villaAllocPcts[v.id] ?? ''}
                                 placeholder="0"
-                                onChange={e => setVillaPct(v.villaId, Number(e.target.value) || 0)}
+                                onChange={e => setVillaPct(v.id, Number(e.target.value) || 0)}
                               />
                               <span className="ef-pct-sym">%</span>
                             </div>
@@ -393,24 +432,36 @@ export default function EntryForm({ report, onSave, onCopyPrevMonth }: Props) {
                 <tr><td colSpan={3 + allVillas.length * 2} className="ef-empty-hint">Chưa có danh mục chi phí chung.</td></tr>
               )}
             </tbody>
-            {/* ── Footer: TỔNG row ── */}
             <tfoot>
               <tr className="ef-mv-footer-row">
                 <td className="ef-mv-footer-lbl">TỔNG</td>
                 <td className="ef-mv-footer-num">{totalSharedFull ? totalSharedFull.toLocaleString('vi-VN') : '—'}</td>
                 <td className="ef-mv-footer-100">100%</td>
                 {allVillas.map(v => {
-                  const pct   = villaAllocPcts[v.villaId] ?? 0;
-                  const total = Math.round(totalSharedFull * pct / 100);
+                  const pct   = villaAllocPcts[v.id] ?? 0;
+                  const total = totalSharedFull && pct ? Math.round(totalSharedFull * pct / 100) : 0;
                   return (
                     <>
-                      <td key={v.villaId+'a'} className="ef-mv-footer-num">
+                      <td key={v.id+'a'} className="ef-mv-footer-num">
                         {total ? total.toLocaleString('vi-VN') : '—'}
                       </td>
-                      <td key={v.villaId+'p'} className="ef-mv-footer-pct">{pct}%</td>
+                      <td key={v.id+'p'} className="ef-mv-footer-pct">{pct}%</td>
                     </>
                   );
                 })}
+              </tr>
+              <tr className={`ef-mv-pct-total-row${allocOk ? ' ef-mv-pct-total-row--ok' : ' ef-mv-pct-total-row--warn'}`}>
+                <td colSpan={3} className="ef-mv-footer-lbl" style={{ fontSize:'.7rem', opacity:.8 }}>
+                  Kiểm tra tổng % phân bổ
+                </td>
+                {allVillas.map(v => (
+                  <>
+                    <td key={v.id+'a'}></td>
+                    <td key={v.id+'p'} className="ef-mv-pct-total-cell">
+                      {villaAllocPcts[v.id] ?? 0}%
+                    </td>
+                  </>
+                ))}
               </tr>
             </tfoot>
           </table>
@@ -737,10 +788,38 @@ const CSS = `
   background: #374151; color: #fff;
   border-left: 2px solid rgba(255,255,255,.2);
 }
+/* % allocation validation bar */
+.ef-alloc-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 8px 16px; border-bottom: 1px solid var(--border);
+  font-size: .78rem;
+}
+.ef-alloc-bar--ok  { background: rgba(10,107,68,.05); }
+.ef-alloc-bar--warn { background: rgba(185,76,42,.05); }
+.ef-alloc-bar-label { flex-shrink: 0; }
+.ef-alloc-bar-hint { color: #B45309; font-weight: 500; }
+.ef-alloc-bar-track {
+  flex: 1; height: 8px; border-radius: 4px;
+  background: rgba(0,0,0,.08); display: flex; overflow: hidden; min-width: 80px;
+}
+.ef-alloc-bar-seg { height: 100%; transition: width .2s; }
+
+/* % total check row in tfoot */
+.ef-mv-pct-total-row { background: #0F2A50; }
+.ef-mv-pct-total-row td { padding: 6px 10px; border: 1px solid rgba(255,255,255,.1); }
+.ef-mv-pct-total-row--ok .ef-mv-pct-total-cell { color: #6EE7B7; font-weight: 700; }
+.ef-mv-pct-total-row--warn .ef-mv-pct-total-cell { color: #FCA5A5; font-weight: 700; }
+.ef-mv-pct-total-cell { text-align: center; font-size: .75rem; }
+
+/* warn state on pct input */
+.ef-pct-input--warn { border-color: #F59E0B !important; background: #FFFBEB !important; }
+
 /* Alternate villa header colors */
-.ef-mv-th--villa:nth-child(3) { background: #3B5998; }
-.ef-mv-th--villa:nth-child(4) { background: #2D6A4F; }
-.ef-mv-th--villa:nth-child(5) { background: #6B3A2A; }
+.ef-mv-th--v0 { background: #3B5998; }
+.ef-mv-th--v1 { background: #2D6A4F; }
+.ef-mv-th--v2 { background: #92400E; }
+.ef-mv-th--v3 { background: #6D28D9; }
+.ef-mv-th--v4 { background: #B91C1C; }
 
 /* Sub-headers */
 .ef-mv-sub-row { background: #F1F5F9; }

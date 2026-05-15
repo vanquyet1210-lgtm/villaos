@@ -100,7 +100,7 @@ export default function ReportShell({
         <ReportView
           report={report}
           onSaveSharedEntry={async (categoryId, amount, note) => {
-            await upsertReportEntry(categoryId, null, year, month, amount, note ?? undefined);
+            await upsertReportEntry(categoryId, null, year, month, amount, note);
             loadReport(year, month, villaId);
           }}
           onSaveAllocPct={async (_pct) => {
@@ -118,6 +118,7 @@ export default function ReportShell({
         <EntryForm
           key={formKey}
           report={report}
+          villas={villas}
           onSave={async (entries: SaveEntry[]) => {
             await Promise.all(
               entries.map(e =>
