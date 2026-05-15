@@ -281,35 +281,23 @@ function KpiCard({
 export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }: Props) {
   const [chartPeriod, setChartPeriod] = useState<'6' | '12' | 'ytd'>('6');
 
-  // ── Shared expenses edit state ──
-  const [sharedAmounts, setSharedAmounts] = useState<Record<string, string>>(
-    () => Object.fromEntries((report.sharedExpenses ?? []).map(c => [c.id, String(c.amount)]))
-  );
-  // Per-row allocation % — each row is independent
-  const [rowAllocPcts, setRowAllocPcts] = useState<Record<string, string>>(
-    () => Object.fromEntries(
-      (report.sharedExpenses ?? []).map(c => [c.id, String(report.sharedAllocPct ?? 0)])
-    )
-  );
-  // Keep a single computed total alloc for the header display
-  const totalAllocAmt = (report.sharedExpenses ?? []).reduce((sum, cat) => {
-    const amt = Number(sharedAmounts[cat.id] ?? cat.amount) || 0;
-    const pct = Number(rowAllocPcts[cat.id] ?? report.sharedAllocPct ?? 0);
-    return sum + Math.round(amt * pct / 100);
-  }, 0);
-  const [savingShared, setSaving]   = useState(false);
-  const [savedShared,  setSaved]    = useState(false);
+  // (shared cost section removed from this view — managed via EntryForm tab)
 
-  // ── Revenue donut: prefer revenueBySource, fallback to report.revenue ──
+  // ── Revenue donut ──
+  // Strategy: merge revenueBySource (OTA channels) with report.revenue auto/manual
+  // This ensures VillaOS auto revenue (from confirmed bookings) always appears.
   const revSlices: Slice[] = (() => {
-    const fromSource = (report.revenueBySource ?? [])
-      .filter(s => s.amount > 0)
-      .map(s => ({ label: s.source, value: s.amount, color: s.color }));
-    if (fromSource.length > 0) return fromSource;
-    // Fallback: build directly from revenue categories (auto + manual)
-    return (report.revenue ?? [])
+    // Build from report.revenue — includes auto (VillaOS) + manual categories
+    const fromCategories = (report.revenue ?? [])
       .filter(c => c.amount > 0)
       .map(c => ({ label: c.name, value: c.amount, color: c.color }));
+
+    if (fromCategories.length > 0) return fromCategories;
+
+    // Last-resort fallback: revenueBySource (OTA channel breakdown)
+    return (report.revenueBySource ?? [])
+      .filter(s => s.amount > 0)
+      .map(s => ({ label: s.source, value: s.amount, color: s.color }));
   })();
 
   // ── Expense donut: group by groupName, first category color per group ──
@@ -471,128 +459,6 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
         </div>
       </div>
 
-      {/* ══ Chi phí chung (Shared) editable ══════════════════ */}
-      {(report.sharedExpenses ?? []).length > 0 && (
-        <div className="rv-card rv-shared-card">
-          {/* Header */}
-          <div className="rv-shared-hdr">
-            <div>
-              <div className="rv-title" style={{ marginBottom: 2 }}>CHI PHÍ CHUNG</div>
-              <div className="rv-shared-sub">
-                Tổng chung: <strong style={{ color: C.navy, fontFamily: 'Georgia,serif', fontStyle: 'italic' }}>
-                  {fmt(report.totalSharedExpense)}
-                </strong>
-                &nbsp;·&nbsp;Phân bổ cho villa này:&nbsp;
-                <strong style={{ color: C.expense, fontFamily: 'Georgia,serif', fontStyle: 'italic' }}>
-                  {fmt(totalAllocAmt)}
-                </strong>
-              </div>
-            </div>
-
-            {/* Header shows total allocated amount across all rows */}
-            <div className="rv-alloc-box">
-              <span className="rv-alloc-label">Tổng phân bổ cho villa</span>
-              <div className="rv-alloc-total" style={{ fontFamily:'Georgia,serif', fontStyle:'italic', fontSize:'1.1rem', color:C.navy, fontWeight:700 }}>
-                {fmt(totalAllocAmt)}
-              </div>
-              <div className="rv-alloc-hint" style={{ fontSize:'.68rem', color:C.muted, marginTop:2 }}>
-                Điều chỉnh % riêng từng khoản bên dưới
-              </div>
-            </div>
-          </div>
-
-          {/* Expense rows */}
-          <div className="rv-shared-rows">
-            {(report.sharedExpenses ?? []).map(cat => {
-              const raw      = sharedAmounts[cat.id] ?? String(cat.amount);
-              const amt      = Number(raw) || 0;
-              const rowPct   = Number(rowAllocPcts[cat.id] ?? report.sharedAllocPct ?? 0);
-              const allocAmt = Math.round(amt * rowPct / 100);
-              return (
-                <div key={cat.id} className="rv-shared-row">
-                  <span className="rv-shared-icon">{cat.icon}</span>
-                  <span className="rv-shared-name">{cat.name}</span>
-                  {cat.groupName && (
-                    <span className="rv-shared-group">{cat.groupName}</span>
-                  )}
-                  <div className="rv-shared-inputs">
-                    {/* Tổng hệ thống */}
-                    <div className="rv-shared-field">
-                      <span className="rv-shared-field-lbl">Tổng hệ thống</span>
-                      <div className="rv-shared-input-wrap">
-                        <input
-                          type="number" min="0" step="1000"
-                          className="rv-shared-input"
-                          value={raw}
-                          onChange={e => setSharedAmounts(prev => ({ ...prev, [cat.id]: e.target.value }))}
-                        />
-                        <span className="rv-shared-currency">đ</span>
-                      </div>
-                    </div>
-                    {/* Per-row % — independent, does not affect other rows */}
-                    <div className="rv-shared-field">
-                      <span className="rv-shared-field-lbl">% phân bổ</span>
-                      <div className="rv-shared-input-wrap">
-                        <input
-                          type="number" min="0" max="100" step="1"
-                          className="rv-shared-input rv-shared-input--pct"
-                          value={rowAllocPcts[cat.id] ?? report.sharedAllocPct ?? 0}
-                          title="Thay đổi % này chỉ áp dụng riêng khoản này"
-                          onChange={e => setRowAllocPcts(prev => ({ ...prev, [cat.id]: e.target.value }))}
-                        />
-                        <span className="rv-shared-currency">%</span>
-                      </div>
-                    </div>
-                    {/* Allocated result */}
-                    <div className="rv-shared-alloc-badge" style={{ background: C.navy + '12', color: C.navy }}>
-                      Villa: <strong style={{ fontFamily: 'Georgia,serif', fontStyle: 'italic' }}>{fmt(allocAmt)}</strong>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Save button */}
-          <div className="rv-shared-footer">
-            {savedShared && (
-              <span className="rv-shared-saved">✓ Đã lưu</span>
-            )}
-            <button
-              className="rv-shared-save-btn"
-              disabled={savingShared}
-              onClick={async () => {
-                if (!onSaveSharedEntry && !onSaveAllocPct) return;
-                setSaving(true);
-                setSaved(false);
-                try {
-                  const tasks: Promise<void>[] = [];
-                  if (onSaveSharedEntry) {
-                    (report.sharedExpenses ?? []).forEach(cat => {
-                      const amt = Number(sharedAmounts[cat.id] ?? cat.amount) || 0;
-                      tasks.push(onSaveSharedEntry(cat.id, amt, cat.note ?? null));
-                    });
-                  }
-                  if (onSaveAllocPct) {
-                    // Save average alloc pct across rows as the global default
-                    const pcts = Object.values(rowAllocPcts).map(Number).filter(Boolean);
-                    const avg  = pcts.length ? Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length) : 0;
-                    tasks.push(onSaveAllocPct(avg));
-                  }
-                  await Promise.all(tasks);
-                  setSaved(true);
-                  setTimeout(() => setSaved(false), 3000);
-                } finally {
-                  setSaving(false);
-                }
-              }}
-              style={{ opacity: (!onSaveSharedEntry && !onSaveAllocPct) ? 0.4 : 1 }}
-            >
-              {savingShared ? 'Đang lưu...' : '💾 Lưu chi phí chung'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ══ Sức khỏe tài chính ════════════════════════════════ */}
       <div className="rv-card">
@@ -816,8 +682,8 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
         }
         .rv-see-all:hover { background:rgba(28,43,74,.04); color:${C.navy}; }
 
-        /* ── Shared expenses editable ── */
-        .rv-shared-card { display:flex; flex-direction:column; gap:0; padding:0; overflow:hidden; }
+        /* (shared cost CSS removed — section moved to EntryForm tab) */
+        .rv-shared-card { display:none; }
         .rv-shared-hdr {
           display:flex; align-items:flex-start; justify-content:space-between;
           gap:16px; flex-wrap:wrap;
