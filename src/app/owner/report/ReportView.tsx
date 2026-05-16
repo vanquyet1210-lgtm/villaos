@@ -26,10 +26,13 @@ const C = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────
+// Bug 5 fix: xử lý số âm — "-55,200,000" → "-55.2 tr" thay vì "-55.200.000đ"
 function fmt(n: number) {
   if (!n) return '0đ';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + ' tr';
-  if (n >= 1_000)     return (n / 1_000).toFixed(0) + 'k';
+  const abs  = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1_000_000) return sign + (abs / 1_000_000).toFixed(1).replace(/\.0$/, '') + ' tr';
+  if (abs >= 1_000)     return sign + (abs / 1_000).toFixed(0) + 'k';
   return n.toLocaleString('vi-VN') + 'đ';
 }
 function pctChange(cur: number, prev: number) {
