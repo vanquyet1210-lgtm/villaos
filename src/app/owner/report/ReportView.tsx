@@ -2,6 +2,9 @@
 
 type Props = {
   report: any;
+  currentVillaId: string | null;
+  onSaveSharedEntry: (categoryId: any, amount: any, note: any) => Promise<void>;
+  onSaveAllocPct: (pct: any) => Promise<void>;
 };
 
 export default function ReportView({ report }: Props) {
