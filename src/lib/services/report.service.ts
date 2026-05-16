@@ -227,9 +227,19 @@ export async function getMonthlyReport(
     const grandTotal = villaRevs.reduce((s, v) => s + v.rev, 0);
     const thisVillaRev = villaRevs.find(v => v.id === villaId)?.rev ?? totalRev;
 
-    sharedAllocPct = grandTotal > 0
-      ? Math.round((thisVillaRev / grandTotal) * 100)
+    // Fix: ưu tiên dùng totalRev (từ report_entries) nếu booking rev = 0
+    // Tránh trường hợp doanh thu nhập tay không có booking trong hệ thống
+    const effectiveThisRev = thisVillaRev > 0 ? thisVillaRev : totalRev;
+    const effectiveGrandTotal = grandTotal > 0
+      ? grandTotal - thisVillaRev + effectiveThisRev
+      : effectiveThisRev;
+
+    sharedAllocPct = effectiveGrandTotal > 0
+      ? Math.round((effectiveThisRev / effectiveGrandTotal) * 100)
       : defaultAllocPct;
+
+    // Clamp về defaultAllocPct nếu chỉ có 1 villa
+    if (nVillas === 1) sharedAllocPct = 100;
 
     totalAllocatedShared = Math.round(totalSharedFull * sharedAllocPct / 100);
     prevAllocatedShared  = Math.round(prevSharedFull  * sharedAllocPct / 100);
