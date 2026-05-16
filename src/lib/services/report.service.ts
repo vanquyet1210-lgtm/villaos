@@ -150,9 +150,19 @@ export async function getMonthlyReport(
     entryMap.get(`${catId}:${y}:${m}:${vid ?? '__null__'}`) ?? 0;
 
   const withAmount = async (c: ReportCategory, y: number, m: number): Promise<ReportCategoryWithEntry> => {
-    // Shared cats stored with villa_id=null; per-villa cats use selected villaId
-    const lookupVid = c.scope === 'shared' ? null : (villaId ?? null);
-    let amount = getEntry(c.id, y, m, lookupVid);
+    // Primary lookup
+    const primaryVid = c.scope === 'shared' ? null : (villaId ?? null);
+    let amount = getEntry(c.id, y, m, primaryVid);
+
+    // Fallback A: shared cat mà bị lưu nhầm với villa_id (EntryForm cũ không set isShared)
+    if (amount === 0 && c.scope === 'shared' && villaId) {
+      amount = getEntry(c.id, y, m, villaId);
+    }
+    // Fallback B: per_villa cat mà bị lưu với villa_id=null (edge case)
+    if (amount === 0 && c.scope !== 'shared' && villaId) {
+      amount = getEntry(c.id, y, m, null);
+    }
+
     if (c.isAuto && c.autoSource && amount === 0) {
       amount = await calcAutoAmount(sb, oid, c.autoSource, y, m, villaId);
     }
@@ -244,24 +254,7 @@ export async function getMonthlyReport(
     totalAllocatedShared = Math.round(totalSharedFull * sharedAllocPct / 100);
     prevAllocatedShared  = Math.round(prevSharedFull  * sharedAllocPct / 100);
 
-    // ── DEBUG — xóa sau khi fix ──────────────────────────────────────────
-    console.log('[REPORT DEBUG]', {
-      villaId,
-      nVillas,
-      defaultAllocPct,
-      grandTotal,
-      thisVillaRev,
-      totalRev,                          // doanh thu từ report_entries
-      sharedAllocPct,
-      totalSharedFull,
-      totalAllocatedShared,
-      sharedCatsCount:  sharedCats.length,
-      perVillaCatsCount: perVillaCats.length,
-      sharedCatNames:   sharedCats.map(c => c.name),
-      villaRevs,                         // doanh thu từng villa (bookings table)
-      entryMapKeys: Array.from(entryMap.keys()).slice(0, 20),
-    });
-    // ── END DEBUG ────────────────────────────────────────────────────────
+    // (debug removed)
   } else if (!villaId) {
     // "Tất cả villa" — 100%
     sharedAllocPct       = 100;
@@ -365,10 +358,21 @@ export async function upsertReportEntry(
   const sb  = await createSupabaseServerClient();
   const oid = session.profile.id;
 
+  // Auto-detect scope: shared categories must always be saved with villa_id=null
+  // This fixes cases where caller passes villaId for a shared category
+  const { data: catMeta } = await (sb as any)
+    .from('report_categories')
+    .select('scope')
+    .eq('id', categoryId)
+    .single();
+
+  const isSharedCat  = catMeta?.scope === 'shared';
+  const correctVillaId = isSharedCat ? null : villaId;
+
   // 1. Lưu entry chính (shared → villa_id=null, per-villa → villa_id cụ thể)
   const { error } = await (sb as any).from('report_entries').upsert({
     category_id: categoryId,
-    villa_id:    villaId,
+    villa_id:    correctVillaId,
     owner_id:    oid,
     year, month, amount,
     note:        note ?? null,
@@ -376,6 +380,17 @@ export async function upsertReportEntry(
   }, { onConflict: 'category_id,villa_id,year,month' });
 
   if (error) return { error: error.message };
+
+  // 1b. Clean up stale entry saved with wrong villa_id (migration safety)
+  if (isSharedCat && villaId && villaId !== correctVillaId) {
+    // Delete the entry that was wrongly saved with this villa_id
+    await (sb as any).from('report_entries').delete()
+      .eq('category_id', categoryId)
+      .eq('villa_id', villaId)
+      .eq('owner_id', oid)
+      .eq('year', year)
+      .eq('month', month);
+  }
 
   // 2. Nếu là shared cat + có alloc → lưu thêm record phân bổ cho villa đó
   //    Key: (category_id, alloc.villaId, year, month) — tách biệt với record tổng (villa_id=null)
