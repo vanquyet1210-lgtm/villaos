@@ -6,6 +6,7 @@ import type { MonthlyReport, HealthMetric } from '@/types/report';
 
 interface Props {
   report: MonthlyReport;
+  currentVillaId?:   string | null;   // needed to compute correct villa-specific totals
   onSaveSharedEntry?: (categoryId: string, amount: number, note: string | null) => Promise<void>;
   onSaveAllocPct?: (pct: number) => Promise<void>;
 }
@@ -278,10 +279,26 @@ function KpiCard({
 }
 
 // ─── Main ─────────────────────────────────────────────────────
-export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }: Props) {
+export default function ReportView({ report, currentVillaId, onSaveSharedEntry, onSaveAllocPct }: Props) {
   const [chartPeriod, setChartPeriod] = useState<'6' | '12' | 'ytd'>('6');
 
-  // (shared cost section removed from this view — managed via EntryForm tab)
+  // ── Fix Bug 2: compute villa-specific totalExpense & netProfit ──────────────
+  // report.totalExpense from the server sums ALL shared costs without allocation,
+  // so we recompute it here using the villa's allocation %.
+  const villaExpSum   = (report.expenses ?? []).reduce((s, c) => s + c.amount, 0);
+  const sharedExpSum  = (report.sharedExpenses ?? []).reduce((s, c) => s + c.amount, 0);
+
+  // Prefer allVillasSummary entry for this villa; fall back to report.sharedAllocPct
+  const villaAllocPct = currentVillaId
+    ? ((report.allVillasSummary ?? []).find(v => v.villaId === currentVillaId)?.allocPct
+        ?? (report.sharedAllocPct ?? 0))
+    : 100;  // "Tất cả villa" — include full shared
+
+  const effectiveTotalExp    = currentVillaId
+    ? villaExpSum + Math.round(sharedExpSum * villaAllocPct / 100)
+    : report.totalExpense;
+
+  const effectiveNetProfit   = report.totalRevenue - effectiveTotalExp;
 
   // ── Revenue donut ──
   // Strategy: merge revenueBySource (OTA channels) with report.revenue auto/manual
@@ -333,10 +350,10 @@ export default function ReportView({ report, onSaveSharedEntry, onSaveAllocPct }
           value={report.totalRevenue}      prev={report.prevMonthRevenue} />
 
         <KpiCard label="LỢI NHUẬN RÒNG"     tag="📈" accentColor={C.profit}
-          value={report.netProfit}         prev={report.prevMonthProfit} />
+          value={effectiveNetProfit}       prev={report.prevMonthProfit} />
 
         <KpiCard label="TỔNG CHI PHÍ"        tag="📊" accentColor={C.expense}
-          value={report.totalExpense}      prev={report.prevMonthExpense}
+          value={effectiveTotalExp}        prev={report.prevMonthExpense}
           positiveIsUp={false} />
 
         <KpiCard label="CASHFLOW THỰC NHẬN"  tag="🏦" accentColor={C.cashflow}

@@ -9,11 +9,13 @@ export interface SaveEntry {
   amount:     number;
   note?:      string;
   isShared?:  boolean;
+  allocPct?:  number;   // per-villa allocation % for shared categories
 }
 
 interface Props {
   report:           MonthlyReport;
   villas:           { id: string; name: string; emoji: string }[];
+  currentVillaId?:  string | null;   // which villa is currently selected
   onSave:           (entries: SaveEntry[]) => Promise<void>;
   onCopyPrevMonth?: () => void;
 }
@@ -116,7 +118,7 @@ function getGroupMeta(name: string, idx: number) {
 }
 
 // ── Main ──────────────────────────────────────────────────────
-export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: Props) {
+export default function EntryForm({ report, villas, currentVillaId, onSave, onCopyPrevMonth }: Props) {
   const now = new Date().toLocaleString('vi-VN', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' });
 
   // Revenue — sorted by preferred order + separated into auto and manual
@@ -197,17 +199,42 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
   const totalRev      = totalAutoRev + totalManRev + totalExtraRev;
   const totalPvExp    = pvExp.reduce((s,c) => s + (villaAmts[c.id]??0), 0);
   const totalSharedFull = [...sharedExp.map(c => sharedAmts[c.id]??0), ...sharedAuto.map(c=>c.amount)].reduce((a,b)=>a+b,0);
-  const allocPct      = report.sharedAllocPct ?? 100;
-  const allocShared   = Math.round(totalSharedFull * allocPct / 100);
-  const totalExp      = totalPvExp + allocShared;
-  const netProfit     = totalRev - totalExp;
+
+  // Use per-cat allocation from the table state (villaAllocPcts) for the current villa.
+  // This is correct even before the server persists allocPct, because the user can see
+  // the live formula update as they adjust the % inputs.
+  const allocShared = (() => {
+    if (!currentVillaId) {
+      // "Tất cả villa" view — use server-side pct as fallback
+      const pct = report.sharedAllocPct ?? 0;
+      return Math.round(totalSharedFull * pct / 100);
+    }
+    return allSharedCats.reduce((s, cat) => {
+      const full = (cat as any).isAuto
+        ? ((cat as any).amount as number)
+        : (sharedAmts[cat.id] ?? 0);
+      const pct = villaAllocPcts[`${currentVillaId}_${cat.id}`] ?? 0;
+      return s + (full && pct ? Math.round(full * pct / 100) : 0);
+    }, 0);
+  })();
+
+  const totalExp  = totalPvExp + allocShared;
+  const netProfit = totalRev - totalExp;
 
   const handleSave = async () => {
     setSaving(true);
     await onSave([
       ...manualRev.map(c => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
       ...pvExp.map(c     => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
-      ...sharedExp.map(c => ({ categoryId:c.id, amount:sharedAmts[c.id]??0, isShared:true })),
+      ...sharedExp.map(c => ({
+        categoryId: c.id,
+        amount:     sharedAmts[c.id]??0,
+        isShared:   true,
+        // Persist the allocation % for this villa so the report calculates correctly
+        allocPct:   currentVillaId
+          ? (villaAllocPcts[`${currentVillaId}_${c.id}`] ?? 0)
+          : undefined,
+      })),
     ]);
     setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -521,7 +548,7 @@ export default function EntryForm({ report, villas, onSave, onCopyPrevMonth }: P
             </div>
             <div className="ef-formula-op">−</div>
             <div className="ef-formula-item">
-              <div className="ef-formula-lbl">③ Chi phí chung (phân bổ {allocPct}%)</div>
+              <div className="ef-formula-lbl">③ Chi phí chung (phân bổ)</div>
               <div className="ef-formula-val ef-formula-val--shared">{money(allocShared)}</div>
             </div>
             <div className="ef-formula-op">=</div>

@@ -99,6 +99,7 @@ export default function ReportShell({
       {tab === 'report' && report && !isPending && (
         <ReportView
           report={report}
+          currentVillaId={villaId}
           onSaveSharedEntry={async (categoryId, amount, note) => {
             await upsertReportEntry(categoryId, null, year, month, amount, note ?? undefined);
             loadReport(year, month, villaId);
@@ -119,6 +120,7 @@ export default function ReportShell({
           key={formKey}
           report={report}
           villas={villas}
+          currentVillaId={villaId}
           onSave={async (entries: SaveEntry[]) => {
             await Promise.all(
               entries.map(e =>
@@ -126,6 +128,7 @@ export default function ReportShell({
                   e.categoryId,
                   e.isShared ? null : villaId,
                   year, month, e.amount, e.note,
+                  e.isShared ? { villaId: villaId ?? undefined, allocPct: e.allocPct } : undefined,
                 ),
               ),
             );

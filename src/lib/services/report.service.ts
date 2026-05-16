@@ -116,11 +116,17 @@ export async function getMonthlyReport(
 
   const entryMap = new Map<string, number>();
   (entries ?? []).forEach((e: any) => {
-    entryMap.set(`${e.category_id}:${e.year}:${e.month}`, e.amount);
+    // Key includes villa_id so shared (null) and per-villa alloc records don't overwrite each other
+    entryMap.set(`${e.category_id}:${e.year}:${e.month}:${e.villa_id ?? '__null__'}`, e.amount);
   });
 
+  const getEntry = (catId: string, y: number, m: number, vid: string | null) =>
+    entryMap.get(`${catId}:${y}:${m}:${vid ?? '__null__'}`) ?? 0;
+
   const withAmount = async (c: ReportCategory, y: number, m: number): Promise<ReportCategoryWithEntry> => {
-    let amount = entryMap.get(`${c.id}:${y}:${m}`) ?? 0;
+    // Shared cats stored with villa_id=null; per-villa cats use selected villaId
+    const lookupVid = c.scope === 'shared' ? null : (villaId ?? null);
+    let amount = getEntry(c.id, y, m, lookupVid);
     if (c.isAuto && c.autoSource && amount === 0) {
       amount = await calcAutoAmount(sb, oid, c.autoSource, y, m, villaId);
     }
@@ -139,9 +145,58 @@ export async function getMonthlyReport(
 
   const sum = (arr: ReportCategoryWithEntry[]) => arr.reduce((s, c) => s + c.amount, 0);
   const totalRev  = sum(revItems);
-  const totalExp  = sum(expItems);
   const prevRev   = sum(prevRevItems);
   const prevExp   = sum(prevExpItems);
+
+  // ── Separate per-villa vs shared expenses ──────────────────────────────────
+  const sharedCats   = cats.filter(c => c.type === 'expense' && c.scope === 'shared');
+  const perVillaCats = cats.filter(c => c.type === 'expense' && c.scope !== 'shared');
+
+  const sharedExpItems: ReportCategoryWithEntry[] = await Promise.all(
+    sharedCats.map(c => withAmount(c, year, month))
+  );
+  const perVillaExpItems: ReportCategoryWithEntry[] = expItems.filter(c => c.scope !== 'shared');
+
+  const totalSharedFull  = sum(sharedExpItems);   // hệ thống tổng
+  const totalPerVillaExp = sum(perVillaExpItems);
+
+  // Per-villa allocated shared: saved as entries with villa_id = villaId
+  // (written by upsertReportEntry when alloc is provided)
+  let totalAllocatedShared = 0;
+  let sharedAllocPct       = 0;
+
+  if (villaId) {
+    totalAllocatedShared = sharedCats.reduce(
+      (s, c) => s + getEntry(c.id, year, month, villaId), 0
+    );
+    sharedAllocPct = totalSharedFull > 0
+      ? Math.round(totalAllocatedShared / totalSharedFull * 100)
+      : 0;
+  } else {
+    // "Tất cả villa" — dùng toàn bộ shared
+    totalAllocatedShared = totalSharedFull;
+    sharedAllocPct       = 100;
+  }
+
+  const totalExp  = totalPerVillaExp + totalAllocatedShared;
+  const netProfit = totalRev - totalExp;
+
+  // ── allVillasSummary ────────────────────────────────────────────────────────
+  const { data: villasData } = await (sb as any)
+    .from('villas')
+    .select('id, name, emoji')
+    .eq('owner_id', oid)
+    .eq('is_active', true);
+
+  const allVillasSummary = (villasData ?? []).map((v: any) => {
+    const allocAmount = sharedCats.reduce(
+      (s, c) => s + getEntry(c.id, year, month, v.id), 0
+    );
+    const allocPct = totalSharedFull > 0
+      ? Math.round(allocAmount / totalSharedFull * 100)
+      : 0;
+    return { villaId: v.id, villaName: v.name, allocPct, allocAmount };
+  });
 
   // Biểu đồ 6 tháng
   const monthly6 = await Promise.all(
@@ -163,48 +218,45 @@ export async function getMonthlyReport(
 
   return {
     year, month, villaId: villaId ?? null,
-    revenue: revItems, expenses: expItems,
-    totalRevenue: totalRev, totalExpense: totalExp, netProfit: totalRev - totalExp,
-    prevMonthRevenue: prevRev, prevMonthExpense: prevExp, prevMonthProfit: prevRev - prevExp,
+    revenue:  revItems,
+    expenses: perVillaExpItems,            // chỉ chi phí riêng của villa
+    totalRevenue:      totalRev,
+    totalExpense:      totalExp,           // villa + allocated shared (đúng)
+    netProfit,
+    prevMonthRevenue:  prevRev,
+    prevMonthExpense:  prevExp,
+    prevMonthProfit:   prevRev - prevExp,
     monthly6,
-    
-    // Shared expenses (tất cả villa được phân bổ)
-    sharedExpenses: cats.filter(c => c.type === 'expense' && c.scope === 'shared').map(c => ({
-      ...c,
-      amount: cats.find(x => x.id === c.id)?.isAuto 
-        ? 0 // auto shared không lưu entry, tính sau
-        : (entryMap.get(`${c.id}:${year}:${month}`) ?? 0),
-      note: null,
-    })),
-    totalSharedExpense: 0, // placeholder
-    sharedAllocPct: 0, // placeholder — phụ thuộc villa được chọn
-    
-    // Multi-villa summary (khi xem tất cả)
-    allVillasSummary: [],
-    
-    // Health metrics
+
+    // Shared expenses — tổng toàn hệ thống (để hiển thị bảng phân bổ)
+    sharedExpenses:    sharedExpItems,
+    totalSharedExpense: totalSharedFull,
+    sharedAllocPct,                        // % phân bổ của villa này (0–100)
+
+    allVillasSummary,                      // allocPct per villa (đọc từ DB)
+
     cashflowReceived: Math.round(totalRev * 0.86),
-    cashflowPending: Math.round(totalRev * 0.14),
+    cashflowPending:  Math.round(totalRev * 0.14),
     occupancyRate: 68,
     healthScore: 75,
     healthLabel: 'Tốt',
     healthMetrics: [
       { icon: '📊', label: 'Công suất phòng', value: 'Tốt' },
-      { icon: '💰', label: 'Dòng tiền', value: 'Tốt' },
+      { icon: '💰', label: 'Dòng tiền',        value: 'Tốt' },
       { icon: '⚡', label: 'Hiệu suất chi phí', value: 'Tốt' },
     ],
-    healthTip: 'Chi phí tháng này tăng 15% — hãy kiểm tra các khoản vận hành.',
-    costAlerts: [],
-    upcomingPayouts: [],
-    channelStats: [],
-    topServices: [],
+    healthTip:      'Chi phí tháng này tăng 15% — hãy kiểm tra các khoản vận hành.',
+    costAlerts:     [],
+    upcomingPayouts:[],
+    channelStats:   [],
+    topServices:    [],
     revenueBySource: revItems
       .filter(r => r.amount > 0)
       .map(r => ({
         source: r.name,
         amount: r.amount,
-        pct: totalRev > 0 ? Math.round((r.amount / totalRev) * 100) : 0,
-        color: r.color,
+        pct:    totalRev > 0 ? Math.round((r.amount / totalRev) * 100) : 0,
+        color:  r.color,
       })),
   };
 }
@@ -213,21 +265,42 @@ export async function getMonthlyReport(
 export async function upsertReportEntry(
   categoryId: string, villaId: string | null,
   year: number, month: number, amount: number, note?: string,
+  alloc?: { villaId?: string; allocPct?: number },
 ): Promise<{ error?: string }> {
   const session = await getServerSession();
   if (!session) return { error: 'Chưa đăng nhập' };
-  const sb = await createSupabaseServerClient();
+  const sb  = await createSupabaseServerClient();
+  const oid = session.profile.id;
 
+  // 1. Lưu entry chính (shared → villa_id=null, per-villa → villa_id cụ thể)
   const { error } = await (sb as any).from('report_entries').upsert({
     category_id: categoryId,
     villa_id:    villaId,
-    owner_id:    session.profile.id,
+    owner_id:    oid,
     year, month, amount,
     note:        note ?? null,
     updated_at:  new Date().toISOString(),
   }, { onConflict: 'category_id,villa_id,year,month' });
 
-  return error ? { error: error.message } : {};
+  if (error) return { error: error.message };
+
+  // 2. Nếu là shared cat + có alloc → lưu thêm record phân bổ cho villa đó
+  //    Key: (category_id, alloc.villaId, year, month) — tách biệt với record tổng (villa_id=null)
+  if (alloc?.villaId && alloc.allocPct !== undefined) {
+    const allocAmount = Math.round(amount * alloc.allocPct / 100);
+    const { error: e2 } = await (sb as any).from('report_entries').upsert({
+      category_id: categoryId,
+      villa_id:    alloc.villaId,
+      owner_id:    oid,
+      year, month,
+      amount:      allocAmount,
+      note:        `alloc:${alloc.allocPct}%`,
+      updated_at:  new Date().toISOString(),
+    }, { onConflict: 'category_id,villa_id,year,month' });
+    if (e2) return { error: e2.message };
+  }
+
+  return {};
 }
 
 // ── Tạo / cập nhật category ───────────────────────────────────
