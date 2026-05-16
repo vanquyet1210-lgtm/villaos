@@ -7,19 +7,24 @@ import { DEFAULT_CATEGORIES }         from '@/types/report';
 import type { ReportCategory, ReportEntry, MonthlyReport, ReportCategoryWithEntry } from '@/types/report';
 
 function mapCat(r: any): ReportCategory {
-  // Nếu cột `scope` chưa có trong DB (chưa migrate), suy ra từ groupName:
-  // - Chi phí nhóm "Nhân sự" hoặc isAuto=true (hoa hồng sale) → shared
-  // - Tất cả còn lại → per_villa
-  const inferredScope: 'shared' | 'per_villa' =
-    r.scope ??
-    (r.type === 'expense' && (r.group_name === 'Nhân sự' || r.is_auto)
-      ? 'shared'
-      : 'per_villa');
+  // Nếu cột `scope` null trong DB (chưa migrate hoặc seed cũ),
+  // xác định lại theo logic VillaOS:
+  //   expense + villa_id = null → category system-wide → 'shared'
+  //   tất cả còn lại          → 'per_villa'
+  const scope: 'shared' | 'per_villa' =
+    r.scope === 'shared'    ? 'shared'    :
+    r.scope === 'per_villa' ? 'per_villa' :
+    (r.type === 'expense' && r.villa_id === null) ? 'shared' : 'per_villa';
 
   return {
     id: r.id, ownerId: r.owner_id, villaId: r.villa_id,
-    name: r.name, type: r.type, scope: inferredScope, groupName: r.group_name,
+    name: r.name, type: r.type, scope, groupName: r.group_name,
     icon: r.icon, color: r.color, isAuto: r.is_auto,
+    autoSource: r.auto_source, fixedAmount: r.fixed_amount ?? 0,
+    sortOrder: r.sort_order ?? 0, isActive: r.is_active,
+    createdAt: r.created_at,
+  };
+}
     autoSource: r.auto_source, fixedAmount: r.fixed_amount ?? 0,
     sortOrder: r.sort_order ?? 0, isActive: r.is_active,
     createdAt: r.created_at,
@@ -39,7 +44,23 @@ export async function getOrInitCategories(villaId?: string): Promise<ReportCateg
     .eq('is_active', true)
     .order('sort_order');
 
-  if (existing && existing.length > 0) return existing.map(mapCat);
+  if (existing && existing.length > 0) {
+    // One-time migration: ghi scope='shared' vào DB cho các rows đang null
+    // (xảy ra khi cột scope được add sau lần seed đầu tiên)
+    const needsFix = existing.filter(
+      (c: any) => !c.scope && c.type === 'expense' && c.villa_id === null
+    );
+    if (needsFix.length > 0) {
+      await (sb as any)
+        .from('report_categories')
+        .update({ scope: 'shared' })
+        .in('id', needsFix.map((c: any) => c.id))
+        .eq('owner_id', session.profile.id);
+      // Patch in-memory để dùng ngay trong request hiện tại
+      needsFix.forEach((c: any) => { c.scope = 'shared'; });
+    }
+    return existing.map(mapCat);
+  }
 
   // Lần đầu: seed template
   const rows = DEFAULT_CATEGORIES.map((c, i) => ({
