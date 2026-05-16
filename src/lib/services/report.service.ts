@@ -232,6 +232,25 @@ export async function getMonthlyReport(
 
     totalAllocatedShared = Math.round(totalSharedFull * sharedAllocPct / 100);
     prevAllocatedShared  = Math.round(prevSharedFull  * sharedAllocPct / 100);
+
+    // ── DEBUG — xóa sau khi fix ──────────────────────────────────────────
+    console.log('[REPORT DEBUG]', {
+      villaId,
+      nVillas,
+      defaultAllocPct,
+      grandTotal,
+      thisVillaRev,
+      totalRev,                          // doanh thu từ report_entries
+      sharedAllocPct,
+      totalSharedFull,
+      totalAllocatedShared,
+      sharedCatsCount:  sharedCats.length,
+      perVillaCatsCount: perVillaCats.length,
+      sharedCatNames:   sharedCats.map(c => c.name),
+      villaRevs,                         // doanh thu từng villa (bookings table)
+      entryMapKeys: Array.from(entryMap.keys()).slice(0, 20),
+    });
+    // ── END DEBUG ────────────────────────────────────────────────────────
   } else if (!villaId) {
     // "Tất cả villa" — 100%
     sharedAllocPct       = 100;
