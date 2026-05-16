@@ -25,11 +25,6 @@ function mapCat(r: any): ReportCategory {
     createdAt: r.created_at,
   };
 }
-    autoSource: r.auto_source, fixedAmount: r.fixed_amount ?? 0,
-    sortOrder: r.sort_order ?? 0, isActive: r.is_active,
-    createdAt: r.created_at,
-  };
-}
 
 // ── Lấy hoặc tạo categories mặc định lần đầu ─────────────────
 export async function getOrInitCategories(villaId?: string): Promise<ReportCategory[]> {
