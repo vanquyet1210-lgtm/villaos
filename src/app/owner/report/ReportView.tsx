@@ -282,23 +282,12 @@ function KpiCard({
 export default function ReportView({ report, currentVillaId, onSaveSharedEntry, onSaveAllocPct }: Props) {
   const [chartPeriod, setChartPeriod] = useState<'6' | '12' | 'ytd'>('6');
 
-  // ── Fix Bug 2: compute villa-specific totalExpense & netProfit ──────────────
-  // report.totalExpense from the server sums ALL shared costs without allocation,
-  // so we recompute it here using the villa's allocation %.
-  const villaExpSum   = (report.expenses ?? []).reduce((s, c) => s + c.amount, 0);
-  const sharedExpSum  = (report.sharedExpenses ?? []).reduce((s, c) => s + c.amount, 0);
-
-  // Prefer allVillasSummary entry for this villa; fall back to report.sharedAllocPct
-  const villaAllocPct = currentVillaId
-    ? ((report.allVillasSummary ?? []).find(v => v.villaId === currentVillaId)?.allocPct
-        ?? (report.sharedAllocPct ?? 0))
-    : 100;  // "Tất cả villa" — include full shared
-
-  const effectiveTotalExp    = currentVillaId
-    ? villaExpSum + Math.round(sharedExpSum * villaAllocPct / 100)
-    : report.totalExpense;
-
-  const effectiveNetProfit   = report.totalRevenue - effectiveTotalExp;
+  // ── Totals: server already computed villa-allocated values correctly ───────────
+  // report.totalExpense  = perVillaExp + allocatedShared  (đúng)
+  // report.netProfit     = totalRevenue - totalExpense    (đúng)
+  // KHÔNG tính lại ở đây để tránh double-counting.
+  const effectiveTotalExp  = report.totalExpense;
+  const effectiveNetProfit = report.netProfit;
 
   // ── Revenue donut ──
   // Strategy: merge revenueBySource (OTA channels) with report.revenue auto/manual
@@ -317,14 +306,25 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
       .map(s => ({ label: s.source, value: s.amount, color: s.color }));
   })();
 
-  // ── Expense donut: group by groupName, first category color per group ──
+  // ── Expense donut: per-villa + shared (allocated portion) grouped by groupName ──
   const expSlices: Slice[] = (() => {
     const groups = new Map<string, { value: number; color: string }>();
-    report.expenses.forEach(c => {
+    // Per-villa expenses
+    (report.expenses ?? []).forEach(c => {
       const g = c.groupName ?? 'Khác';
       const ex = groups.get(g);
       if (ex) ex.value += c.amount;
       else groups.set(g, { value: c.amount, color: c.color });
+    });
+    // Shared expenses — only the allocated portion for this villa
+    const allocPct = report.sharedAllocPct ?? 100;
+    (report.sharedExpenses ?? []).forEach(c => {
+      const g   = c.groupName ?? 'Nhân sự';
+      const val = Math.round(c.amount * allocPct / 100);
+      if (!val) return;
+      const ex  = groups.get(g);
+      if (ex) ex.value += val;
+      else groups.set(g, { value: val, color: c.color });
     });
     return Array.from(groups.entries())
       .filter(([, { value }]) => value > 0)
