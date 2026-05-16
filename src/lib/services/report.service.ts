@@ -7,9 +7,18 @@ import { DEFAULT_CATEGORIES }         from '@/types/report';
 import type { ReportCategory, ReportEntry, MonthlyReport, ReportCategoryWithEntry } from '@/types/report';
 
 function mapCat(r: any): ReportCategory {
+  // Nếu cột `scope` chưa có trong DB (chưa migrate), suy ra từ groupName:
+  // - Chi phí nhóm "Nhân sự" hoặc isAuto=true (hoa hồng sale) → shared
+  // - Tất cả còn lại → per_villa
+  const inferredScope: 'shared' | 'per_villa' =
+    r.scope ??
+    (r.type === 'expense' && (r.group_name === 'Nhân sự' || r.is_auto)
+      ? 'shared'
+      : 'per_villa');
+
   return {
     id: r.id, ownerId: r.owner_id, villaId: r.villa_id,
-    name: r.name, type: r.type, scope: r.scope ?? 'per_villa', groupName: r.group_name,
+    name: r.name, type: r.type, scope: inferredScope, groupName: r.group_name,
     icon: r.icon, color: r.color, isAuto: r.is_auto,
     autoSource: r.auto_source, fixedAmount: r.fixed_amount ?? 0,
     sortOrder: r.sort_order ?? 0, isActive: r.is_active,
