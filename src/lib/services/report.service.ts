@@ -7,14 +7,16 @@ import { DEFAULT_CATEGORIES }         from '@/types/report';
 import type { ReportCategory, ReportEntry, MonthlyReport, ReportCategoryWithEntry } from '@/types/report';
 
 function mapCat(r: any): ReportCategory {
-  // Nếu cột `scope` null trong DB (chưa migrate hoặc seed cũ),
-  // xác định lại theo logic VillaOS:
-  //   expense + villa_id = null → category system-wide → 'shared'
-  //   tất cả còn lại          → 'per_villa'
+  // Suy ra scope khi DB chưa có cột scope:
+  // - Ưu tiên giá trị DB nếu có ('shared' | 'per_villa')
+  // - Fallback: dùng groupName để phân biệt → "Nhân sự" và isAuto → shared
+  // KHÔNG dùng villa_id=null vì TẤT CẢ categories đều có villa_id=null
   const scope: 'shared' | 'per_villa' =
     r.scope === 'shared'    ? 'shared'    :
     r.scope === 'per_villa' ? 'per_villa' :
-    (r.type === 'expense' && r.villa_id === null) ? 'shared' : 'per_villa';
+    (r.type === 'expense' && (r.group_name === 'Nhân sự' || r.is_auto === true))
+      ? 'shared'
+      : 'per_villa';
 
   return {
     id: r.id, ownerId: r.owner_id, villaId: r.villa_id,
@@ -220,7 +222,6 @@ export async function getMonthlyReport(
   let prevAllocatedShared  = 0;
 
   if (villaId && villasData && villasData.length > 0) {
-    // Lấy doanh thu toàn hệ thống để tính tỷ lệ phân bổ
     const from2  = `${year}-${String(month).padStart(2,'0')}-01`;
     const to2    = new Date(year, month, 0).toISOString().slice(0,10);
     const ACTIVE = ['confirmed', 'hold', 'checked_in', 'completed'];
@@ -234,29 +235,31 @@ export async function getMonthlyReport(
         return { id: v.id, rev: (bks ?? []).reduce((s: number, b: any) => s + (b.total ?? 0), 0) };
       })
     );
-    const grandTotal = villaRevs.reduce((s, v) => s + v.rev, 0);
-    const thisVillaRev = villaRevs.find(v => v.id === villaId)?.rev ?? totalRev;
+    const grandTotal   = villaRevs.reduce((s, v) => s + v.rev, 0);
+    const thisVillaRev = villaRevs.find(v => v.id === villaId)?.rev ?? 0;
 
-    // Fix: ưu tiên dùng totalRev (từ report_entries) nếu booking rev = 0
-    // Tránh trường hợp doanh thu nhập tay không có booking trong hệ thống
-    const effectiveThisRev = thisVillaRev > 0 ? thisVillaRev : totalRev;
+    const effectiveThisRev    = thisVillaRev > 0 ? thisVillaRev : totalRev;
     const effectiveGrandTotal = grandTotal > 0
       ? grandTotal - thisVillaRev + effectiveThisRev
       : effectiveThisRev;
 
-    sharedAllocPct = effectiveGrandTotal > 0
-      ? Math.round((effectiveThisRev / effectiveGrandTotal) * 100)
-      : defaultAllocPct;
-
-    // Clamp về defaultAllocPct nếu chỉ có 1 villa
-    if (nVillas === 1) sharedAllocPct = 100;
+    sharedAllocPct = nVillas === 1
+      ? 100
+      : (effectiveGrandTotal > 0
+          ? Math.round((effectiveThisRev / effectiveGrandTotal) * 100)
+          : defaultAllocPct);
 
     totalAllocatedShared = Math.round(totalSharedFull * sharedAllocPct / 100);
     prevAllocatedShared  = Math.round(prevSharedFull  * sharedAllocPct / 100);
 
-    // (debug removed)
-  } else if (!villaId) {
-    // "Tất cả villa" — 100%
+  } else if (villaId) {
+    // villaId có nhưng villasData rỗng/null → fallback equal split
+    sharedAllocPct       = defaultAllocPct;
+    totalAllocatedShared = defaultAllocAmount;
+    prevAllocatedShared  = Math.round(prevSharedFull / nVillas);
+
+  } else {
+    // "Tất cả villa" (villaId = undefined/null) → 100%
     sharedAllocPct       = 100;
     totalAllocatedShared = totalSharedFull;
     prevAllocatedShared  = prevSharedFull;
