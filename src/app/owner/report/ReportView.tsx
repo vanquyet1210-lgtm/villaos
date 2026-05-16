@@ -367,6 +367,33 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
       </div>
 
       {/* ══ Chart — full width ═══════════════════════════════ */}
+      {/* ── Summary formula strip ── */}
+      <div className="rv-strip">
+        <div className="rv-strip-cell rv-strip-cell--rev">
+          <span className="rv-strip-label">DOANH THU</span>
+          <span className="rv-strip-val">{fmt(report.totalRevenue)}</span>
+        </div>
+        <span className="rv-strip-op">−</span>
+        <div className="rv-strip-cell rv-strip-cell--exp">
+          <span className="rv-strip-label">TỔNG CHI PHÍ</span>
+          <span className="rv-strip-val">{fmt(effectiveTotalExp)}</span>
+        </div>
+        <span className="rv-strip-op">=</span>
+        <div className={`rv-strip-cell rv-strip-cell--profit${effectiveNetProfit < 0 ? ' rv-strip-cell--neg' : ''}`}>
+          <span className="rv-strip-label">LỢI NHUẬN ƯỚC TÍNH</span>
+          <span className="rv-strip-val">{fmt(Math.abs(effectiveNetProfit))}{effectiveNetProfit < 0 ? ' (lỗ)' : ''}</span>
+        </div>
+        <div className="rv-strip-margin">
+          <span className="rv-strip-label">BIÊN LN</span>
+          <span className="rv-strip-val rv-strip-val--sm">
+            {report.totalRevenue > 0
+              ? Math.round(effectiveNetProfit / report.totalRevenue * 100) + '%'
+              : '—'}
+          </span>
+        </div>
+      </div>
+
+      {/* ══ Chart — full width ═══════════════════════════════ */}
       <div className="rv-card rv-chart-card">
         <div className="rv-chart-hdr">
           <div className="rv-chart-hdr-top">
@@ -436,20 +463,20 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
         <div className="rv-card">
           <div className="rv-title">🔴 CHI PHÍ THEO DANH MỤC</div>
           <div className="rv-donut-summary" style={{ color: C.expense }}>
-            {fmt(report.totalExpense)}
+            {fmt(effectiveTotalExp)}
             {(() => {
-              const d = pctChange(report.totalExpense, report.prevMonthExpense);
+              const d = pctChange(effectiveTotalExp, report.prevMonthExpense);
               return d ? <span className="rv-donut-delta" style={{ color: d.up ? C.expense : C.revenue }}>
                 {d.up ? ' ↑' : ' ↓'}{Math.abs(d.pct)}%
               </span> : null;
             })()}
           </div>
           <div className="rv-donut-row rv-donut-row--sm">
-            <Donut slices={expSlices} label={fmt(report.totalExpense)} sub="Tổng chi phí" />
+            <Donut slices={expSlices} label={fmt(effectiveTotalExp)} sub="Tổng chi phí" />
             <div className="rv-legend">
               {expSlices.map(sl => (
                 <LegendRow key={sl.label} color={sl.color}
-                  name={sl.label} value={sl.value} total={report.totalExpense} />
+                  name={sl.label} value={sl.value} total={effectiveTotalExp} />
               ))}
             </div>
           </div>
@@ -535,6 +562,40 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
           font-size:.62rem; font-weight:700; letter-spacing:.1em;
           text-transform:uppercase; color:${C.muted}; margin-bottom:12px;
         }
+
+        /* ── Summary formula strip ── */
+        .rv-strip {
+          display:grid; grid-template-columns:1fr auto 1fr auto 1fr auto;
+          align-items:center; gap:6px;
+          background:#fff; border:1px solid ${C.border};
+          border-radius:14px; padding:14px 20px;
+        }
+        .rv-strip-cell {
+          display:flex; flex-direction:column; align-items:center;
+          padding:8px 12px; border-radius:10px; text-align:center;
+          border:1px solid transparent;
+        }
+        .rv-strip-cell--rev    { background:rgba(23,138,94,.08);  border-color:rgba(23,138,94,.22); }
+        .rv-strip-cell--exp    { background:rgba(163,45,45,.07);  border-color:rgba(163,45,45,.2);  }
+        .rv-strip-cell--profit { background:rgba(201,168,76,.08); border-color:rgba(201,168,76,.25);}
+        .rv-strip-cell--neg    { background:rgba(163,45,45,.08);  border-color:rgba(163,45,45,.22); }
+        .rv-strip-margin {
+          display:flex; flex-direction:column; align-items:center;
+          padding:8px 12px; border-radius:10px; text-align:center;
+          background:rgba(28,43,74,.04); border:1px solid ${C.border};
+        }
+        .rv-strip-label {
+          font-size:.56rem; font-weight:700; letter-spacing:.09em;
+          text-transform:uppercase; color:${C.muted}; margin-bottom:4px;
+        }
+        .rv-strip-val { font-variant-numeric:tabular-nums; font-size:1.05rem; font-weight:700; line-height:1.1; }
+        .rv-strip-val--sm { font-size:.9rem; }
+        .rv-strip-cell--rev    .rv-strip-val { color:${C.revenue}; }
+        .rv-strip-cell--exp    .rv-strip-val { color:${C.expense}; }
+        .rv-strip-cell--profit .rv-strip-val { color:${C.profit};  }
+        .rv-strip-cell--neg    .rv-strip-val { color:${C.expense}; }
+        .rv-strip-margin       .rv-strip-val { color:${C.navy};    }
+        .rv-strip-op { font-size:1.3rem; font-weight:300; color:${C.muted}; padding:0 4px; flex-shrink:0; }
 
         /* ── 5 KPI cards ── */
         .rv-kpi { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }

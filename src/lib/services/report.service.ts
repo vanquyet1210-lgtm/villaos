@@ -160,8 +160,25 @@ export async function getMonthlyReport(
   const totalSharedFull  = sum(sharedExpItems);   // hệ thống tổng
   const totalPerVillaExp = sum(perVillaExpItems);
 
-  // Per-villa allocated shared: saved as entries with villa_id = villaId
-  // (written by upsertReportEntry when alloc is provided)
+  // ── allVillasSummary — query trước để biết nVillas ──────────────────────────
+  const { data: villasData } = await (sb as any)
+    .from('villas')
+    .select('id, name, emoji')
+    .eq('owner_id', oid)
+    .eq('is_active', true);
+
+  const nVillas = (villasData ?? []).length || 1;
+
+  // Kiểm tra xem đã có entry phân bổ per-villa nào trong DB chưa
+  const totalStoredAlloc = (villasData ?? []).reduce((s: number, v: any) =>
+    s + sharedCats.reduce((ss, c) => ss + getEntry(c.id, year, month, v.id), 0), 0
+  );
+  // Nếu chưa có → dùng equal split làm mặc định
+  const useDefaultSplit = totalStoredAlloc === 0 && totalSharedFull > 0;
+  const defaultAllocPct    = Math.round(100 / nVillas);
+  const defaultAllocAmount = Math.round(totalSharedFull / nVillas);
+
+  // Per-villa allocated shared
   let totalAllocatedShared = 0;
   let sharedAllocPct       = 0;
 
@@ -169,9 +186,15 @@ export async function getMonthlyReport(
     totalAllocatedShared = sharedCats.reduce(
       (s, c) => s + getEntry(c.id, year, month, villaId), 0
     );
-    sharedAllocPct = totalSharedFull > 0
-      ? Math.round(totalAllocatedShared / totalSharedFull * 100)
-      : 0;
+    // Fallback: nếu chưa lưu → equal split
+    if (useDefaultSplit) {
+      totalAllocatedShared = defaultAllocAmount;
+      sharedAllocPct       = defaultAllocPct;
+    } else {
+      sharedAllocPct = totalSharedFull > 0
+        ? Math.round(totalAllocatedShared / totalSharedFull * 100)
+        : 0;
+    }
   } else {
     // "Tất cả villa" — dùng toàn bộ shared
     totalAllocatedShared = totalSharedFull;
@@ -181,20 +204,13 @@ export async function getMonthlyReport(
   const totalExp  = totalPerVillaExp + totalAllocatedShared;
   const netProfit = totalRev - totalExp;
 
-  // ── allVillasSummary ────────────────────────────────────────────────────────
-  const { data: villasData } = await (sb as any)
-    .from('villas')
-    .select('id, name, emoji')
-    .eq('owner_id', oid)
-    .eq('is_active', true);
-
   const allVillasSummary = (villasData ?? []).map((v: any) => {
-    const allocAmount = sharedCats.reduce(
+    const storedAmount = sharedCats.reduce(
       (s, c) => s + getEntry(c.id, year, month, v.id), 0
     );
-    const allocPct = totalSharedFull > 0
-      ? Math.round(allocAmount / totalSharedFull * 100)
-      : 0;
+    const allocAmount = useDefaultSplit ? defaultAllocAmount : storedAmount;
+    const allocPct    = useDefaultSplit ? defaultAllocPct
+      : (totalSharedFull > 0 ? Math.round(allocAmount / totalSharedFull * 100) : 0);
     return { villaId: v.id, villaName: v.name, allocPct, allocAmount };
   });
 
