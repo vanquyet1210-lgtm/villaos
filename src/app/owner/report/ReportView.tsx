@@ -288,9 +288,15 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
   // ── Totals: server already computed villa-allocated values correctly ───────────
   // report.totalExpense  = perVillaExp + allocatedShared  (đúng)
   // report.netProfit     = totalRevenue - totalExpense    (đúng)
-  // KHÔNG tính lại ở đây để tránh double-counting.
   const effectiveTotalExp  = report.totalExpense;
   const effectiveNetProfit = report.netProfit;
+
+  // ── Tách 2 thành phần chi phí để hiển thị breakdown ────────
+  const perVillaExpTotal   = (report.expenses ?? []).reduce((s, c) => s + c.amount, 0);
+  const allocPct           = report.sharedAllocPct ?? 100;
+  const sharedFull         = report.totalSharedExpense ?? 0;
+  const allocatedShared    = Math.round(sharedFull * allocPct / 100);
+  // Verify: perVillaExpTotal + allocatedShared ≈ effectiveTotalExp
 
   // ── Revenue donut ──
   // Strategy: merge revenueBySource (OTA channels) with report.revenue auto/manual
@@ -481,6 +487,30 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
                 <LegendRow key={sl.label} color={sl.color}
                   name={sl.label} value={sl.value} total={effectiveTotalExp} />
               ))}
+            </div>
+          </div>
+
+          {/* ── Chi phí breakdown: riêng + chung phân bổ ── */}
+          <div className="rv-exp-breakdown">
+            <div className="rv-exp-breakdown-row">
+              <span className="rv-exp-bd-icon">🏠</span>
+              <span className="rv-exp-bd-label">Chi phí riêng villa</span>
+              <span className="rv-exp-bd-val">{fmt(perVillaExpTotal)}</span>
+            </div>
+            <div className="rv-exp-breakdown-row rv-exp-breakdown-row--shared">
+              <span className="rv-exp-bd-icon">🔗</span>
+              <span className="rv-exp-bd-label">
+                Chi phí chung
+                <span className="rv-exp-bd-badge">phân bổ {allocPct}%</span>
+              </span>
+              <span className="rv-exp-bd-val rv-exp-bd-val--shared">
+                {fmt(allocatedShared)}
+                <span className="rv-exp-bd-full"> / {fmt(sharedFull)}</span>
+              </span>
+            </div>
+            <div className="rv-exp-breakdown-total">
+              <span>TỔNG CHI PHÍ THỰC TẾ</span>
+              <span className="rv-exp-bd-total-val">{fmt(effectiveTotalExp)}</span>
             </div>
           </div>
           {/* Alerts inline below donut */}
@@ -854,6 +884,52 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
         }
         @media (max-width:360px) {
           .rv-kpi { grid-template-columns:1fr; }
+        }
+
+        /* ── Expense breakdown ── */
+        .rv-exp-breakdown {
+          margin-top: 12px;
+          border: 1px solid rgba(163,45,45,.15);
+          border-radius: 10px;
+          overflow: hidden;
+          font-size: .8rem;
+        }
+        .rv-exp-breakdown-row {
+          display: flex; align-items: center; gap: 8px;
+          padding: 9px 14px;
+          border-bottom: 1px solid rgba(163,45,45,.08);
+          background: #fff;
+        }
+        .rv-exp-breakdown-row--shared {
+          background: rgba(26,58,107,.03);
+        }
+        .rv-exp-bd-icon  { font-size: .9rem; flex-shrink: 0; }
+        .rv-exp-bd-label {
+          flex: 1; color: #374151; display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+        }
+        .rv-exp-bd-badge {
+          font-size: .65rem; font-weight: 700; letter-spacing: .06em;
+          background: rgba(26,58,107,.1); color: #1A3A6B;
+          border-radius: 99px; padding: 2px 7px; white-space: nowrap;
+        }
+        .rv-exp-bd-val {
+          font-weight: 700; color: #A32D2D;
+          font-variant-numeric: tabular-nums; white-space: nowrap;
+        }
+        .rv-exp-bd-val--shared { color: #1A3A6B; }
+        .rv-exp-bd-full {
+          font-weight: 400; font-size: .72rem; color: #8A8F9A; margin-left: 4px;
+        }
+        .rv-exp-breakdown-total {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 10px 14px;
+          background: rgba(163,45,45,.06);
+          border-top: 1px solid rgba(163,45,45,.15);
+          font-size: .72rem; font-weight: 700; letter-spacing: .05em; color: #7A2020;
+        }
+        .rv-exp-bd-total-val {
+          font-size: .95rem; font-weight: 800;
+          color: #A32D2D; font-variant-numeric: tabular-nums;
         }
       `}</style>
     </div>
