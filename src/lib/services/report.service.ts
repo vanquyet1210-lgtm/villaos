@@ -63,7 +63,6 @@ export async function getOrInitCategories(villaId?: string): Promise<ReportCateg
     villa_id:     null,
     name:         c.name,
     type:         c.type,
-    scope:        c.scope,
     group_name:   c.groupName,
     icon:         c.icon,
     color:        c.color,
@@ -72,6 +71,8 @@ export async function getOrInitCategories(villaId?: string): Promise<ReportCateg
     fixed_amount: c.fixedAmount,
     sort_order:   i,
     is_active:    true,
+    // scope được thêm nếu cột tồn tại, nếu không DB sẽ bỏ qua
+    ...(c.scope ? { scope: c.scope } : {}),
   }));
 
   const { data: inserted } = await (sb as any)
@@ -396,12 +397,11 @@ export async function upsertCategory(data: {
   if (!session) return { error: 'Chưa đăng nhập' };
   const sb = await createSupabaseServerClient();
 
-  const row = {
+  const row: any = {
     owner_id:     session.profile.id,
     villa_id:     data.villaId ?? null,
     name:         data.name,
     type:         data.type,
-    scope:        data.scope ?? 'per_villa',
     group_name:   data.groupName ?? null,
     icon:         data.icon ?? '💰',
     color:        data.color ?? '#178a5e',
@@ -411,6 +411,8 @@ export async function upsertCategory(data: {
     sort_order:   data.sortOrder ?? 99,
     is_active:    true,
   };
+  // Thêm scope chỉ khi được cung cấp (tránh 400 nếu cột chưa tồn tại)
+  if (data.scope) row.scope = data.scope;
 
   const { error } = data.id
     ? await (sb as any).from('report_categories').update(row).eq('id', data.id)
