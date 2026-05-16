@@ -369,7 +369,17 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
       {/* ══ Chart — full width ═══════════════════════════════ */}
       <div className="rv-card rv-chart-card">
         <div className="rv-chart-hdr">
-          <span className="rv-title" style={{ marginBottom: 0 }}>📊 DOANH THU &amp; LỢI NHUẬN (6 THÁNG)</span>
+          <div className="rv-chart-hdr-top">
+            <span className="rv-title" style={{ marginBottom: 0 }}>📊 DOANH THU &amp; LỢI NHUẬN (6 THÁNG)</span>
+            <div className="rv-period-tabs">
+              {(['6', '12', 'ytd'] as const).map(p => (
+                <button key={p} className={`rv-period-btn${chartPeriod === p ? ' active' : ''}`}
+                  onClick={() => setChartPeriod(p)}>
+                  {p === '6' ? '6 tháng' : p === '12' ? '12 tháng' : 'Năm nay'}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="rv-chart-legend">
             {[
               { color: C.revenue, label: 'Doanh thu', dash: false },
@@ -384,14 +394,6 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
                 </svg>
                 {l.label}
               </span>
-            ))}
-          </div>
-          <div className="rv-period-tabs">
-            {(['6', '12', 'ytd'] as const).map(p => (
-              <button key={p} className={`rv-period-btn${chartPeriod === p ? ' active' : ''}`}
-                onClick={() => setChartPeriod(p)}>
-                {p === '6' ? '6 tháng' : p === '12' ? '12 tháng' : 'Năm nay'}
-              </button>
             ))}
           </div>
         </div>
@@ -582,13 +584,13 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
         .leg-val { font-family:Georgia,serif; font-style:italic; font-size:.73rem; color:${C.navy}; flex-shrink:0; }
         .leg-pct { font-size:.63rem; color:${C.muted}; min-width:30px; flex-shrink:0; }
 
-        /* Chart */
         .rv-chart-card { display:flex; flex-direction:column; }
-        .rv-chart-hdr { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
-        .rv-chart-hdr .rv-title { margin-bottom:0; }
-        .rv-chart-legend { display:flex; gap:10px; flex-wrap:wrap; }
-        .rv-leg-item { display:flex; align-items:center; gap:4px; font-size:.67rem; color:${C.muted}; }
-        .rv-period-tabs { display:flex; gap:2px; background:rgba(28,43,74,.06); border-radius:6px; padding:2px; margin-left:auto; }
+        .rv-chart-hdr { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+        .rv-chart-hdr-top { display:flex; align-items:center; gap:10px; }
+        .rv-chart-hdr-top .rv-title { margin-bottom:0; flex:1; }
+        .rv-chart-legend { display:flex; gap:14px; flex-wrap:wrap; padding-left:2px; }
+        .rv-leg-item { display:flex; align-items:center; gap:5px; font-size:.72rem; color:${C.muted}; font-weight:500; }
+        .rv-period-tabs { display:flex; gap:2px; background:rgba(28,43,74,.06); border-radius:6px; padding:2px; margin-left:auto; flex-shrink:0; }
         .rv-period-btn {
           padding:4px 10px; border-radius:4px; border:none;
           background:transparent; font-size:.7rem; color:${C.muted}; cursor:pointer; transition:all .12s;

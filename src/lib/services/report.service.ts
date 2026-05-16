@@ -198,20 +198,28 @@ export async function getMonthlyReport(
     return { villaId: v.id, villaName: v.name, allocPct, allocAmount };
   });
 
-  // Biểu đồ 6 tháng
+  // Biểu đồ 6 tháng — expense phải dùng cùng logic: perVilla + allocatedShared
   const monthly6 = await Promise.all(
     Array.from({ length: 6 }, (_, i) => {
-      let m2 = month - 5 + i;
-      let y2 = year;
-      while (m2 < 1) { m2 += 12; y2--; }
-      return m2;
-    }).map(async (m2, i) => {
-      let y2 = year;
       let mm = month - 5 + i;
+      let y2 = year;
       while (mm < 1) { mm += 12; y2--; }
-      const rv = await Promise.all(cats.filter(c=>c.type==='revenue').map(c=>withAmount(c,y2,mm)));
-      const ex = await Promise.all(cats.filter(c=>c.type==='expense').map(c=>withAmount(c,y2,mm)));
-      const r = sum(rv as any), e = sum(ex as any);
+      return { mm, y2 };
+    }).map(async ({ mm, y2 }) => {
+      const rv     = await Promise.all(cats.filter(c => c.type === 'revenue').map(c => withAmount(c, y2, mm)));
+      const perV   = await Promise.all(perVillaCats.map(c => withAmount(c, y2, mm)));
+      const sharedM = await Promise.all(sharedCats.map(c => withAmount(c, y2, mm)));
+
+      const r           = sum(rv as any);
+      const perVExp     = sum(perV as any);
+      const sharedFull  = sum(sharedM as any);
+
+      // Per-villa allocated shared for this month (stored entries with villa_id=villaId)
+      const allocExp = villaId
+        ? sharedCats.reduce((s, c) => s + getEntry(c.id, y2, mm, villaId), 0)
+        : sharedFull;   // "Tất cả villa" — dùng toàn bộ
+
+      const e = perVExp + allocExp;
       return { label: `T${mm}/${y2.toString().slice(2)}`, revenue: r, expense: e, profit: r - e };
     })
   );

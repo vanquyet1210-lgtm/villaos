@@ -226,11 +226,20 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
     await onSave([
       ...manualRev.map(c => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
       ...pvExp.map(c     => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
+      // Shared nhập tay — lưu amount + allocPct
       ...sharedExp.map(c => ({
         categoryId: c.id,
         amount:     sharedAmts[c.id]??0,
         isShared:   true,
-        // Persist the allocation % for this villa so the report calculates correctly
+        allocPct:   currentVillaId
+          ? (villaAllocPcts[`${currentVillaId}_${c.id}`] ?? 0)
+          : undefined,
+      })),
+      // Shared tự động — giữ nguyên amount auto-calc, chỉ cần lưu allocPct
+      ...sharedAuto.map(c => ({
+        categoryId: c.id,
+        amount:     c.amount,
+        isShared:   true,
         allocPct:   currentVillaId
           ? (villaAllocPcts[`${currentVillaId}_${c.id}`] ?? 0)
           : undefined,
