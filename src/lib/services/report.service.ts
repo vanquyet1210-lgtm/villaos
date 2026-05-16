@@ -169,9 +169,8 @@ export async function getMonthlyReport(
   ]);
 
   const sum = (arr: ReportCategoryWithEntry[]) => arr.reduce((s, c) => s + c.amount, 0);
-  const totalRev  = sum(revItems);
-  const prevRev   = sum(prevRevItems);
-  const prevExp   = sum(prevExpItems);
+  const totalRev = sum(revItems);
+  const prevRev  = sum(prevRevItems);
 
   // ── Separate per-villa vs shared expenses ──────────────────────────────────
   const sharedCats   = cats.filter(c => c.type === 'expense' && c.scope === 'shared');
@@ -182,10 +181,18 @@ export async function getMonthlyReport(
   );
   const perVillaExpItems: ReportCategoryWithEntry[] = expItems.filter(c => c.scope !== 'shared');
 
-  const totalSharedFull  = sum(sharedExpItems);   // hệ thống tổng
+  const totalSharedFull  = sum(sharedExpItems);
   const totalPerVillaExp = sum(perVillaExpItems);
 
-  // ── allVillasSummary — query trước để biết nVillas ──────────────────────────
+  // ── Prev month shared (same split logic) ──────────────────────────────────
+  const prevSharedItems: ReportCategoryWithEntry[] = await Promise.all(
+    sharedCats.map(c => withAmount(c, prevYear, prevMonth))
+  );
+  const prevSharedFull   = sum(prevSharedItems);
+  const prevPerVillaItems = prevExpItems.filter(c => c.scope !== 'shared');
+  const prevPerVillaExp  = sum(prevPerVillaItems);
+
+  // ── allVillasSummary — query villas để tính nVillas và revenue ratio ────────
   const { data: villasData } = await (sb as any)
     .from('villas')
     .select('id, name, emoji')
@@ -193,53 +200,60 @@ export async function getMonthlyReport(
     .eq('is_active', true);
 
   const nVillas = (villasData ?? []).length || 1;
-
-  // Kiểm tra xem đã có entry phân bổ per-villa nào trong DB chưa
-  const totalStoredAlloc = (villasData ?? []).reduce((s: number, v: any) =>
-    s + sharedCats.reduce((ss, c) => ss + getEntry(c.id, year, month, v.id), 0), 0
-  );
-  // Nếu chưa có → dùng equal split làm mặc định
-  const useDefaultSplit = totalStoredAlloc === 0 && totalSharedFull > 0;
   const defaultAllocPct    = Math.round(100 / nVillas);
   const defaultAllocAmount = Math.round(totalSharedFull / nVillas);
 
-  // Per-villa allocated shared
-  let totalAllocatedShared = 0;
+  // ── Tính sharedAllocPct từ tỷ lệ doanh thu thực tế ──────────────────────
   let sharedAllocPct       = 0;
+  let totalAllocatedShared = 0;
+  let prevAllocatedShared  = 0;
 
-  if (villaId) {
-    totalAllocatedShared = sharedCats.reduce(
-      (s, c) => s + getEntry(c.id, year, month, villaId), 0
+  if (villaId && villasData && villasData.length > 0) {
+    // Lấy doanh thu toàn hệ thống để tính tỷ lệ phân bổ
+    const from2  = `${year}-${String(month).padStart(2,'0')}-01`;
+    const to2    = new Date(year, month, 0).toISOString().slice(0,10);
+    const ACTIVE = ['confirmed', 'hold', 'checked_in', 'completed'];
+
+    const villaRevs = await Promise.all(
+      (villasData as any[]).map(async (v: any) => {
+        const { data: bks } = await (sb as any)
+          .from('bookings').select('total')
+          .eq('villa_id', v.id).in('status', ACTIVE)
+          .gte('checkin', from2).lte('checkin', to2);
+        return { id: v.id, rev: (bks ?? []).reduce((s: number, b: any) => s + (b.total ?? 0), 0) };
+      })
     );
-    // Fallback: nếu chưa lưu → equal split
-    if (useDefaultSplit) {
-      totalAllocatedShared = defaultAllocAmount;
-      sharedAllocPct       = defaultAllocPct;
-    } else {
-      sharedAllocPct = totalSharedFull > 0
-        ? Math.round(totalAllocatedShared / totalSharedFull * 100)
-        : 0;
-    }
-  } else {
-    // "Tất cả villa" — dùng toàn bộ shared
-    totalAllocatedShared = totalSharedFull;
+    const grandTotal = villaRevs.reduce((s, v) => s + v.rev, 0);
+    const thisVillaRev = villaRevs.find(v => v.id === villaId)?.rev ?? totalRev;
+
+    sharedAllocPct = grandTotal > 0
+      ? Math.round((thisVillaRev / grandTotal) * 100)
+      : defaultAllocPct;
+
+    totalAllocatedShared = Math.round(totalSharedFull * sharedAllocPct / 100);
+    prevAllocatedShared  = Math.round(prevSharedFull  * sharedAllocPct / 100);
+  } else if (!villaId) {
+    // "Tất cả villa" — 100%
     sharedAllocPct       = 100;
+    totalAllocatedShared = totalSharedFull;
+    prevAllocatedShared  = prevSharedFull;
   }
 
   const totalExp  = totalPerVillaExp + totalAllocatedShared;
   const netProfit = totalRev - totalExp;
+  // Bug 2 fix: prevExp dùng đúng allocated portion
+  const prevExp   = prevPerVillaExp + prevAllocatedShared;
 
-  const allVillasSummary = (villasData ?? []).map((v: any) => {
-    const storedAmount = sharedCats.reduce(
-      (s, c) => s + getEntry(c.id, year, month, v.id), 0
-    );
-    const allocAmount = useDefaultSplit ? defaultAllocAmount : storedAmount;
-    const allocPct    = useDefaultSplit ? defaultAllocPct
-      : (totalSharedFull > 0 ? Math.round(allocAmount / totalSharedFull * 100) : 0);
-    return { villaId: v.id, villaName: v.name, allocPct, allocAmount };
-  });
+  const allVillasSummary = (villasData ?? []).map((v: any) => ({
+    villaId:   v.id,
+    villaName: v.name,
+    emoji:     v.emoji ?? '🏠',
+    allocPct:  defaultAllocPct,
+    totalRevenue: 0, totalExpense: 0, netProfit: 0,
+    perVillaExpense: 0, sharedAlloc: 0, occupancyRate: 0,
+  }));
 
-  // Biểu đồ 6 tháng — expense phải dùng cùng logic: perVilla + allocatedShared
+  // Bug 3 fix: monthly6 dùng sharedAllocPct + fallback equal split
   const monthly6 = await Promise.all(
     Array.from({ length: 6 }, (_, i) => {
       let mm = month - 5 + i;
@@ -251,14 +265,14 @@ export async function getMonthlyReport(
       const perV   = await Promise.all(perVillaCats.map(c => withAmount(c, y2, mm)));
       const sharedM = await Promise.all(sharedCats.map(c => withAmount(c, y2, mm)));
 
-      const r           = sum(rv as any);
-      const perVExp     = sum(perV as any);
-      const sharedFull  = sum(sharedM as any);
+      const r          = sum(rv as any);
+      const perVExp    = sum(perV as any);
+      const sharedFull = sum(sharedM as any);
 
-      // Per-villa allocated shared for this month (stored entries with villa_id=villaId)
+      // Bug 3 fix: dùng sharedAllocPct (tỷ lệ doanh thu) thay vì stored entries
       const allocExp = villaId
-        ? sharedCats.reduce((s, c) => s + getEntry(c.id, y2, mm, villaId), 0)
-        : sharedFull;   // "Tất cả villa" — dùng toàn bộ
+        ? Math.round(sharedFull * sharedAllocPct / 100)
+        : sharedFull;
 
       const e = perVExp + allocExp;
       return { label: `T${mm}/${y2.toString().slice(2)}`, revenue: r, expense: e, profit: r - e };
@@ -273,7 +287,7 @@ export async function getMonthlyReport(
     totalExpense:      totalExp,           // villa + allocated shared (đúng)
     netProfit,
     prevMonthRevenue:  prevRev,
-    prevMonthExpense:  prevExp,
+    prevMonthExpense:  prevExp,   // Bug 2 fixed: perVilla + allocatedShared (không cộng full 105tr)
     prevMonthProfit:   prevRev - prevExp,
     monthly6,
 
