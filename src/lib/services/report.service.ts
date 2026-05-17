@@ -281,13 +281,16 @@ export async function getMonthlyReport(
     })
   );
 
-  // ── Đọc alloc entries đã lưu per-villa để restore % vào EntryForm ──────────
-  // Alloc entries có villa_id = villaId và note bắt đầu bằng "alloc:"
+  // ── Đọc alloc entries cho TẤT CẢ villas để EntryForm restore % đúng ────────
+  // Key: `${catId}_${villaId}` → amount đã phân bổ
+  // Sau đó EntryForm tính: pct = allocAmt / fullAmt * 100
   const sharedAllocAmtByVilla: Record<string, number> = {};
-  if (villaId && sharedCats.length > 0) {
+  if (sharedCats.length > 0 && villasData && villasData.length > 0) {
     sharedCats.forEach(c => {
-      const allocAmt = getEntry(c.id, year, month, villaId);
-      if (allocAmt > 0) sharedAllocAmtByVilla[c.id] = allocAmt;
+      (villasData as any[]).forEach((v: any) => {
+        const allocAmt = getEntry(c.id, year, month, v.id);
+        if (allocAmt > 0) sharedAllocAmtByVilla[`${c.id}_${v.id}`] = allocAmt;
+      });
     });
   }
 

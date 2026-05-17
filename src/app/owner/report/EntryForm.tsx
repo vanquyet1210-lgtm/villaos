@@ -5,11 +5,12 @@ import { useState } from 'react';
 import type { MonthlyReport, ReportCategoryWithEntry } from '@/types/report';
 
 export interface SaveEntry {
-  categoryId: string;
-  amount:     number;
-  note?:      string;
-  isShared?:  boolean;
-  allocPct?:  number;   // per-villa allocation % for shared categories
+  categoryId:         string;
+  amount:             number;
+  note?:              string;
+  isShared?:          boolean;
+  allocPct?:          number;                      // % phân bổ cho villa đang xem
+  allVillaAllocPcts?: Record<string, number>;      // % phân bổ tất cả villas: {villaId: pct}
 }
 
 interface Props {
@@ -161,38 +162,49 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
     ...(report.sharedExpenses ?? []).filter(c => !c.isAuto),
   ];
   const initVillaAllocPcts = () => {
+    // sharedAllocAmtByVilla key = `${catId}_${villaId}`
     const savedAmts  = report.sharedAllocAmtByVilla ?? {};
     const equalSplit = villas.length > 0 ? Math.round(100 / villas.length) : 0;
     const m: Record<string, number> = {};
 
-    villas.forEach(v => {
-      allSharedCats.forEach(cat => {
-        const fullAmt = (report.sharedExpenses ?? []).find(s => s.id === cat.id)?.amount ?? 0;
+    allSharedCats.forEach(cat => {
+      const fullAmt = (report.sharedExpenses ?? []).find(s => s.id === cat.id)?.amount ?? 0;
+      // Kiểm tra xem DB có alloc data cho category này không
+      const hasData = villas.some(v => (savedAmts[`${cat.id}_${v.id}`] ?? 0) > 0);
 
-        // Villa đang xem: đọc % từ alloc entries đã lưu trong DB
-        if (v.id === currentVillaId && savedAmts[cat.id] && fullAmt > 0) {
-          m[`${v.id}_${cat.id}`] = Math.round(savedAmts[cat.id] / fullAmt * 100);
+      villas.forEach(v => {
+        if (hasData && fullAmt > 0 && savedAmts[`${cat.id}_${v.id}`]) {
+          // Restore % từ DB: allocAmt / fullAmt * 100
+          m[`${v.id}_${cat.id}`] = Math.round(savedAmts[`${cat.id}_${v.id}`] / fullAmt * 100);
         } else {
-          // Villa khác hoặc chưa có dữ liệu → equal split
           m[`${v.id}_${cat.id}`] = equalSplit;
         }
       });
     });
     return m;
   };
+
   const [villaAllocPcts, setVAP] = useState<Record<string,number>>(initVillaAllocPcts);
-  // Each cell is independent — changing one does NOT affect others
+
   const setVillaPct = (villaId: string, catId: string, raw: number) => {
     const pct = Math.min(100, Math.max(0, raw));
     setVAP(p => ({ ...p, [`${villaId}_${catId}`]: pct }));
   };
-  // For display: show column total % as average across rows (informational only)
+
+  // Validate: mỗi ROW (category) tổng % các villa = 100%
+  const rowTotal = (catId: string) =>
+    villas.reduce((s, v) => s + (villaAllocPcts[`${v.id}_${catId}`] ?? 0), 0);
+
+  const allRowsOk = allSharedCats.every(c => rowTotal(c.id) === 100);
+
+  // Cho display bar: % của villa này theo từng row (dùng cat đầu tiên làm đại diện)
   const villaColPct = (villaId: string) => {
-    const vals = allSharedCats.map(c => villaAllocPcts[`${villaId}_${c.id}`] ?? 0);
-    return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0) / vals.length) : 0;
+    if (allSharedCats.length === 0) return 0;
+    return villaAllocPcts[`${villaId}_${allSharedCats[0].id}`] ?? 0;
   };
+
   const totalAllocPct = villas.reduce((s, v) => s + villaColPct(v.id), 0);
-  const allocOk = totalAllocPct === 100;
+  const allocOk = allRowsOk;
 
   const va = (id: string, v: number) => setVA(p => ({ ...p, [id]: v }));
   const sa = (id: string, v: number) => setSA(p => ({ ...p, [id]: v }));
@@ -228,26 +240,30 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
 
   const handleSave = async () => {
     setSaving(true);
+
+    const allSharedItems = [
+      ...sharedExp.map(c  => ({ categoryId:c.id, amount:sharedAmts[c.id]??0, isAuto:false })),
+      ...sharedAuto.map(c => ({ categoryId:c.id, amount:c.amount, isAuto:true })),
+    ];
+
     await onSave([
+      // Doanh thu nhập tay
       ...manualRev.map(c => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
-      ...pvExp.map(c     => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
-      // Shared nhập tay — lưu amount + allocPct
-      ...sharedExp.map(c => ({
-        categoryId: c.id,
-        amount:     sharedAmts[c.id]??0,
-        isShared:   true,
-        allocPct:   currentVillaId
-          ? (villaAllocPcts[`${currentVillaId}_${c.id}`] ?? 0)
-          : undefined,
-      })),
-      // Shared tự động — giữ nguyên amount auto-calc, chỉ cần lưu allocPct
-      ...sharedAuto.map(c => ({
+      // Chi phí riêng villa
+      ...pvExp.map(c => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
+      // Chi phí chung — lưu full amount (villa_id=null) + alloc cho TẤT CẢ villas
+      ...allSharedItems.map(c => ({
         categoryId: c.id,
         amount:     c.amount,
         isShared:   true,
-        allocPct:   currentVillaId
+        // allocPct cho villa đang xem (ReportShell sẽ dùng để lưu alloc entry)
+        allocPct: currentVillaId
           ? (villaAllocPcts[`${currentVillaId}_${c.id}`] ?? 0)
           : undefined,
+        // Truyền thêm allocPcts của tất cả villas để ReportShell lưu tất cả
+        allVillaAllocPcts: Object.fromEntries(
+          villas.map(v => [v.id, villaAllocPcts[`${v.id}_${c.id}`] ?? 0])
+        ),
       })),
     ]);
     setSaving(false); setSaved(true);
@@ -410,18 +426,15 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
         {/* % allocation validation bar */}
         <div className={`ef-alloc-bar${allocOk ? ' ef-alloc-bar--ok' : ' ef-alloc-bar--warn'}`}>
           <span className="ef-alloc-bar-label">
-            {allocOk ? '✅' : '⚠️'} Tổng % phân bổ:&nbsp;
-            <strong>{totalAllocPct}%</strong>
-            {!allocOk && (
-              <span className="ef-alloc-bar-hint">
-                &nbsp;— tổng các villa phải đúng 100%&nbsp;
-                ({totalAllocPct < 100 ? `thiếu ${100 - totalAllocPct}%` : `thừa ${totalAllocPct - 100}%`})
-              </span>
-            )}
+            {allocOk ? '✅' : '⚠️'}&nbsp;
+            {allocOk
+              ? 'Mỗi khoản chi phân bổ đúng 100%'
+              : <>Chưa đúng 100% tại: <strong>{allSharedCats.filter(c => rowTotal(c.id) !== 100).map(c => c.name).join(', ')}</strong></>
+            }
           </span>
           <div className="ef-alloc-bar-track">
             {allVillas.map((v, i) => {
-              const pct = villaAllocPcts[v.id] ?? 0;
+              const pct = villaColPct(v.id);
               const COLORS = ['#3B5998','#2D6A4F','#92400E','#6D28D9','#B91C1C'];
               return pct > 0 ? (
                 <div key={v.id} className="ef-alloc-bar-seg"
@@ -529,19 +542,27 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
                   );
                 })}
               </tr>
-              <tr className={`ef-mv-pct-total-row${allocOk ? ' ef-mv-pct-total-row--ok' : ' ef-mv-pct-total-row--warn'}`}>
-                <td colSpan={3} className="ef-mv-footer-lbl" style={{ fontSize:'.7rem', opacity:.8 }}>
-                  Kiểm tra tổng % phân bổ
-                </td>
-                {allVillas.map(v => (
-                  <>
-                    <td key={v.id+'a'}></td>
-                    <td key={v.id+'p'} className="ef-mv-pct-total-cell">
-                      ~{villaColPct(v.id)}%
+              {/* Per-row validation: each row's villa %s must sum to 100% */}
+              {allSharedCats.map(cat => {
+                const total = rowTotal(cat.id);
+                const ok = total === 100;
+                if (ok) return null;
+                return (
+                  <tr key={`warn-${cat.id}`} className="ef-mv-pct-total-row ef-mv-pct-total-row--warn">
+                    <td colSpan={3} className="ef-mv-footer-lbl" style={{ fontSize:'.68rem' }}>
+                      ⚠️ {cat.name}: tổng = {total}% (cần 100%)
                     </td>
-                  </>
-                ))}
-              </tr>
+                    {allVillas.map(v => (
+                      <>
+                        <td key={v.id+'a'}></td>
+                        <td key={v.id+'p'} className="ef-mv-pct-total-cell">
+                          {villaAllocPcts[`${v.id}_${cat.id}`] ?? 0}%
+                        </td>
+                      </>
+                    ))}
+                  </tr>
+                );
+              })}
             </tfoot>
           </table>
         </div>
