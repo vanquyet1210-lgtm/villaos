@@ -162,23 +162,17 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
     ...(report.sharedExpenses ?? []).filter(c => !c.isAuto),
   ];
   const initVillaAllocPcts = () => {
-    // sharedAllocAmtByVilla key = `${catId}_${villaId}`
-    const savedAmts  = report.sharedAllocAmtByVilla ?? {};
+    // Source of truth: sharedAllocPctByVilla[`${catId}_${villaId}`] = pct
+    // Được lưu từ note field "alloc:XX" — không tính ngược từ amount
+    const savedPcts  = report.sharedAllocPctByVilla ?? {};
     const equalSplit = villas.length > 0 ? Math.round(100 / villas.length) : 0;
     const m: Record<string, number> = {};
 
     allSharedCats.forEach(cat => {
-      const fullAmt = (report.sharedExpenses ?? []).find(s => s.id === cat.id)?.amount ?? 0;
-      // Kiểm tra xem DB có alloc data cho category này không
-      const hasData = villas.some(v => (savedAmts[`${cat.id}_${v.id}`] ?? 0) > 0);
-
       villas.forEach(v => {
-        if (hasData && fullAmt > 0 && savedAmts[`${cat.id}_${v.id}`]) {
-          // Restore % từ DB: allocAmt / fullAmt * 100
-          m[`${v.id}_${cat.id}`] = Math.round(savedAmts[`${cat.id}_${v.id}`] / fullAmt * 100);
-        } else {
-          m[`${v.id}_${cat.id}`] = equalSplit;
-        }
+        // Đọc % trực tiếp — không math, không round, không lệch
+        const saved = savedPcts[`${cat.id}_${v.id}`];
+        m[`${v.id}_${cat.id}`] = saved != null ? saved : equalSplit;
       });
     });
     return m;
