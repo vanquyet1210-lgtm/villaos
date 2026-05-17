@@ -203,12 +203,12 @@ export async function getMonthlyReport(
   const prevPerVillaItems = prevExpItems.filter(c => c.scope !== 'shared');
   const prevPerVillaExp  = sum(prevPerVillaItems);
 
-  // ── allVillasSummary — query villas để tính nVillas và revenue ratio ────────
+  // ── Query villas — dùng đúng field 'status' thay vì 'is_active' ──────────
   const { data: villasData } = await (sb as any)
     .from('villas')
     .select('id, name, emoji')
     .eq('owner_id', oid)
-    .eq('is_active', true);
+    .eq('status', 'active');   // ← FIX: villas dùng status='active', không có is_active
 
   const nVillas = (villasData ?? []).length || 1;
   const defaultAllocPct    = Math.round(100 / nVillas);
