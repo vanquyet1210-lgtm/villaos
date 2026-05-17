@@ -290,6 +290,8 @@ export async function getMonthlyReport(
       if (allocAmt > 0) sharedAllocAmtByVilla[c.id] = allocAmt;
     });
   }
+
+  const allVillasSummary = (villasData ?? []).map((v: any) => ({
     villaId:         v.id,
     villaName:       v.name,
     emoji:           v.emoji ?? '🏠',
