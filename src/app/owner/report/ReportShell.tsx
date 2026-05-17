@@ -122,16 +122,24 @@ export default function ReportShell({
           villas={villas}
           currentVillaId={villaId}
           onSave={async (entries: SaveEntry[]) => {
-            await Promise.all(
-              entries.map(e =>
-                upsertReportEntry(
-                  e.categoryId,
-                  e.isShared ? null : villaId,
-                  year, month, e.amount, e.note,
-                  e.isShared ? { villaId: villaId ?? undefined, allocPct: e.allocPct } : undefined,
-                ),
-              ),
-            );
+            const saves: Promise<any>[] = [];
+
+            entries.forEach(e => {
+              if (e.isShared) {
+                // 1. Lưu full amount với villa_id = null (tổng toàn hệ thống)
+                saves.push(upsertReportEntry(e.categoryId, null, year, month, e.amount, e.note));
+                // 2. Lưu allocated amount với villa_id = currentVillaId
+                //    Service đọc entry này để tính sharedAllocPct
+                if (villaId && e.allocPct != null && e.allocPct > 0) {
+                  const allocAmt = Math.round(e.amount * e.allocPct / 100);
+                  saves.push(upsertReportEntry(e.categoryId, villaId, year, month, allocAmt, `alloc:${e.allocPct}`));
+                }
+              } else {
+                saves.push(upsertReportEntry(e.categoryId, villaId, year, month, e.amount, e.note));
+              }
+            });
+
+            await Promise.all(saves);
             loadReport(year, month, villaId);
             setTab('report');
           }}
