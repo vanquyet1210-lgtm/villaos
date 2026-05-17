@@ -161,16 +161,25 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
     ...(report.sharedExpenses ?? []).filter(c => !c.isAuto),
   ];
   const initVillaAllocPcts = () => {
-    const summary = report.allVillasSummary ?? [];
-    const defaultPct = (villaId: string) => {
-      const s = summary.find(x => x.villaId === villaId);
+    const summary    = report.allVillasSummary    ?? [];
+    const savedAmts  = report.sharedAllocAmtByVilla ?? {}; // per-cat saved alloc from DB
+    const defaultPct = (vid: string) => {
+      const s = summary.find(x => x.villaId === vid);
       if (s) return s.allocPct ?? 0;
       return villas.length > 0 ? Math.round(100 / villas.length) : 0;
     };
     const m: Record<string, number> = {};
     villas.forEach(v => {
-      allSharedCats.forEach(c => {
-        m[`${v.id}_${c.id}`] = defaultPct(v.id);
+      allSharedCats.forEach(cat => {
+        // Ưu tiên: saved alloc record từ DB → tránh mismatch với ReportView
+        if (v.id === currentVillaId && savedAmts[cat.id]) {
+          const fullAmt = (report.sharedExpenses ?? []).find(s => s.id === cat.id)?.amount ?? 0;
+          m[`${v.id}_${cat.id}`] = fullAmt > 0
+            ? Math.round(savedAmts[cat.id] / fullAmt * 100)
+            : defaultPct(v.id);
+        } else {
+          m[`${v.id}_${cat.id}`] = defaultPct(v.id);
+        }
       });
     });
     return m;

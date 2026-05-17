@@ -278,9 +278,38 @@ export async function getMonthlyReport(
     prevAllocatedShared  = prevSharedFull;
   }
 
+  // ── OVERRIDE: nếu user đã lưu alloc records → dùng thay vì tính từ revenue ratio ──
+  // Lý do: nVillas=1 → sharedAllocPct=100% nhưng user có thể set 33% thực tế
+  if (villaId) {
+    const savedAlloc = sharedCats.reduce(
+      (s, cat) => s + (entryMap.get(`${cat.id}:${year}:${month}:${villaId}`) ?? 0), 0
+    );
+    if (savedAlloc > 0) {
+      totalAllocatedShared = savedAlloc;
+      sharedAllocPct = totalSharedFull > 0
+        ? Math.round(savedAlloc / totalSharedFull * 100)
+        : sharedAllocPct;
+    }
+    const savedPrevAlloc = sharedCats.reduce(
+      (s, cat) => s + (entryMap.get(`${cat.id}:${prevYear}:${prevMonth}:${villaId}`) ?? 0), 0
+    );
+    if (savedPrevAlloc > 0) {
+      prevAllocatedShared = savedPrevAlloc;
+    }
+  }
+
+  // ── Per-cat alloc amounts for current villa (để EntryForm init đúng %) ──
+  const sharedAllocAmtByVilla: Record<string, number> = {};
+  if (villaId) {
+    sharedCats.forEach(cat => {
+      const saved = entryMap.get(`${cat.id}:${year}:${month}:${villaId}`) ?? 0;
+      if (saved > 0) sharedAllocAmtByVilla[cat.id] = saved;
+    });
+  }
+
   const totalExp  = totalPerVillaExp + totalAllocatedShared;
   const netProfit = totalRev - totalExp;
-  const prevExp   = prevPerVillaExp + prevAllocatedShared;  // Bug 2 fix
+  const prevExp   = prevPerVillaExp + prevAllocatedShared;
   const prevProfit = prevRev - prevExp;
 
   // ── allVillasSummary ──────────────────────────────────────────
@@ -312,8 +341,14 @@ export async function getMonthlyReport(
       const perVExp    = sum(perV as any);
       const sharedFull = sum(sharedM as any);
 
-      // Dùng sharedAllocPct của tháng hiện tại làm proxy cho các tháng trong chart
-      const allocExp = villaId ? Math.round(sharedFull * sharedAllocPct / 100) : sharedFull;
+      // Ưu tiên alloc records đã lưu cho từng tháng, fallback về sharedAllocPct
+      const savedMonthAlloc = villaId
+        ? sharedCats.reduce((s, cat) =>
+            s + (entryMap.get(`${cat.id}:${y2}:${mm}:${villaId}`) ?? 0), 0)
+        : 0;
+      const allocExp = villaId
+        ? (savedMonthAlloc > 0 ? savedMonthAlloc : Math.round(sharedFull * sharedAllocPct / 100))
+        : sharedFull;
       const e = perVExp + allocExp;
       return { label: `T${mm}/${y2.toString().slice(2)}`, revenue: r, expense: e, profit: r - e };
     })
@@ -334,6 +369,7 @@ export async function getMonthlyReport(
     sharedExpenses:     sharedExpItems,
     totalSharedExpense: totalSharedFull,
     sharedAllocPct,
+    sharedAllocAmtByVilla,  // per-cat saved alloc amounts for currentVilla
 
     allVillasSummary,
 

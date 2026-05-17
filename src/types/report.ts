@@ -117,6 +117,7 @@ export interface MonthlyReport {
   sharedExpenses:     ReportCategoryWithEntry[];  // full shared amounts (before alloc)
   totalSharedExpense: number;                     // full shared total
   sharedAllocPct:     number;                     // allocation % for this villa (0–100)
+  sharedAllocAmtByVilla: Record<string, number>;  // catId → saved alloc amt for current villa
 
   // Hướng 2: All-villas summary (populated when villaId = null)
   allVillasSummary: VillaSummary[];
