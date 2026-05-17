@@ -242,27 +242,22 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
     setSaving(true);
 
     const allSharedItems = [
-      ...sharedExp.map(c  => ({ categoryId:c.id, amount:sharedAmts[c.id]??0, isAuto:false })),
-      ...sharedAuto.map(c => ({ categoryId:c.id, amount:c.amount, isAuto:true })),
+      ...sharedExp.map(c  => ({ categoryId: c.id, amount: sharedAmts[c.id]??0, isAuto: false })),
+      ...sharedAuto.map(c => ({ categoryId: c.id, amount: c.amount,             isAuto: true  })),
     ];
 
     await onSave([
-      // Doanh thu nhập tay
-      ...manualRev.map(c => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
-      // Chi phí riêng villa
-      ...pvExp.map(c => ({ categoryId:c.id, amount:villaAmts[c.id]??0 })),
-      // Chi phí chung — lưu full amount (villa_id=null) + alloc cho TẤT CẢ villas
+      ...manualRev.map(c => ({ categoryId: c.id, amount: villaAmts[c.id]??0 })),
+      ...pvExp.map(c     => ({ categoryId: c.id, amount: villaAmts[c.id]??0 })),
       ...allSharedItems.map(c => ({
-        categoryId: c.id,
+        categoryId: c.categoryId,
         amount:     c.amount,
         isShared:   true,
-        // allocPct cho villa đang xem (ReportShell sẽ dùng để lưu alloc entry)
         allocPct: currentVillaId
-          ? (villaAllocPcts[`${currentVillaId}_${c.id}`] ?? 0)
+          ? (villaAllocPcts[`${currentVillaId}_${c.categoryId}`] ?? 0)
           : undefined,
-        // Truyền thêm allocPcts của tất cả villas để ReportShell lưu tất cả
         allVillaAllocPcts: Object.fromEntries(
-          villas.map(v => [v.id, villaAllocPcts[`${v.id}_${c.id}`] ?? 0])
+          villas.map(v => [v.id, villaAllocPcts[`${v.id}_${c.categoryId}`] ?? 0])
         ),
       })),
     ]);
