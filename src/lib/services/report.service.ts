@@ -281,7 +281,15 @@ export async function getMonthlyReport(
     })
   );
 
-  const allVillasSummary = (villasData ?? []).map((v: any) => ({
+  // ── Đọc alloc entries đã lưu per-villa để restore % vào EntryForm ──────────
+  // Alloc entries có villa_id = villaId và note bắt đầu bằng "alloc:"
+  const sharedAllocAmtByVilla: Record<string, number> = {};
+  if (villaId && sharedCats.length > 0) {
+    sharedCats.forEach(c => {
+      const allocAmt = getEntry(c.id, year, month, villaId);
+      if (allocAmt > 0) sharedAllocAmtByVilla[c.id] = allocAmt;
+    });
+  }
     villaId:         v.id,
     villaName:       v.name,
     emoji:           v.emoji ?? '🏠',
@@ -308,7 +316,7 @@ export async function getMonthlyReport(
     sharedExpenses:     sharedExpItems,
     totalSharedExpense: totalSharedFull,
     sharedAllocPct,
-    sharedAllocAmtByVilla: {},
+    sharedAllocAmtByVilla,  // per-cat alloc amount từ DB để EntryForm restore %
     allVillasSummary,
     cashflowReceived:  Math.round(totalRev * 0.86),
     cashflowPending:   Math.round(totalRev * 0.14),
