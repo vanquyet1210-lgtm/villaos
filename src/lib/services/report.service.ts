@@ -228,9 +228,29 @@ export async function getMonthlyReport(
   const prevSharedFull   = sum(prevSharedItems);
   const prevPerVillaExp  = sum(prevPerVillaItems);
 
+  // ── Đọc % phân bổ từ note field TRƯỚC khi tính sharedAllocPct ────────────
+  const sharedAllocPctByVilla: Record<string, number> = {};
+  if (sharedCats.length > 0 && villasData && villasData.length > 0) {
+    const sharedCatIds = sharedCats.map(c => c.id);
+    const villaIds     = (villasData as any[]).map((v: any) => v.id);
+    const { data: allocEntries } = await (sb as any)
+      .from('report_entries')
+      .select('category_id, villa_id, note')
+      .eq('owner_id', oid)
+      .eq('year', year)
+      .eq('month', month)
+      .in('category_id', sharedCatIds)
+      .in('villa_id', villaIds);
+    (allocEntries ?? []).forEach((e: any) => {
+      if (typeof e.note === 'string' && e.note.startsWith('alloc:')) {
+        const pct = parseInt(e.note.replace('alloc:', ''), 10);
+        if (!isNaN(pct)) sharedAllocPctByVilla[`${e.category_id}_${e.villa_id}`] = pct;
+      }
+    });
+  }
+
   // ── Tỷ lệ phân bổ chi phí chung ─────────────────────────────
   // Source of truth: note field "alloc:XX" → đọc qua sharedAllocPctByVilla
-  // Không tính ngược từ amount để tránh rounding errors
   let sharedAllocPct       = 0;
   let totalAllocatedShared = 0;
   let prevAllocatedShared  = 0;
@@ -240,16 +260,12 @@ export async function getMonthlyReport(
     totalAllocatedShared = totalSharedFull;
     prevAllocatedShared  = prevSharedFull;
   } else {
-    // Đọc % từ note field của 1 shared cat bất kỳ (tất cả cùng %)
-    // Key của sharedAllocPctByVilla: `${catId}_${villaId}`
     const anyPct = sharedCats.length > 0
       ? sharedAllocPctByVilla[`${sharedCats[0].id}_${villaId}`]
       : undefined;
-
     sharedAllocPct = anyPct != null
       ? anyPct
       : (nVillas === 1 ? 100 : defaultAllocPct);
-
     totalAllocatedShared = Math.round(totalSharedFull * sharedAllocPct / 100);
     prevAllocatedShared  = Math.round(prevSharedFull  * sharedAllocPct / 100);
   }
@@ -281,34 +297,6 @@ export async function getMonthlyReport(
       return { label: `T${mm}/${y2.toString().slice(2)}`, revenue: r, expense: e, profit: r - e };
     })
   );
-
-  // ── Đọc % phân bổ từ note field của alloc entries ───────────────────────────
-  // Source of truth: note = "alloc:33" → pct = 33
-  // Key: `${catId}_${villaId}` → pct
-  const sharedAllocPctByVilla: Record<string, number> = {};
-  if (sharedCats.length > 0 && villasData && villasData.length > 0) {
-    // Lấy tất cả alloc entries 1 lần (tránh N+1 queries)
-    const sharedCatIds = sharedCats.map(c => c.id);
-    const villaIds     = (villasData as any[]).map((v: any) => v.id);
-
-    const { data: allocEntries } = await (sb as any)
-      .from('report_entries')
-      .select('category_id, villa_id, note')
-      .eq('owner_id', oid)
-      .eq('year', year)
-      .eq('month', month)
-      .in('category_id', sharedCatIds)
-      .in('villa_id', villaIds);
-
-    (allocEntries ?? []).forEach((e: any) => {
-      if (typeof e.note === 'string' && e.note.startsWith('alloc:')) {
-        const pct = parseInt(e.note.replace('alloc:', ''), 10);
-        if (!isNaN(pct)) {
-          sharedAllocPctByVilla[`${e.category_id}_${e.villa_id}`] = pct;
-        }
-      }
-    });
-  }
 
   const allVillasSummary = (villasData ?? []).map((v: any) => ({
     villaId:         v.id,
