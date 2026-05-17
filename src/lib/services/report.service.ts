@@ -346,25 +346,28 @@ export async function getMonthlyReport(
 export async function upsertReportEntry(
   categoryId: string, villaId: string | null,
   year: number, month: number, amount: number, note?: string,
-  alloc?: { villaId?: string; allocPct?: number },
 ): Promise<{ error?: string }> {
   const session = await getServerSession();
   if (!session) return { error: 'Chưa đăng nhập' };
   const sb  = await createSupabaseServerClient();
   const oid = session.profile.id;
 
-  // Auto-detect scope: shared categories must always be saved with villa_id=null
-  // This fixes cases where caller passes villaId for a shared category
-  const { data: catMeta } = await (sb as any)
-    .from('report_categories')
-    .select('scope')
-    .eq('id', categoryId)
-    .single();
+  // Nếu note bắt đầu bằng "alloc:" → đây là alloc entry, lưu với villa_id như được truyền vào
+  // Không được override villa_id vì alloc entry CẦN có villa_id cụ thể để service đọc lại
+  const isAllocEntry = typeof note === 'string' && note.startsWith('alloc:');
 
-  const isSharedCat  = catMeta?.scope === 'shared';
-  const correctVillaId = isSharedCat ? null : villaId;
+  let correctVillaId = villaId;
+  if (!isAllocEntry) {
+    // Entry bình thường: shared category → luôn lưu với villa_id=null
+    const { data: catMeta } = await (sb as any)
+      .from('report_categories')
+      .select('scope')
+      .eq('id', categoryId)
+      .single();
+    const isSharedCat = catMeta?.scope === 'shared';
+    correctVillaId = isSharedCat ? null : villaId;
+  }
 
-  // 1. Lưu entry chính (shared → villa_id=null, per-villa → villa_id cụ thể)
   const { error } = await (sb as any).from('report_entries').upsert({
     category_id: categoryId,
     villa_id:    correctVillaId,
@@ -374,36 +377,7 @@ export async function upsertReportEntry(
     updated_at:  new Date().toISOString(),
   }, { onConflict: 'category_id,villa_id,year,month' });
 
-  if (error) return { error: error.message };
-
-  // 1b. Clean up stale entry saved with wrong villa_id (migration safety)
-  if (isSharedCat && villaId && villaId !== correctVillaId) {
-    // Delete the entry that was wrongly saved with this villa_id
-    await (sb as any).from('report_entries').delete()
-      .eq('category_id', categoryId)
-      .eq('villa_id', villaId)
-      .eq('owner_id', oid)
-      .eq('year', year)
-      .eq('month', month);
-  }
-
-  // 2. Nếu là shared cat + có alloc → lưu thêm record phân bổ cho villa đó
-  //    Key: (category_id, alloc.villaId, year, month) — tách biệt với record tổng (villa_id=null)
-  if (alloc?.villaId && alloc.allocPct !== undefined) {
-    const allocAmount = Math.round(amount * alloc.allocPct / 100);
-    const { error: e2 } = await (sb as any).from('report_entries').upsert({
-      category_id: categoryId,
-      villa_id:    alloc.villaId,
-      owner_id:    oid,
-      year, month,
-      amount:      allocAmount,
-      note:        `alloc:${alloc.allocPct}%`,
-      updated_at:  new Date().toISOString(),
-    }, { onConflict: 'category_id,villa_id,year,month' });
-    if (e2) return { error: e2.message };
-  }
-
-  return {};
+  return error ? { error: error.message } : {};
 }
 
 // ── Tạo / cập nhật category ───────────────────────────────────
