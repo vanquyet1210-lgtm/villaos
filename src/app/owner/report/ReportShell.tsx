@@ -2,15 +2,25 @@
 // VillaOS v7 — app/owner/report/ReportShell.tsx
 
 import { useState, useTransition } from 'react';
-import type { MonthlyReport }      from '@/types/report';
-import { getMonthlyReport, upsertReportEntry, deleteSharedAllocEntries } from '@/lib/services/report.service';
+import type { MonthlyReport }      from '@/lib/services/report.service';
+import { getMonthlyReport, saveEntries } from '@/lib/services/report.service';
 import ReportView    from './ReportView';
-import EntryForm, { type SaveEntry } from './EntryForm';
+import EntryForm     from './EntryForm';
 import CategorySetup from './CategorySetup';
 
+// ── FormState — cấu trúc state nội bộ của EntryForm ──────────
+export type FormState = {
+  perVilla: Record<number, Record<number, number>>;   // [catId][villaId] = amount
+  shared:   Record<number, {
+    amount: number;
+    alloc:  Record<number, number>;   // [villaId] = pct
+    note?:  string;
+  }>;
+};
+
 interface Props {
-  villas:         { id: string; name: string; emoji: string }[];
-  initialVillaId: string | null;
+  villas:         { id: number; name: string; emoji: string }[];
+  initialVillaId: number | null;
   initialYear:    number;
   initialMonth:   number;
   initialReport:  MonthlyReport | null;
@@ -32,24 +42,57 @@ export default function ReportShell({
   const [isPending, start]    = useTransition();
   const [formKey,   setFormKey] = useState(0);
 
-  const loadReport = (y: number, m: number, vid: string | null): Promise<void> => {
-    return new Promise(resolve => {
+  // ── Load report ──────────────────────────────────────────
+  const loadReport = (y: number, m: number, vid: number | null): Promise<void> =>
+    new Promise(resolve => {
       start(async () => {
         const r = await getMonthlyReport(y, m, vid ?? undefined);
         setReport(r);
         resolve();
       });
     });
-  };
 
   const changeMonth = (d: number) => {
     let m = month + d;
     let y = year;
     if (m > 12) { m = 1;  y++; }
     if (m < 1)  { m = 12; y--; }
-    setYear(y);
-    setMonth(m);
+    setYear(y); setMonth(m);
     loadReport(y, m, villaId);
+  };
+
+  // ── Submit từ EntryForm ──────────────────────────────────
+  // EntryForm chỉ cần gọi hàm này với FormState — không cần biết gì về DB
+  const handleSave = async (state: FormState) => {
+    const entries = [
+      // Per-villa entries
+      ...Object.entries(state.perVilla).flatMap(([catId, villaAmounts]) =>
+        Object.entries(villaAmounts).map(([vid, amount]) => ({
+          category_id: Number(catId),
+          scope:       'per_villa' as const,
+          villa_id:    Number(vid),
+          amount,
+        }))
+      ),
+      // Shared entries
+      ...Object.entries(state.shared).map(([catId, { amount, alloc, note }]) => ({
+        category_id: Number(catId),
+        scope:       'shared' as const,
+        amount,
+        alloc,
+        note,
+      })),
+    ];
+
+    const { error } = await saveEntries(year, month, entries);
+    if (error) {
+      alert(`Lỗi khi lưu: ${error}`);
+      return;
+    }
+
+    await loadReport(year, month, villaId);
+    setFormKey(k => k + 1);
+    setTab('report');
   };
 
   return (
@@ -62,7 +105,7 @@ export default function ReportShell({
               className="report-villa-select"
               value={villaId ?? ''}
               onChange={e => {
-                const v = e.target.value || null;
+                const v = e.target.value ? Number(e.target.value) : null;
                 setVillaId(v);
                 loadReport(year, month, v);
               }}
@@ -96,19 +139,18 @@ export default function ReportShell({
 
       {isPending && <div className="report-loading">Đang tải...</div>}
 
-      {/* ── Content ── */}
-
-      {/* Report tab */}
+      {/* ── Report tab ── */}
       {tab === 'report' && report && !isPending && (
         <ReportView
           report={report}
           currentVillaId={villaId}
           onSaveSharedEntry={async (categoryId, amount, note) => {
-            await upsertReportEntry(categoryId, null, year, month, amount, note ?? undefined);
-            loadReport(year, month, villaId);
-          }}
-          onSaveAllocPct={async (_pct) => {
-            // wire to your allocPct persistence layer here
+            await saveEntries(year, month, [{
+              category_id: categoryId,
+              scope:       'shared',
+              amount,
+              note,
+            }]);
             loadReport(year, month, villaId);
           }}
         />
@@ -117,63 +159,14 @@ export default function ReportShell({
         <div className="report-empty">Chưa có dữ liệu tháng này.</div>
       )}
 
-      {/* Entry tab */}
+      {/* ── Entry tab ── */}
       {tab === 'entry' && report && !isPending && (
         <EntryForm
           key={formKey}
           report={report}
           villas={villas}
           currentVillaId={villaId}
-          onSave={async (entries: SaveEntry[]) => {
-            const sharedEntries    = entries.filter(e => e.isShared);
-            const perVillaEntries  = entries.filter(e => !e.isShared);
-
-            // ── BƯỚC 1: Xóa alloc entries cũ TRƯỚC khi lưu mới ──────────
-            // Tránh stale data làm average bị sai khi đọc lại
-            const sharedCatIds = [...new Set(sharedEntries.map(e => e.categoryId))];
-            const allVillaIds  = villas.map(v => v.id);
-            if (sharedCatIds.length > 0 && allVillaIds.length > 0) {
-              await deleteSharedAllocEntries(sharedCatIds, allVillaIds, year, month);
-            }
-
-            // ── BƯỚC 2: Lưu toàn bộ ─────────────────────────────────────
-            const saves: Promise<any>[] = [];
-
-            // Per-villa entries (Điện, Nước, Agoda...)
-            perVillaEntries.forEach(e => {
-              saves.push(upsertReportEntry(e.categoryId, villaId, year, month, e.amount, e.note));
-            });
-
-            // Shared entries: 1 entry null (tổng) + 1 entry mỗi villa (alloc_pct)
-            sharedEntries.forEach(e => {
-              // Tổng hệ thống
-              saves.push(upsertReportEntry(e.categoryId, null, year, month, e.amount, e.note));
-
-              // Alloc cho từng villa với % độc lập
-              if (e.allVillaAllocPcts) {
-                Object.entries(e.allVillaAllocPcts).forEach(([vid, pct]) => {
-                  saves.push(upsertReportEntry(
-                    e.categoryId, vid, year, month,
-                    Math.round(e.amount * (pct as number) / 100),
-                    e.note,
-                    pct as number,   // alloc_pct — source of truth
-                  ));
-                });
-              } else if (villaId && e.allocPct != null) {
-                saves.push(upsertReportEntry(
-                  e.categoryId, villaId, year, month,
-                  Math.round(e.amount * e.allocPct / 100),
-                  e.note,
-                  e.allocPct,
-                ));
-              }
-            });
-
-            await Promise.all(saves);
-            await loadReport(year, month, villaId);
-            setFormKey(k => k + 1);
-            setTab('report');
-          }}
+          onSave={handleSave}
           onCopyPrevMonth={() => {
             const pm = month === 1 ? 12 : month - 1;
             const py = month === 1 ? year - 1 : year;
@@ -182,20 +175,16 @@ export default function ReportShell({
           }}
         />
       )}
-      {/* Priority 1 fix: empty state when no report on entry tab */}
       {tab === 'entry' && !report && !isPending && (
         <div className="report-empty">
           <p>Chưa có dữ liệu tháng này.</p>
-          <button
-            className="report-empty-btn"
-            onClick={() => loadReport(year, month, villaId)}
-          >
+          <button className="report-empty-btn" onClick={() => loadReport(year, month, villaId)}>
             Tạo báo cáo tháng {MONTH_NAMES[month - 1]}
           </button>
         </div>
       )}
 
-      {/* Setup tab */}
+      {/* ── Setup tab ── */}
       {tab === 'setup' && (
         <CategorySetup
           onDone={() => {
@@ -206,7 +195,6 @@ export default function ReportShell({
       )}
 
       <style>{`
-        /* ── Design tokens (shared with EntryForm) ── */
         .report-shell {
           --rev-text:    #0A6B44;
           --rev-bg:      #EBF7F2;
@@ -222,7 +210,6 @@ export default function ReportShell({
           font-family: 'Be Vietnam Pro', 'Inter', system-ui, sans-serif;
         }
 
-        /* ── Topbar ── */
         .report-topbar {
           display: flex; align-items: center; justify-content: space-between;
           flex-wrap: wrap; gap: 10px;
@@ -232,7 +219,6 @@ export default function ReportShell({
         }
         .report-topbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-        /* Villa selector */
         .report-villa-select {
           padding: 7px 14px;
           border: 1px solid rgba(26,58,107,.2);
@@ -244,7 +230,6 @@ export default function ReportShell({
         }
         .report-villa-select:focus { outline: none; border-color: var(--shared-text); }
 
-        /* Month nav */
         .report-month-nav {
           display: flex; align-items: center;
           background: var(--surface-dim);
@@ -266,7 +251,6 @@ export default function ReportShell({
           border-right: 1px solid var(--border);
         }
 
-        /* Tabs */
         .report-tabs {
           display: flex; gap: 3px;
           background: var(--surface-dim);
@@ -286,7 +270,6 @@ export default function ReportShell({
         }
         .report-tab:hover:not(.active) { color: #1A202C; background: rgba(0,0,0,.03); }
 
-        /* States */
         .report-loading {
           text-align: center; padding: 28px;
           color: var(--muted); font-size: .84rem;
