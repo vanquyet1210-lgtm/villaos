@@ -149,7 +149,7 @@ export default function ReportShell({
               category_id: categoryId,
               scope:       'shared',
               amount,
-              note,
+              note: note ?? undefined,
             }]);
             loadReport(year, month, villaId);
           }}
