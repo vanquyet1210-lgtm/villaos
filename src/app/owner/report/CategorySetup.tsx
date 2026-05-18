@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import {
-  getOrInitCategories,
+  getCategories,
   upsertCategory,
   deactivateCategory,
   updateCategorySortOrders,
@@ -34,7 +34,7 @@ export default function CategorySetup({ onDone }: Props) {
   const [dragOver, setDragOver] = useState<string | null>(null);
 
   useEffect(() => {
-    getOrInitCategories().then(c => { setCats(c); setLoading(false); });
+    getCategories().then(c => { setCats(c); setLoading(false); });
   }, []);
 
   const filtered = cats.filter(c => c.type === tab).sort((a, b) => a.sortOrder - b.sortOrder);
@@ -101,7 +101,7 @@ export default function CategorySetup({ onDone }: Props) {
     if (res.error) {
       setMsg(res.error);
     } else {
-      const updated = await getOrInitCategories();
+      const updated = await getCategories();
       setCats(updated);
       setEditing(null);
       setMsg('');
