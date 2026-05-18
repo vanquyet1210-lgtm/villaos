@@ -32,10 +32,13 @@ export default function ReportShell({
   const [isPending, start]    = useTransition();
   const [formKey,   setFormKey] = useState(0);
 
-  const loadReport = (y: number, m: number, vid: string | null) => {
-    start(async () => {
-      const r = await getMonthlyReport(y, m, vid ?? undefined);
-      setReport(r);
+  const loadReport = (y: number, m: number, vid: string | null): Promise<void> => {
+    return new Promise(resolve => {
+      start(async () => {
+        const r = await getMonthlyReport(y, m, vid ?? undefined);
+        setReport(r);
+        resolve();
+      });
     });
   };
 
@@ -126,13 +129,19 @@ export default function ReportShell({
 
             entries.forEach(e => {
               if (e.isShared) {
-                // 1. Lưu full amount với villa_id = null (tổng toàn hệ thống)
+                // 1. Full amount với villa_id=null (tổng hệ thống, không có alloc_pct)
                 saves.push(upsertReportEntry(e.categoryId, null, year, month, e.amount, e.note));
-                // 2. Lưu allocated amount với villa_id = currentVillaId
-                //    Service đọc entry này để tính sharedAllocPct
-                if (villaId && e.allocPct != null && e.allocPct > 0) {
-                  const allocAmt = Math.round(e.amount * e.allocPct / 100);
-                  saves.push(upsertReportEntry(e.categoryId, villaId, year, month, allocAmt, `alloc:${e.allocPct}`));
+
+                // 2. Alloc entry cho TẤT CẢ villas — lưu alloc_pct vào cột riêng
+                if (e.allVillaAllocPcts) {
+                  Object.entries(e.allVillaAllocPcts).forEach(([vid, pct]) => {
+                    const p = pct as number;
+                    // amount = phần được phân bổ (chỉ để tham khảo)
+                    // alloc_pct = source of truth
+                    saves.push(upsertReportEntry(e.categoryId, vid, year, month, e.amount, e.note, p));
+                  });
+                } else if (villaId && e.allocPct != null) {
+                  saves.push(upsertReportEntry(e.categoryId, villaId, year, month, e.amount, e.note, e.allocPct));
                 }
               } else {
                 saves.push(upsertReportEntry(e.categoryId, villaId, year, month, e.amount, e.note));
@@ -140,7 +149,8 @@ export default function ReportShell({
             });
 
             await Promise.all(saves);
-            loadReport(year, month, villaId);
+            await loadReport(year, month, villaId);
+            setFormKey(k => k + 1);
             setTab('report');
           }}
           onCopyPrevMonth={() => {

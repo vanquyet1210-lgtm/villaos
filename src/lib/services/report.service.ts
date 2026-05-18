@@ -228,23 +228,26 @@ export async function getMonthlyReport(
   const prevSharedFull   = sum(prevSharedItems);
   const prevPerVillaExp  = sum(prevPerVillaItems);
 
-  // ── Đọc % phân bổ từ note field TRƯỚC khi tính sharedAllocPct ────────────
+  // ── Đọc alloc_pct từ cột riêng — source of truth ────────────────────────
+  // Key: `${catId}_${villaId}` → alloc_pct (integer, không parse string)
   const sharedAllocPctByVilla: Record<string, number> = {};
   if (sharedCats.length > 0 && villasData && villasData.length > 0) {
     const sharedCatIds = sharedCats.map(c => c.id);
     const villaIds     = (villasData as any[]).map((v: any) => v.id);
+
     const { data: allocEntries } = await (sb as any)
       .from('report_entries')
-      .select('category_id, villa_id, note')
+      .select('category_id, villa_id, alloc_pct')
       .eq('owner_id', oid)
       .eq('year', year)
       .eq('month', month)
       .in('category_id', sharedCatIds)
-      .in('villa_id', villaIds);
+      .in('villa_id', villaIds)
+      .not('alloc_pct', 'is', null);
+
     (allocEntries ?? []).forEach((e: any) => {
-      if (typeof e.note === 'string' && e.note.startsWith('alloc:')) {
-        const pct = parseInt(e.note.replace('alloc:', ''), 10);
-        if (!isNaN(pct)) sharedAllocPctByVilla[`${e.category_id}_${e.villa_id}`] = pct;
+      if (e.alloc_pct != null) {
+        sharedAllocPctByVilla[`${e.category_id}_${e.villa_id}`] = e.alloc_pct;
       }
     });
   }
@@ -260,12 +263,15 @@ export async function getMonthlyReport(
     totalAllocatedShared = totalSharedFull;
     prevAllocatedShared  = prevSharedFull;
   } else {
-    const anyPct = sharedCats.length > 0
-      ? sharedAllocPctByVilla[`${sharedCats[0].id}_${villaId}`]
-      : undefined;
-    sharedAllocPct = anyPct != null
-      ? anyPct
+    // Lấy alloc_pct của villa này từ tất cả shared cats, dùng average
+    const villaAllocPcts = sharedCats
+      .map(c => sharedAllocPctByVilla[`${c.id}_${villaId}`])
+      .filter((p): p is number => p != null);
+
+    sharedAllocPct = villaAllocPcts.length > 0
+      ? Math.round(villaAllocPcts.reduce((a, b) => a + b, 0) / villaAllocPcts.length)
       : (nVillas === 1 ? 100 : defaultAllocPct);
+
     totalAllocatedShared = Math.round(totalSharedFull * sharedAllocPct / 100);
     prevAllocatedShared  = Math.round(prevSharedFull  * sharedAllocPct / 100);
   }
@@ -355,38 +361,34 @@ export async function getMonthlyReport(
 
 // ── Upsert entry (nhập tay) ───────────────────────────────────
 export async function upsertReportEntry(
-  categoryId: string, villaId: string | null,
-  year: number, month: number, amount: number, note?: string,
+  categoryId: string,
+  villaId:    string | null,
+  year:       number,
+  month:      number,
+  amount:     number,
+  note?:      string,
+  allocPct?:  number,   // % phân bổ — lưu vào cột alloc_pct, không parse string
 ): Promise<{ error?: string }> {
   const session = await getServerSession();
   if (!session) return { error: 'Chưa đăng nhập' };
   const sb  = await createSupabaseServerClient();
   const oid = session.profile.id;
 
-  // Nếu note bắt đầu bằng "alloc:" → đây là alloc entry, lưu với villa_id như được truyền vào
-  // Không được override villa_id vì alloc entry CẦN có villa_id cụ thể để service đọc lại
-  const isAllocEntry = typeof note === 'string' && note.startsWith('alloc:');
-
-  let correctVillaId = villaId;
-  if (!isAllocEntry) {
-    // Entry bình thường: shared category → luôn lưu với villa_id=null
-    const { data: catMeta } = await (sb as any)
-      .from('report_categories')
-      .select('scope')
-      .eq('id', categoryId)
-      .single();
-    const isSharedCat = catMeta?.scope === 'shared';
-    correctVillaId = isSharedCat ? null : villaId;
-  }
-
-  const { error } = await (sb as any).from('report_entries').upsert({
+  const row: any = {
     category_id: categoryId,
-    villa_id:    correctVillaId,
+    villa_id:    villaId,
     owner_id:    oid,
     year, month, amount,
     note:        note ?? null,
     updated_at:  new Date().toISOString(),
-  }, { onConflict: 'category_id,villa_id,year,month' });
+  };
+
+  // Chỉ set alloc_pct khi có giá trị — tránh ghi đè null lên entries thường
+  if (allocPct != null) row.alloc_pct = allocPct;
+
+  const { error } = await (sb as any)
+    .from('report_entries')
+    .upsert(row, { onConflict: 'category_id,villa_id,year,month' });
 
   return error ? { error: error.message } : {};
 }
