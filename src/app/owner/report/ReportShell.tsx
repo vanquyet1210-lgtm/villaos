@@ -3,7 +3,7 @@
 
 import { useState, useTransition } from 'react';
 import type { MonthlyReport }      from '@/types/report';
-import { getMonthlyReport, upsertReportEntry } from '@/lib/services/report.service';
+import { getMonthlyReport, upsertReportEntry, deleteSharedAllocEntries } from '@/lib/services/report.service';
 import ReportView    from './ReportView';
 import EntryForm, { type SaveEntry } from './EntryForm';
 import CategorySetup from './CategorySetup';
@@ -125,26 +125,47 @@ export default function ReportShell({
           villas={villas}
           currentVillaId={villaId}
           onSave={async (entries: SaveEntry[]) => {
+            const sharedEntries    = entries.filter(e => e.isShared);
+            const perVillaEntries  = entries.filter(e => !e.isShared);
+
+            // ── BƯỚC 1: Xóa alloc entries cũ TRƯỚC khi lưu mới ──────────
+            // Tránh stale data làm average bị sai khi đọc lại
+            const sharedCatIds = [...new Set(sharedEntries.map(e => e.categoryId))];
+            const allVillaIds  = villas.map(v => v.id);
+            if (sharedCatIds.length > 0 && allVillaIds.length > 0) {
+              await deleteSharedAllocEntries(sharedCatIds, allVillaIds, year, month);
+            }
+
+            // ── BƯỚC 2: Lưu toàn bộ ─────────────────────────────────────
             const saves: Promise<any>[] = [];
 
-            entries.forEach(e => {
-              if (e.isShared) {
-                // 1. Full amount với villa_id=null (tổng hệ thống, không có alloc_pct)
-                saves.push(upsertReportEntry(e.categoryId, null, year, month, e.amount, e.note));
+            // Per-villa entries (Điện, Nước, Agoda...)
+            perVillaEntries.forEach(e => {
+              saves.push(upsertReportEntry(e.categoryId, villaId, year, month, e.amount, e.note));
+            });
 
-                // 2. Alloc entry cho TẤT CẢ villas — lưu alloc_pct vào cột riêng
-                if (e.allVillaAllocPcts) {
-                  Object.entries(e.allVillaAllocPcts).forEach(([vid, pct]) => {
-                    const p = pct as number;
-                    // amount = phần được phân bổ (chỉ để tham khảo)
-                    // alloc_pct = source of truth
-                    saves.push(upsertReportEntry(e.categoryId, vid, year, month, e.amount, e.note, p));
-                  });
-                } else if (villaId && e.allocPct != null) {
-                  saves.push(upsertReportEntry(e.categoryId, villaId, year, month, e.amount, e.note, e.allocPct));
-                }
-              } else {
-                saves.push(upsertReportEntry(e.categoryId, villaId, year, month, e.amount, e.note));
+            // Shared entries: 1 entry null (tổng) + 1 entry mỗi villa (alloc_pct)
+            sharedEntries.forEach(e => {
+              // Tổng hệ thống
+              saves.push(upsertReportEntry(e.categoryId, null, year, month, e.amount, e.note));
+
+              // Alloc cho từng villa với % độc lập
+              if (e.allVillaAllocPcts) {
+                Object.entries(e.allVillaAllocPcts).forEach(([vid, pct]) => {
+                  saves.push(upsertReportEntry(
+                    e.categoryId, vid, year, month,
+                    Math.round(e.amount * (pct as number) / 100),
+                    e.note,
+                    pct as number,   // alloc_pct — source of truth
+                  ));
+                });
+              } else if (villaId && e.allocPct != null) {
+                saves.push(upsertReportEntry(
+                  e.categoryId, villaId, year, month,
+                  Math.round(e.amount * e.allocPct / 100),
+                  e.note,
+                  e.allocPct,
+                ));
               }
             });
 

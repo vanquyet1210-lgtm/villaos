@@ -458,3 +458,32 @@ export async function updateCategorySortOrders(
 
   return {};
 }
+
+// ── Xóa alloc entries cũ trước khi lưu mới ────────────────────
+// Gọi TRƯỚC upsertReportEntry(isShared) để tránh stale data
+export async function deleteSharedAllocEntries(
+  categoryIds: string[],
+  villaIds:    string[],
+  year:        number,
+  month:       number,
+): Promise<{ error?: string }> {
+  const session = await getServerSession();
+  if (!session) return { error: 'Chưa đăng nhập' };
+  if (!categoryIds.length || !villaIds.length) return {};
+
+  const sb  = await createSupabaseServerClient();
+  const oid = session.profile.id;
+
+  // Xóa tất cả alloc entries cho các categoryId + villaId + tháng này
+  // Chỉ xóa entries có villa_id KHÔNG PHẢI null (villa_id=null là entry gốc "tổng hệ thống")
+  const { error } = await (sb as any)
+    .from('report_entries')
+    .delete()
+    .eq('owner_id', oid)
+    .eq('year',  year)
+    .eq('month', month)
+    .in('category_id', categoryIds)
+    .in('villa_id',    villaIds);   // chỉ xóa alloc rows, không xóa null row
+
+  return error ? { error: error.message } : {};
+}
