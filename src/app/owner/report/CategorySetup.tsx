@@ -7,70 +7,73 @@ import {
   upsertCategory,
   deactivateCategory,
   updateCategorySortOrders,
+  type Category,
+  type CategoryScope,
 } from '@/lib/services/report.service';
-import type { ReportCategory } from '@/types/report';
 
 interface Props { onDone: () => void; }
 
-const ICON_LIST  = ['💰','💵','🏡','🅰️','🔵','✨','⚡','💧','🧹','📶','🏷️','👤','🏢','🏦','🚗','🍽️','🌿','🔧'];
-const COLOR_LIST = [
-  '#178a5e','#3266ad','#d65a1e','#7f77dd','#854F0B',
-  '#185FA5','#5A6978','#6B7280','#374151','#A32D2D',
-  '#C9A84C','#1C2B4A','#78303F','#2E7D32',
-];
+const ICON_LIST = ['💰','💵','🏡','🅰️','🔵','✨','⚡','💧','🧹','📶','🏷️','👤','🏢','🏦','🚗','🍽️','🌿','🔧'];
 
 type TabType = 'revenue' | 'expense';
 
+// Màu dot theo scope
+const SCOPE_COLOR: Record<CategoryScope, string> = {
+  per_villa: '#C9A84C',
+  shared:    '#185FA5',
+};
+
 export default function CategorySetup({ onDone }: Props) {
-  const [cats,    setCats]    = useState<ReportCategory[]>([]);
+  const [cats,    setCats]    = useState<Category[]>([]);
   const [tab,     setTab]     = useState<TabType>('revenue');
-  const [editing, setEditing] = useState<Partial<ReportCategory> | null>(null);
+  const [editing, setEditing] = useState<Partial<Category> | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [msg,     setMsg]     = useState('');
 
-  // Priority 3: drag state
-  const dragId  = useRef<string | null>(null);
-  const [dragOver, setDragOver] = useState<string | null>(null);
+  // drag state — id là number (khớp với Category.id)
+  const dragId  = useRef<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
 
   useEffect(() => {
     getCategories().then(c => { setCats(c); setLoading(false); });
   }, []);
 
-  const filtered = cats.filter(c => c.type === tab).sort((a, b) => a.sortOrder - b.sortOrder);
+  const filtered = cats
+    .filter(c => c.type === tab)
+    .sort((a, b) => a.sort_order - b.sort_order);
 
-  // ── Priority 3: HTML5 drag-and-drop sort ─────────────────
-  const handleDragStart = (e: React.DragEvent, id: string) => {
+  // ── HTML5 drag-and-drop sort ─────────────────────────────
+  const handleDragStart = (e: React.DragEvent, id: number) => {
     dragId.current = id;
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e: React.DragEvent, id: string) => {
+  const handleDragOver = (e: React.DragEvent, id: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOver(id);
   };
 
-  const handleDrop = async (e: React.DragEvent, targetId: string) => {
+  const handleDrop = async (e: React.DragEvent, targetId: number) => {
     e.preventDefault();
     setDragOver(null);
     const fromId = dragId.current;
-    if (!fromId || fromId === targetId) return;
+    if (fromId == null || fromId === targetId) return;
 
-    // Reorder within filtered list
     const reordered = [...filtered];
     const fromIdx   = reordered.findIndex(c => c.id === fromId);
     const toIdx     = reordered.findIndex(c => c.id === targetId);
     const [item]    = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, item);
 
-    // Assign new sortOrders (keep other tab's items unchanged)
-    const newOrders = reordered.map((c, i) => ({ id: c.id, sortOrder: i }));
+    // sort_order khớp với service (snake_case)
+    const newOrders = reordered.map((c, i) => ({ id: c.id, sort_order: i }));
 
-    // Optimistic UI update
+    // Optimistic UI
     setCats(prev => {
       const otherTab = prev.filter(c => c.type !== tab);
-      const updated  = reordered.map((c, i) => ({ ...c, sortOrder: i }));
+      const updated  = reordered.map((c, i) => ({ ...c, sort_order: i }));
       return [...otherTab, ...updated];
     });
 
@@ -89,14 +92,11 @@ export default function CategorySetup({ onDone }: Props) {
     if (!editing.name?.trim()) { setMsg('Vui lòng nhập tên danh mục'); return; }
     setSaving(true);
     const res = await upsertCategory({
-      id:          editing.id,
-      name:        editing.name!,
-      type:        editing.type ?? tab,
-      groupName:   editing.groupName ?? undefined,
-      icon:        editing.icon ?? '💰',
-      color:       editing.color ?? '#178a5e',
-      isAuto:      editing.isAuto ?? false,
-      fixedAmount: editing.fixedAmount ?? 0,
+      id:    editing.id,
+      name:  editing.name!,
+      type:  editing.type ?? tab,
+      scope: editing.scope ?? 'per_villa',
+      icon:  editing.icon ?? '💰',
     });
     if (res.error) {
       setMsg(res.error);
@@ -109,7 +109,7 @@ export default function CategorySetup({ onDone }: Props) {
     setSaving(false);
   };
 
-  const handleDeactivate = async (id: string) => {
+  const handleDeactivate = async (id: number) => {
     if (!confirm('Ẩn danh mục này khỏi báo cáo?')) return;
     await deactivateCategory(id);
     setCats(prev => prev.filter(c => c.id !== id));
@@ -141,30 +141,28 @@ export default function CategorySetup({ onDone }: Props) {
           >
             <div className="cat-row-left">
               <span className="cat-drag" title="Kéo để sắp xếp">⠿</span>
-              <span className="cat-dot" style={{ background: c.color }} />
+              <span className="cat-dot" style={{ background: SCOPE_COLOR[c.scope] }} />
               <span className="cat-icon">{c.icon}</span>
               <div>
                 <div className="cat-name">{c.name}</div>
                 <div className="cat-meta">
-                  {c.groupName && <span className="cat-group">{c.groupName}</span>}
-                  {c.isAuto && <span className="cat-badge cat-badge--auto">tự động</span>}
-                  {c.fixedAmount > 0 && <span className="cat-badge cat-badge--fixed">cố định</span>}
-                  {!c.isAuto && !c.fixedAmount && <span className="cat-badge cat-badge--manual">thủ công</span>}
+                  {c.scope === 'shared'
+                    ? <span className="cat-badge cat-badge--shared">dùng chung</span>
+                    : <span className="cat-badge cat-badge--villa">riêng villa</span>
+                  }
                 </div>
               </div>
             </div>
             <div className="cat-row-right">
               <button className="cat-btn" onClick={() => setEditing({ ...c })}>Sửa</button>
-              {!c.isAuto && (
-                <button className="cat-btn cat-btn--danger" onClick={() => handleDeactivate(c.id)}>Ẩn</button>
-              )}
+              <button className="cat-btn cat-btn--danger" onClick={() => handleDeactivate(c.id)}>Ẩn</button>
             </div>
           </div>
         ))}
 
         <button
           className="cat-add-btn"
-          onClick={() => setEditing({ type: tab, icon:'💰', color:'#178a5e', isAuto:false, fixedAmount:0 })}
+          onClick={() => setEditing({ type: tab, icon: '💰', scope: 'per_villa' })}
         >
           + Thêm danh mục {tab === 'revenue' ? 'doanh thu' : 'chi phí'}
         </button>
@@ -180,6 +178,7 @@ export default function CategorySetup({ onDone }: Props) {
             </div>
 
             <div className="cat-modal-body">
+              {/* Tên */}
               <div className="cat-field">
                 <label>Tên danh mục *</label>
                 <input
@@ -189,15 +188,33 @@ export default function CategorySetup({ onDone }: Props) {
                 />
               </div>
 
-              <div className="cat-field">
-                <label>Nhóm</label>
-                <input
-                  value={editing.groupName ?? ''}
-                  onChange={e => setEditing(p => ({ ...p, groupName: e.target.value }))}
-                  placeholder="VD: Vận hành, Nhân sự, Cố định..."
-                />
-              </div>
+              {/* Scope — chỉ cho expense */}
+              {(editing.type ?? tab) === 'expense' && (
+                <div className="cat-field">
+                  <label>Phạm vi chi phí</label>
+                  <div className="cat-scope-row">
+                    <button
+                      className={`cat-scope-btn${(editing.scope ?? 'per_villa') === 'per_villa' ? ' selected' : ''}`}
+                      onClick={() => setEditing(p => ({ ...p, scope: 'per_villa' as CategoryScope }))}
+                    >
+                      🏠 Riêng từng villa
+                    </button>
+                    <button
+                      className={`cat-scope-btn${editing.scope === 'shared' ? ' selected' : ''}`}
+                      onClick={() => setEditing(p => ({ ...p, scope: 'shared' as CategoryScope }))}
+                    >
+                      🤝 Dùng chung
+                    </button>
+                  </div>
+                  <div className="cat-field-hint">
+                    {editing.scope === 'shared'
+                      ? 'Chi phí này sẽ được phân bổ theo % cho các villa.'
+                      : 'Chi phí này nhập riêng cho từng villa.'}
+                  </div>
+                </div>
+              )}
 
+              {/* Icon */}
               <div className="cat-field">
                 <label>Icon</label>
                 <div className="cat-icon-grid">
@@ -208,36 +225,6 @@ export default function CategorySetup({ onDone }: Props) {
                       onClick={() => setEditing(p => ({ ...p, icon: ic }))}
                     >{ic}</button>
                   ))}
-                </div>
-              </div>
-
-              <div className="cat-field">
-                <label>Màu</label>
-                <div className="cat-color-grid">
-                  {COLOR_LIST.map(cl => (
-                    <button
-                      key={cl}
-                      className={`cat-color-btn${editing.color === cl ? ' selected' : ''}`}
-                      style={{ background: cl }}
-                      onClick={() => setEditing(p => ({ ...p, color: cl }))}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="cat-field">
-                <label>Số tiền cố định (lặp mỗi tháng)</label>
-                <div className="cat-input-wrap">
-                  <input
-                    type="number" min="0"
-                    value={editing.fixedAmount || ''}
-                    onChange={e => setEditing(p => ({ ...p, fixedAmount: parseInt(e.target.value) || 0 }))}
-                    placeholder="0 — để trống nếu không cố định"
-                  />
-                  <span>đ</span>
-                </div>
-                <div className="cat-field-hint">
-                  Điền số này nếu chi phí lặp đều mỗi tháng (vd: tiền thuê, trả ngân hàng)
                 </div>
               </div>
 
@@ -294,15 +281,13 @@ export default function CategorySetup({ onDone }: Props) {
         .cat-row-left  { display:flex; align-items:center; gap:8px; flex:1; }
         .cat-row-right { display:flex; gap:6px; }
         .cat-drag   { color:#C9A84C; font-size:1rem; cursor:grab; }
-        .cat-dot    { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+        .cat-dot    { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
         .cat-icon   { font-size:1rem; }
         .cat-name   { font-size:.85rem; font-weight:500; color:#1C2B4A; }
         .cat-meta   { display:flex; gap:4px; margin-top:2px; }
-        .cat-group  { font-size:.65rem; color:#8A8F9A; }
         .cat-badge  { font-size:.6rem; padding:1px 6px; border-radius:4px; }
-        .cat-badge--auto   { background:rgba(23,138,94,.1); color:#178a5e; }
-        .cat-badge--manual { background:rgba(133,79,11,.1); color:#854F0B; }
-        .cat-badge--fixed  { background:rgba(24,95,165,.1); color:#185FA5; }
+        .cat-badge--shared { background:rgba(24,95,165,.1);   color:#185FA5; }
+        .cat-badge--villa  { background:rgba(201,168,76,.12); color:#8B6914; }
         .cat-btn {
           font-size:.75rem; padding:4px 10px;
           border:1px solid rgba(28,43,74,.12); border-radius:6px;
@@ -318,7 +303,6 @@ export default function CategorySetup({ onDone }: Props) {
           cursor:pointer; text-align:center; transition:background .12s;
         }
         .cat-add-btn:hover { background:rgba(201,168,76,.06); color:#1C2B4A; }
-
         .cat-modal-overlay {
           position:fixed; inset:0; z-index:900;
           background:rgba(28,43,74,.45); backdrop-filter:blur(4px);
@@ -348,9 +332,16 @@ export default function CategorySetup({ onDone }: Props) {
         }
         .cat-field input:focus { border-color:#C9A84C; box-shadow:0 0 0 3px rgba(201,168,76,.12); }
         .cat-field-hint { font-size:.68rem; color:#8A8F9A; }
-        .cat-input-wrap { display:flex; align-items:center; gap:6px; }
-        .cat-input-wrap input { flex:1; }
-        .cat-input-wrap span  { font-size:.75rem; color:#8A8F9A; }
+        .cat-scope-row { display:flex; gap:6px; }
+        .cat-scope-btn {
+          flex:1; padding:8px 10px; border-radius:8px; font-size:.78rem;
+          border:1.5px solid rgba(28,43,74,.12); background:none;
+          color:#8A8F9A; cursor:pointer; transition:all .12s; text-align:center;
+        }
+        .cat-scope-btn.selected {
+          border-color:#C9A84C; background:rgba(201,168,76,.08);
+          color:#1C2B4A; font-weight:500;
+        }
         .cat-icon-grid  { display:flex; flex-wrap:wrap; gap:4px; }
         .cat-icon-btn {
           width:34px; height:34px; border-radius:8px;
@@ -358,12 +349,6 @@ export default function CategorySetup({ onDone }: Props) {
           font-size:1.1rem; cursor:pointer; transition:all .1s;
         }
         .cat-icon-btn.selected { border-color:#C9A84C; background:rgba(201,168,76,.1); }
-        .cat-color-grid { display:flex; flex-wrap:wrap; gap:6px; }
-        .cat-color-btn {
-          width:24px; height:24px; border-radius:50%;
-          border:2px solid transparent; cursor:pointer; transition:transform .1s;
-        }
-        .cat-color-btn.selected { border-color:#1C2B4A; transform:scale(1.15); }
         .cat-error {
           font-size:.8rem; color:#78303F;
           padding:8px 12px; background:rgba(120,48,63,.06); border-radius:8px;
