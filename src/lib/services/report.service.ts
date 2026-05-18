@@ -22,11 +22,36 @@ export type Category = {
 };
 
 export type CategoryResult = Category & {
-  amount:   number;                    // amount hiển thị (đã apply alloc_pct nếu cần)
-  total:    number;                    // tổng hệ thống (villa_id = null)
-  allocPct: number;                    // % phân bổ (100 nếu per_villa hoặc xem tất cả)
-  byVilla:  Record<number, number>;   // villaId → amount
-  note:     string | null;
+  amount:     number;                  // amount hiển thị (đã apply alloc_pct nếu cần)
+  total:      number;                  // tổng hệ thống (villa_id = null)
+  allocPct:   number;                  // % phân bổ (100 nếu per_villa hoặc xem tất cả)
+  byVilla:    Record<number, number>; // villaId → amount
+  note:       string | null;
+  // Optional display fields (used by ReportView)
+  color?:     string;
+  groupName?: string;
+};
+
+export type MonthSummary = {
+  label:   string;
+  revenue: number;
+  expense: number;
+  profit:  number;
+};
+
+export type CostAlert = {
+  name:      string;
+  icon:      string;
+  color:     string;
+  amount:    number;
+  pctChange: number;
+  reason:    string;
+};
+
+export type HealthMetric = {
+  icon:  string;
+  label: string;
+  value: string;
 };
 
 export type VillaSummary = {
@@ -56,6 +81,18 @@ export type MonthlyReport = {
   prevMonthExpense:   number;
   prevMonthProfit:    number;
   allVillasSummary:   VillaSummary[];
+  // Optional fields used by ReportView (analytics / future layers)
+  sharedAllocPct?:    number;
+  revenueBySource?:   { source: string; amount: number; color: string }[];
+  costAlerts?:        CostAlert[];
+  healthMetrics?:     HealthMetric[];
+  monthly6?:          MonthSummary[];
+  cashflowReceived?:  number;
+  cashflowPending?:   number;
+  occupancyRate?:     number;
+  healthScore?:       number;
+  healthLabel?:       string;
+  healthTip?:         string;
 };
 
 export type EntryInput = {

@@ -2,12 +2,12 @@
 // VillaOS v7 — app/owner/report/ReportView.tsx
 
 import { useState } from 'react';
-import type { MonthlyReport, HealthMetric } from '@/types/report';
+import type { MonthlyReport, HealthMetric } from '@/lib/services/report.service';
 
 interface Props {
   report: MonthlyReport;
-  currentVillaId?:   string | null;   // needed to compute correct villa-specific totals
-  onSaveSharedEntry?: (categoryId: string, amount: number, note: string | null) => Promise<void>;
+  currentVillaId?:   number | null;
+  onSaveSharedEntry?: (categoryId: number, amount: number, note: string | null) => Promise<void>;
   onSaveAllocPct?: (pct: number) => Promise<void>;
 }
 
