@@ -25,7 +25,7 @@ export type CategoryResult = Category & {
   amount:     number;                  // amount hiển thị (đã apply alloc_pct nếu cần)
   total:      number;                  // tổng hệ thống (villa_id = null)
   allocPct:   number;                  // % phân bổ (100 nếu per_villa hoặc xem tất cả)
-  byVilla:    Record<number, number>; // villaId → amount
+  byVilla:    Record<number, number>;  // villaId → amount
   note:       string | null;
   // Optional display fields (used by ReportView / EntryForm)
   color?:     string;
@@ -83,21 +83,21 @@ export type MonthlyReport = {
   prevMonthProfit:    number;
   allVillasSummary:   VillaSummary[];
   // Optional fields used by ReportView (analytics / future layers)
-  sharedAllocPct?:       number;
+  sharedAllocPct?:        number;
   sharedAllocPctByVilla?: Record<string, number>;  // key: `${catId}_${villaId}`
-  revenueBySource?:      { source: string; amount: number; color: string }[];
-  costAlerts?:           CostAlert[];
-  healthMetrics?:        HealthMetric[];
-  monthly6?:             MonthSummary[];
-  cashflowReceived?:     number;
-  cashflowPending?:      number;
-  occupancyRate?:        number;
-  healthScore?:          number;
-  healthLabel?:          string;
-  healthTip?:            string;
-  upcomingPayouts?:      unknown[];
-  channelStats?:         unknown[];
-  topServices?:          unknown[];
+  revenueBySource?:       { source: string; amount: number; color: string }[];
+  costAlerts?:            CostAlert[];
+  healthMetrics?:         HealthMetric[];
+  monthly6?:              MonthSummary[];
+  cashflowReceived?:      number;
+  cashflowPending?:       number;
+  occupancyRate?:         number;
+  healthScore?:           number;
+  healthLabel?:           string;
+  healthTip?:             string;
+  upcomingPayouts?:       unknown[];
+  channelStats?:          unknown[];
+  topServices?:           unknown[];
 };
 
 export type EntryInput = {
@@ -126,8 +126,27 @@ export async function getMonthlyReport(
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear  = month === 1 ? year - 1 : year;
 
+  // ── BUG #1 FIX: Tính last6 TRƯỚC để biết cần fetch năm/tháng nào ──
+  // Trước đây chỉ fetch [year, prevYear] × [month, prevMonth] → chỉ 2 tháng,
+  // nhưng monthly6 cần 6 tháng nên T-2..T-4 luôn trả về 0.
+  const last6: { year: number; month: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    let m = month - i; let y = year;
+    while (m < 1) { m += 12; y--; }
+    last6.push({ year: y, month: m });
+  }
+
+  // Gom tất cả (year, month) pairs cần thiết: trend + tháng hiện tại + tháng trước
+  const neededPairs = new Set<string>();
+  for (const p of last6) neededPairs.add(`${p.year}:${p.month}`);
+  neededPairs.add(`${year}:${month}`);
+  neededPairs.add(`${prevYear}:${prevMonth}`);
+
+  // Fetch entries cho tất cả năm liên quan (tối đa 2 năm), filter tháng trong JS
+  const neededYears = [...new Set([...neededPairs].map(k => Number(k.split(':')[0])))];
+
   // ── Fetch song song ──────────────────────────────────────────────
-  const [{ data: cats }, { data: villasData }, { data: rawEntries }] = await Promise.all([
+  const [{ data: cats }, { data: villasData }, { data: rawEntriesAll }] = await Promise.all([
     (sb as any)
       .from('categories')
       .select('*')
@@ -145,9 +164,13 @@ export async function getMonthlyReport(
       .from('entries')
       .select('*')
       .eq('owner_id', oid)
-      .in('year',  [year, prevYear])
-      .in('month', [month, prevMonth]),
+      .in('year', neededYears),
   ]);
+
+  // Filter chỉ giữ (year, month) pairs thực sự cần → loại bỏ tháng thừa trong cùng năm
+  const rawEntries = (rawEntriesAll ?? []).filter(
+    (e: any) => neededPairs.has(`${e.year}:${e.month}`),
+  );
 
   const allVillas: { id: number; name: string; emoji: string }[] = villasData ?? [];
   const nVillas      = allVillas.length || 1;
@@ -161,17 +184,21 @@ export async function getMonthlyReport(
   //
   // amountMap key: `${catId}:${villaId ?? 'null'}:${year}:${month}`
   // allocMap  key: `${catId}:${villaId}:${year}:${month}`
+  // noteMap   key: `${catId}:${villaId ?? 'null'}:${year}:${month}`
 
   const amountMap = new Map<string, number>();
   const allocMap  = new Map<string, number>();
+  const noteMap   = new Map<string, string | null>();
 
-  for (const e of rawEntries ?? []) {
+  for (const e of rawEntries) {
     const vid = e.villa_id ?? 'null';
     const k   = `${e.category_id}:${vid}:${e.year}:${e.month}`;
     if (e.alloc_pct != null) {
       allocMap.set(k, e.alloc_pct);
     } else {
       amountMap.set(k, (amountMap.get(k) ?? 0) + e.amount);
+      // BUG #5 FIX: index note cho cả per_villa lẫn shared
+      if (e.note) noteMap.set(k, e.note);
     }
   }
 
@@ -180,6 +207,10 @@ export async function getMonthlyReport(
 
   const getAllocPct = (catId: number, y: number, m: number, vid: number): number =>
     allocMap.get(`${catId}:${vid}:${y}:${m}`) ?? defaultAlloc;
+
+  // BUG #5 FIX: helper lấy note từ noteMap thay vì dùng find() O(n)
+  const getNote = (catId: number, y: number, m: number, vid: number | null): string | null =>
+    noteMap.get(`${catId}:${vid ?? 'null'}:${y}:${m}`) ?? null;
 
   // ── Build CategoryResult ─────────────────────────────────────────
   const buildResult = (cat: Category, y: number, m: number): CategoryResult => {
@@ -192,7 +223,12 @@ export async function getMonthlyReport(
       const amount = villaId
         ? (byVilla[villaId] ?? 0)
         : Object.values(byVilla).reduce((a, b) => a + b, 0);
-      return { ...cat, amount, total: amount, allocPct: 100, byVilla, note: null };
+
+      // BUG #5 FIX: lấy note đúng villa (trước đây luôn trả null)
+      const noteVid = villaId ?? (Object.keys(byVilla)[0] ? Number(Object.keys(byVilla)[0]) : null);
+      const note    = noteVid !== null ? getNote(cat.id, y, m, noteVid) : null;
+
+      return { ...cat, amount, total: amount, allocPct: 100, byVilla, note };
     }
 
     // shared
@@ -206,13 +242,8 @@ export async function getMonthlyReport(
       byVilla[v.id] = Math.round(total * pct / 100);
     }
 
-    const note = (rawEntries ?? []).find(
-      (e: any) => e.category_id === cat.id
-               && e.villa_id   === null
-               && e.year       === y
-               && e.month      === m
-               && e.alloc_pct  == null,
-    )?.note ?? null;
+    // Shared note vẫn lấy từ row villa_id = null (không đổi)
+    const note = getNote(cat.id, y, m, null);
 
     return { ...cat, amount, total, allocPct, byVilla, note };
   };
@@ -240,28 +271,54 @@ export async function getMonthlyReport(
   const prevRev     = sum(prevRevItems);
   const prevExp     = sum(prevExpItems) + sum(prevSharedItems);
 
-  // ── allVillasSummary ─────────────────────────────────────────────
+  // ── BUG #4 FIX: Tính sharedAllocPct và sharedAllocPctByVilla ────
+  // Trước đây không được gán vào return → ReportView luôn fallback về ?? 100.
+  //
+  // sharedAllocPct: trung bình có trọng số (weighted by total amount) của
+  // allocPct từng shared category cho villa hiện tại.
+  let sharedAllocPct = 100;
+  if (villaId) {
+    if (totalShared > 0) {
+      const weightedSum = sharedItems.reduce((s, c) => s + c.total * c.allocPct, 0);
+      sharedAllocPct = Math.round(weightedSum / totalShared);
+    } else {
+      sharedAllocPct = defaultAlloc;
+    }
+  }
+
+  // sharedAllocPctByVilla: key = `${catId}_${villaId}` → % phân bổ (source of truth)
+  const sharedAllocPctByVilla: Record<string, number> = {};
+  for (const c of sharedItems) {
+    for (const v of allVillas) {
+      sharedAllocPctByVilla[`${c.id}_${v.id}`] = getAllocPct(c.id, year, month, v.id);
+    }
+  }
+
+  // ── BUG #2 FIX: allVillasSummary tính sharedAlloc đúng per-category ──
+  // Trước đây: average allocPct × totalShared → sai khi mỗi danh mục
+  // có % phân bổ khác nhau.
+  // Đúng: sum(catTotal × catAllocPct%) từng danh mục riêng.
   const allVillasSummary: VillaSummary[] = allVillas.map(v => {
-    const revenue = revCats
-      .map(c => buildResult(c, year, month))
-      .reduce((s, c) => s + (c.byVilla[v.id] ?? 0), 0);
+    // Dùng lại byVilla từ items đã build → không gọi buildResult thừa
+    const revenue         = revItems.reduce((s, c)    => s + (c.byVilla[v.id] ?? 0), 0);
+    const perVillaExpense = expItems.reduce((s, c)    => s + (c.byVilla[v.id] ?? 0), 0);
 
-    const perVillaExpense = perVillaCats
-      .map(c => buildResult(c, year, month))
-      .reduce((s, c) => s + (c.byVilla[v.id] ?? 0), 0);
+    // BUG #2 FIX: tính từng category, không dùng trung bình
+    const sharedAlloc = sharedItems.reduce((s, c) => {
+      const catTotal  = c.total;
+      const catPct    = getAllocPct(c.id, year, month, v.id);
+      return s + Math.round(catTotal * catPct / 100);
+    }, 0);
 
-    // allocPct: trung bình của tất cả shared cats cho villa này
-    const pcts = sharedCats
-      .map(c => getAllocPct(c.id, year, month, v.id));
-    const allocPct = pcts.length > 0
-      ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
-      : defaultAlloc;
-
-    const sharedTotal = sharedCats
-      .map(c => getAmt(c.id, year, month, null))
-      .reduce((a, b) => a + b, 0);
-    const sharedAlloc  = Math.round(sharedTotal * allocPct / 100);
     const totalExpense = perVillaExpense + sharedAlloc;
+
+    // allocPct hiển thị: trung bình có trọng số để dùng trong UI
+    const allocPct = totalShared > 0
+      ? Math.round(
+          sharedItems.reduce((s, c) => s + c.total * getAllocPct(c.id, year, month, v.id), 0)
+          / totalShared,
+        )
+      : defaultAlloc;
 
     return {
       villaId:   v.id,
@@ -277,12 +334,8 @@ export async function getMonthlyReport(
   });
 
   // ── monthly6: 6 tháng gần nhất để vẽ biểu đồ xu hướng ──────
-  const last6: { year: number; month: number }[] = [];
-  for (let i = 5; i >= 0; i--) {
-    let m = month - i; let y = year;
-    while (m < 1) { m += 12; y--; }
-    last6.push({ year: y, month: m });
-  }
+  // BUG #1 FIX: last6 đã được tính ở trên và rawEntries đã bao gồm
+  // đủ data cho tất cả 6 tháng.
   const MONTH_LBL = ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'];
   const monthly6: MonthSummary[] = last6.map(p => {
     const r = sum(revCats.map(c => buildResult(c, p.year, p.month)));
@@ -306,6 +359,9 @@ export async function getMonthlyReport(
     prevMonthProfit:    prevRev - prevExp,
     allVillasSummary,
     monthly6,
+    // BUG #4 FIX: gán đầy đủ vào return (trước đây bị thiếu)
+    sharedAllocPct,
+    sharedAllocPctByVilla,
   };
 }
 
@@ -327,18 +383,67 @@ export async function saveEntries(
   const valid = entries.filter(e => e.amount > 0);
   if (valid.length === 0) return {};
 
-  // Chỉ xóa đúng catIds đang được save — không đụng phần còn lại của tháng
-  const catIds = [...new Set(valid.map(e => e.category_id))];
+  // ── BUG #3 FIX: DELETE scope-aware, không xóa nhầm villa khác ──
+  // Trước đây: DELETE WHERE category_id IN catIds (toàn bộ) →
+  // khi lưu villa A, data villa B cùng danh mục bị xóa mà không re-insert.
+  //
+  // Đúng:
+  //   shared  → DELETE amount row (villa_id IS NULL) + tất cả alloc rows cho cat đó
+  //   per_villa → DELETE chỉ đúng villa_id đang được lưu
 
-  const { error: delError } = await (sb as any)
-    .from('entries')
-    .delete()
-    .eq('owner_id', oid)
-    .eq('year',  year)
-    .eq('month', month)
-    .in('category_id', catIds);
+  const sharedValid    = valid.filter(e => e.scope === 'shared');
+  const perVillaValid  = valid.filter(e => e.scope === 'per_villa');
 
-  if (delError) return { error: delError.message };
+  // Xóa shared entries (an toàn: shared rows không chứa data riêng villa nào)
+  if (sharedValid.length > 0) {
+    const sharedCatIds = [...new Set(sharedValid.map(e => e.category_id))];
+
+    // Xóa amount rows (villa_id IS NULL)
+    const { error: e1 } = await (sb as any)
+      .from('entries')
+      .delete()
+      .eq('owner_id', oid)
+      .eq('year', year)
+      .eq('month', month)
+      .in('category_id', sharedCatIds)
+      .is('villa_id', null);
+    if (e1) return { error: e1.message };
+
+    // Xóa alloc marker rows (alloc_pct IS NOT NULL)
+    const { error: e2 } = await (sb as any)
+      .from('entries')
+      .delete()
+      .eq('owner_id', oid)
+      .eq('year', year)
+      .eq('month', month)
+      .in('category_id', sharedCatIds)
+      .not('alloc_pct', 'is', null);
+    if (e2) return { error: e2.message };
+  }
+
+  // Xóa per_villa entries — chỉ đúng villa_id đang được lưu
+  if (perVillaValid.length > 0) {
+    // Group theo villa_id để tránh xóa nhầm villa khác
+    const byVilla = new Map<number, number[]>(); // villaId → catIds
+    for (const e of perVillaValid) {
+      if (!e.villa_id) continue;
+      const vid = Number(e.villa_id);
+      if (!byVilla.has(vid)) byVilla.set(vid, []);
+      byVilla.get(vid)!.push(e.category_id);
+    }
+
+    for (const [vid, catIds] of byVilla) {
+      const { error: e3 } = await (sb as any)
+        .from('entries')
+        .delete()
+        .eq('owner_id', oid)
+        .eq('year', year)
+        .eq('month', month)
+        .eq('villa_id', vid)
+        .in('category_id', catIds);
+      if (e3) return { error: e3.message };
+    }
+  }
 
   // Build payload
   const payload: any[] = [];
@@ -461,43 +566,43 @@ export async function updateCategorySortOrders(
 
 const DEFAULT_CATEGORIES: Omit<Category, 'id' | 'is_active'>[] = [
   // ── 1. DOANH THU (per_villa) ─────────────────────────────
-  { name: 'VillaOS',         type: 'revenue', scope: 'per_villa', icon: '🏠', sort_order:  0 },
-  { name: 'Agoda',           type: 'revenue', scope: 'per_villa', icon: '🔴', sort_order:  1 },
-  { name: 'Booking.com',     type: 'revenue', scope: 'per_villa', icon: '💙', sort_order:  2 },
-  { name: 'Airbnb',          type: 'revenue', scope: 'per_villa', icon: '🌸', sort_order:  3 },
-  { name: 'Traveloka',       type: 'revenue', scope: 'per_villa', icon: '💚', sort_order:  4 },
-  { name: 'Facebook',        type: 'revenue', scope: 'per_villa', icon: '👥', sort_order:  5 },
-  { name: 'Trực tiếp',       type: 'revenue', scope: 'per_villa', icon: '🤝', sort_order:  6 },
-  { name: 'Doanh thu khác',  type: 'revenue', scope: 'per_villa', icon: '💰', sort_order:  7 },
+  { name: 'VillaOS',            type: 'revenue', scope: 'per_villa', icon: '🏠', sort_order:  0 },
+  { name: 'Agoda',              type: 'revenue', scope: 'per_villa', icon: '🔴', sort_order:  1 },
+  { name: 'Booking.com',        type: 'revenue', scope: 'per_villa', icon: '💙', sort_order:  2 },
+  { name: 'Airbnb',             type: 'revenue', scope: 'per_villa', icon: '🌸', sort_order:  3 },
+  { name: 'Traveloka',          type: 'revenue', scope: 'per_villa', icon: '💚', sort_order:  4 },
+  { name: 'Facebook',           type: 'revenue', scope: 'per_villa', icon: '👥', sort_order:  5 },
+  { name: 'Trực tiếp',          type: 'revenue', scope: 'per_villa', icon: '🤝', sort_order:  6 },
+  { name: 'Doanh thu khác',     type: 'revenue', scope: 'per_villa', icon: '💰', sort_order:  7 },
 
   // ── 2.1 CHI PHÍ VẬN HÀNH (per_villa) ────────────────────
-  { name: 'Điện',            type: 'expense', scope: 'per_villa', icon: '⚡', sort_order: 10 },
-  { name: 'Nước',            type: 'expense', scope: 'per_villa', icon: '💧', sort_order: 11 },
-  { name: 'Internet',        type: 'expense', scope: 'per_villa', icon: '📶', sort_order: 12 },
-  { name: 'Vệ sinh',         type: 'expense', scope: 'per_villa', icon: '🧹', sort_order: 13 },
-  { name: 'Vật tư tiêu hao', type: 'expense', scope: 'per_villa', icon: '🛒', sort_order: 14 },
-  { name: 'Bảo trì',         type: 'expense', scope: 'per_villa', icon: '🔧', sort_order: 15 },
-  { name: 'Chi phí khác',    type: 'expense', scope: 'per_villa', icon: '📦', sort_order: 16 },
+  { name: 'Điện',               type: 'expense', scope: 'per_villa', icon: '⚡', sort_order: 10 },
+  { name: 'Nước',               type: 'expense', scope: 'per_villa', icon: '💧', sort_order: 11 },
+  { name: 'Internet',           type: 'expense', scope: 'per_villa', icon: '📶', sort_order: 12 },
+  { name: 'Vệ sinh',            type: 'expense', scope: 'per_villa', icon: '🧹', sort_order: 13 },
+  { name: 'Vật tư tiêu hao',    type: 'expense', scope: 'per_villa', icon: '🛒', sort_order: 14 },
+  { name: 'Bảo trì',            type: 'expense', scope: 'per_villa', icon: '🔧', sort_order: 15 },
+  { name: 'Chi phí khác',       type: 'expense', scope: 'per_villa', icon: '📦', sort_order: 16 },
 
   // ── 2.2 CHI PHÍ TÀI CHÍNH (per_villa) ───────────────────
-  { name: 'Thuê mặt bằng',   type: 'expense', scope: 'per_villa', icon: '🏢', sort_order: 20 },
-  { name: 'Thuế GTGT',       type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 21 },
-  { name: 'Thuế TNDN',       type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 22 },
-  { name: 'Thuế TNCN',       type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 23 },
-  { name: 'Thuế khác',       type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 24 },
-  { name: 'Trả ngân hàng',   type: 'expense', scope: 'per_villa', icon: '🏦', sort_order: 25 },
+  { name: 'Thuê mặt bằng',      type: 'expense', scope: 'per_villa', icon: '🏢', sort_order: 20 },
+  { name: 'Thuế GTGT',          type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 21 },
+  { name: 'Thuế TNDN',          type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 22 },
+  { name: 'Thuế TNCN',          type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 23 },
+  { name: 'Thuế khác',          type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 24 },
+  { name: 'Trả ngân hàng',      type: 'expense', scope: 'per_villa', icon: '🏦', sort_order: 25 },
 
   // ── 2.3 CHI PHÍ KHÁC (per_villa) ────────────────────────
-  { name: 'Marketing',       type: 'expense', scope: 'per_villa', icon: '📣', sort_order: 30 },
-  { name: 'Văn phòng phẩm',  type: 'expense', scope: 'per_villa', icon: '✏️', sort_order: 31 },
-  { name: 'Phí dịch vụ',     type: 'expense', scope: 'per_villa', icon: '💼', sort_order: 32 },
-  { name: 'Chi phí phát sinh',type: 'expense', scope: 'per_villa', icon: '🗂️', sort_order: 33 },
+  { name: 'Marketing',          type: 'expense', scope: 'per_villa', icon: '📣', sort_order: 30 },
+  { name: 'Văn phòng phẩm',     type: 'expense', scope: 'per_villa', icon: '✏️', sort_order: 31 },
+  { name: 'Phí dịch vụ',        type: 'expense', scope: 'per_villa', icon: '💼', sort_order: 32 },
+  { name: 'Chi phí phát sinh',  type: 'expense', scope: 'per_villa', icon: '🗂️', sort_order: 33 },
 
   // ── 3. CHI PHÍ CHUNG (shared) ────────────────────────────
-  { name: 'Lương nhân viên', type: 'expense', scope: 'shared',    icon: '💵', sort_order: 40 },
-  { name: 'Lễ tân',          type: 'expense', scope: 'shared',    icon: '🛎️', sort_order: 41 },
-  { name: 'Quản lý',         type: 'expense', scope: 'shared',    icon: '👔', sort_order: 42 },
-  { name: 'Chi phí chung khác', type: 'expense', scope: 'shared', icon: '🤝', sort_order: 43 },
+  { name: 'Lương nhân viên',    type: 'expense', scope: 'shared',    icon: '💵', sort_order: 40 },
+  { name: 'Lễ tân',             type: 'expense', scope: 'shared',    icon: '🛎️', sort_order: 41 },
+  { name: 'Quản lý',            type: 'expense', scope: 'shared',    icon: '👔', sort_order: 42 },
+  { name: 'Chi phí chung khác', type: 'expense', scope: 'shared',    icon: '🤝', sort_order: 43 },
 ];
 
 export async function seedDefaultCategories(): Promise<{ inserted: number; error?: string }> {
