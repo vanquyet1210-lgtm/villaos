@@ -2,12 +2,12 @@
 // VillaOS v7 — app/owner/report/ReportView.tsx
 
 import { useState } from 'react';
-import type { MonthlyReport, HealthMetric } from '@/lib/services/report.service';
+import type { MonthlyReport, HealthMetric } from '@/types/report';
 
 interface Props {
   report: MonthlyReport;
-  currentVillaId?:   number | null;
-  onSaveSharedEntry?: (categoryId: number, amount: number, note: string | null) => Promise<void>;
+  currentVillaId?:   string | null;   // needed to compute correct villa-specific totals
+  onSaveSharedEntry?: (categoryId: string, amount: number, note: string | null) => Promise<void>;
   onSaveAllocPct?: (pct: number) => Promise<void>;
 }
 
@@ -171,7 +171,8 @@ function HealthGauge({ score }: { score: number }) {
 }
 
 // ─── 6-month area chart ───────────────────────────────────────
-function Chart6m({ data }: { data: MonthlyReport['monthly6'] }) {
+function Chart6m({ data = [] }: { data?: MonthlyReport['monthly6'] }) {
+  if (!data || data.length === 0) return null;
   const W = 560, H = 188, P = { t: 30, r: 18, b: 30, l: 48 };
   const cW = W - P.l - P.r, cH = H - P.t - P.b, n = data.length;
   const maxV = Math.max(...data.flatMap(d => [d.revenue, d.expense, d.profit]), 1) * 1.12;
