@@ -276,6 +276,21 @@ export async function getMonthlyReport(
     };
   });
 
+  // ── monthly6: 6 tháng gần nhất để vẽ biểu đồ xu hướng ──────
+  const last6: { year: number; month: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    let m = month - i; let y = year;
+    while (m < 1) { m += 12; y--; }
+    last6.push({ year: y, month: m });
+  }
+  const MONTH_LBL = ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'];
+  const monthly6: MonthSummary[] = last6.map(p => {
+    const r = sum(revCats.map(c => buildResult(c, p.year, p.month)));
+    const e = sum(perVillaCats.map(c => buildResult(c, p.year, p.month)))
+            + sum(sharedCats.map(c => buildResult(c, p.year, p.month)));
+    return { label: MONTH_LBL[p.month - 1], revenue: r, expense: e, profit: r - e };
+  });
+
   return {
     year, month,
     villaId:            villaId ?? null,
@@ -290,6 +305,7 @@ export async function getMonthlyReport(
     prevMonthExpense:   prevExp,
     prevMonthProfit:    prevRev - prevExp,
     allVillasSummary,
+    monthly6,
   };
 }
 

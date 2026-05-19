@@ -1,7 +1,7 @@
 'use client';
 // VillaOS v7 — app/owner/report/EntryForm.tsx
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import type { MonthlyReport, CategoryResult } from '@/lib/services/report.service';
 type ReportCategoryWithEntry = CategoryResult;
 
@@ -10,6 +10,7 @@ export interface SaveEntry {
   amount:             number;
   note?:              string;
   isShared?:          boolean;
+  villa_id?:          number | null;   // per-villa: villa cụ thể
   allocPct?:          number;
   allVillaAllocPcts?: Record<number, number>;
 }
@@ -164,8 +165,8 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
   const sharedGrps = groupBy(sharedExp, c => c.groupName ?? 'Nhân sự');
 
   // State
-  const [villaAmts,  setVA] = useState<Record<string,number>>(initMap([...manualRev, ...pvExp]));
-  const [sharedAmts, setSA] = useState<Record<string,number>>(initMap(sharedExp));
+  const [villaAmts,  setVA] = useState<Record<number,number>>(initMap([...manualRev, ...pvExp]));
+  const [sharedAmts, setSA] = useState<Record<number,number>>(initMap(sharedExp));
   const [extraRows,  setER] = useState([{ label:'', amount:0 },{ label:'', amount:0 },{ label:'', amount:0 }]);
   const [saving,  setSaving] = useState(false);
   const [saved,   setSaved]  = useState(false);
@@ -249,6 +250,11 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
   const netProfit = totalRev - totalExp;
 
   const handleSave = async () => {
+    // Guard: per-villa entries cần chọn villa cụ thể
+    if (!currentVillaId && pvExp.length > 0) {
+      alert('Vui lòng chọn một villa cụ thể để nhập chi phí riêng.');
+      return;
+    }
     setSaving(true);
 
     const allSharedItems = [
@@ -257,8 +263,8 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
     ];
 
     await onSave([
-      ...manualRev.map(c => ({ categoryId: c.id, amount: villaAmts[c.id]??0 })),
-      ...pvExp.map(c     => ({ categoryId: c.id, amount: villaAmts[c.id]??0 })),
+      ...manualRev.map(c => ({ categoryId: c.id, amount: villaAmts[c.id]??0, villa_id: currentVillaId })),
+      ...pvExp.map(c     => ({ categoryId: c.id, amount: villaAmts[c.id]??0, villa_id: currentVillaId })),
       ...allSharedItems.map(c => ({
         categoryId: c.categoryId,
         amount:     c.amount,
@@ -470,10 +476,10 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
                 <th className="ef-mv-sub">SỐ TIỀN (VND)</th>
                 <th className="ef-mv-sub ef-mv-sub--100">100%</th>
                 {allVillas.map(v => (
-                  <>
+                  <React.Fragment key={v.id}>
                     <th key={v.id+'a'} className="ef-mv-sub">SỐ TIỀN (VND)</th>
                     <th key={v.id+'p'} className="ef-mv-sub ef-mv-sub--pct">% PHÂN BỔ</th>
-                  </>
+                  </React.Fragment>
                 ))}
               </tr>
             </thead>
@@ -500,24 +506,26 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
                       const cellKey = `${v.id}_${c.id}`;
                       const pct     = villaAllocPcts[cellKey] ?? 0;
                       const alloc   = full && pct ? Math.round(full * pct / 100) : 0;
+                      const rowTot  = rowTotal(c.id);
+                      const warnPct = rowTot !== 100 && rowTot > 0;
                       return (
-                        <>
-                          <td key={v.id+'a'} className="ef-mv-td-alloc">
+                        <React.Fragment key={v.id}>
+                          <td className="ef-mv-td-alloc">
                             {alloc ? alloc.toLocaleString('vi-VN') : '—'}
                           </td>
-                          <td key={v.id+'p'} className="ef-mv-td-pct-edit">
-                            <div className="ef-pct-input-wrap">
+                          <td className="ef-mv-td-pct-edit">
+                            <div className={`ef-pct-input-wrap${warnPct ? ' ef-pct-warn' : ''}`}>
                               <input
                                 type="number" min="0" max="100" step="1"
                                 className="ef-pct-input"
-                                value={villaAllocPcts[cellKey] ?? 0}
+                                value={pct}
                                 placeholder="0"
                                 onChange={e => setVillaPct(v.id, c.id, Number(e.target.value) || 0)}
                               />
                               <span className="ef-pct-sym">%</span>
                             </div>
                           </td>
-                        </>
+                        </React.Fragment>
                       );
                     })}
                   </tr>
@@ -533,7 +541,6 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
                 <td className="ef-mv-footer-num">{totalSharedFull ? totalSharedFull.toLocaleString('vi-VN') : '—'}</td>
                 <td className="ef-mv-footer-100">100%</td>
                 {allVillas.map(v => {
-                  // Sum actual allocations per villa across all rows
                   const totalVillaAlloc = allSharedCats.reduce((s, cat) => {
                     const full2 = cat.isAuto ? cat.amount : (sharedAmts[cat.id] ?? 0);
                     const pct2  = villaAllocPcts[`${v.id}_${cat.id}`] ?? 0;
@@ -541,12 +548,12 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
                   }, 0);
                   const avgPct = villaColPct(v.id);
                   return (
-                    <>
-                      <td key={v.id+'a'} className="ef-mv-footer-num">
+                    <React.Fragment key={v.id}>
+                      <td className="ef-mv-footer-num">
                         {totalVillaAlloc ? totalVillaAlloc.toLocaleString('vi-VN') : '—'}
                       </td>
-                      <td key={v.id+'p'} className="ef-mv-footer-pct">~{avgPct}%</td>
-                    </>
+                      <td className="ef-mv-footer-pct">~{avgPct}%</td>
+                    </React.Fragment>
                   );
                 })}
               </tr>
@@ -993,6 +1000,12 @@ const CSS = `
 .ef-pct-input::-webkit-inner-spin-button { -webkit-appearance: none; }
 .ef-pct-input:focus { outline: none; border-color: #1A3A6B; background: #EAF0FB; }
 .ef-pct-sym { font-size: .72rem; font-weight: 700; color: #1A3A6B; }
+.ef-pct-warn .ef-pct-input {
+  border-color: #D97706;
+  background: #FFFBEB;
+  color: #92400E;
+}
+.ef-pct-warn .ef-pct-sym { color: #D97706; }
 
 /* Footer */
 .ef-mv-footer-row { background: #1A3A6B; }

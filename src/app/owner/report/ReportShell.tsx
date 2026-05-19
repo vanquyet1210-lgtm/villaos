@@ -58,7 +58,7 @@ export default function ReportShell({
     const entryInputs = entries.map(e => ({
       category_id: e.categoryId,
       scope:       (e.isShared ? 'shared' : 'per_villa') as 'shared' | 'per_villa',
-      villa_id:    e.isShared ? undefined : (villaId ?? undefined),
+      villa_id:    e.isShared ? undefined : (e.villa_id ?? villaId ?? undefined),
       amount:      e.amount,
       alloc:       e.allVillaAllocPcts
         ? Object.fromEntries(Object.entries(e.allVillaAllocPcts).map(([k, v]) => [Number(k), v]))

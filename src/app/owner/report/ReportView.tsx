@@ -461,10 +461,13 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
           <div className="rv-donut-row">
             <Donut slices={revSlices} label={fmt(report.totalRevenue)} sub="Tổng doanh thu" />
             <div className="rv-legend">
-              {revSlices.map(sl => (
-                <LegendRow key={sl.label} color={sl.color}
-                  name={sl.label} value={sl.value} total={report.totalRevenue} />
-              ))}
+              {revSlices.length === 0
+                ? <div className="rv-no-data">Chưa có dữ liệu tháng này</div>
+                : revSlices.map(sl => (
+                    <LegendRow key={sl.label} color={sl.color}
+                      name={sl.label} value={sl.value} total={report.totalRevenue} />
+                  ))
+              }
             </div>
           </div>
           {revSlices.length > 0 && (
@@ -490,10 +493,13 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
           <div className="rv-donut-row rv-donut-row--sm">
             <Donut slices={expSlices} label={fmt(effectiveTotalExp)} sub="Tổng chi phí" />
             <div className="rv-legend">
-              {expSlices.map(sl => (
-                <LegendRow key={sl.label} color={sl.color}
-                  name={sl.label} value={sl.value} total={effectiveTotalExp} />
-              ))}
+              {expSlices.length === 0
+                ? <div className="rv-no-data">Chưa có dữ liệu tháng này</div>
+                : expSlices.map(sl => (
+                    <LegendRow key={sl.label} color={sl.color}
+                      name={sl.label} value={sl.value} total={effectiveTotalExp} />
+                  ))
+              }
             </div>
           </div>
 
@@ -677,6 +683,7 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
 
         /* Legend — bar color injected inline */
         .rv-legend { display:flex; flex-direction:column; gap:7px; flex:1; min-width:0; }
+        .rv-no-data { font-size:.78rem; color:#8A8F9A; font-style:italic; padding:12px 0; }
         .leg-row { display:flex; align-items:center; gap:5px; }
         .leg-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
         .leg-name { font-size:.73rem; color:${C.navy}; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
