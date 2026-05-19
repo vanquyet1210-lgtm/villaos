@@ -198,7 +198,7 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
 
   const [villaAllocPcts, setVAP] = useState<Record<string,number>>(initVillaAllocPcts);
 
-  const setVillaPct = (villaId: number, catId: number, raw: number) => {
+  const setVillaPct = (villaId: string | number, catId: number, raw: number) => {
     const pct = Math.min(100, Math.max(0, raw));
     setVAP(p => ({ ...p, [`${villaId}_${catId}`]: pct }));
   };
@@ -209,7 +209,7 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
 
   const allRowsOk = allSharedCats.every(c => rowTotal(c.id) === 100);
 
-  const villaColPct = (villaId: number) => {
+  const villaColPct = (villaId: string | number) => {
     if (allSharedCats.length === 0) return 0;
     return villaAllocPcts[`${villaId}_${allSharedCats[0].id}`] ?? 0;
   };
@@ -274,7 +274,7 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
           ? (villaAllocPcts[`${currentVillaId}_${c.categoryId}`] ?? 0)
           : undefined,
         allVillaAllocPcts: Object.fromEntries(
-          villas.map(v => [v.id, villaAllocPcts[`${v.id}_${c.categoryId}`] ?? 0])
+          villas.map(v => [String(v.id), villaAllocPcts[`${v.id}_${c.categoryId}`] ?? 0])
         ),
       })),
     ]);
