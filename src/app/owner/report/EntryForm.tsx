@@ -10,15 +10,15 @@ export interface SaveEntry {
   amount:             number;
   note?:              string;
   isShared?:          boolean;
-  villa_id?:          number | null;   // per-villa: villa cụ thể
+  villa_id?:          string | number | null;
   allocPct?:          number;
-  allVillaAllocPcts?: Record<number, number>;
+  allVillaAllocPcts?: Record<string | number, number>;
 }
 
 interface Props {
   report:           MonthlyReport;
-  villas:           { id: number; name: string; emoji: string }[];
-  currentVillaId?:  number | null;
+  villas:           { id: string | number; name: string; emoji: string }[];
+  currentVillaId?:  string | number | null;
   onSave:           (entries: SaveEntry[]) => Promise<void>;
   onCopyPrevMonth?: () => void;
 }

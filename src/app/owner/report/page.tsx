@@ -21,22 +21,14 @@ export default async function OwnerReportPage({
   const year  = yearStr  ? parseInt(yearStr)  : now.getFullYear();
   const month = monthStr ? parseInt(monthStr) : now.getMonth() + 1;
 
-  // Chuyển villa ID sang number nếu hợp lệ, giữ nguyên undefined nếu không
-  const toNumId = (id: unknown): number | undefined => {
-    const n = Number(id);
-    return !isNaN(n) && n > 0 ? n : undefined;
-  };
+  const effectiveVillaId = villaParam ?? villas[0]?.id ?? undefined;
 
-  const effectiveVillaId = villaParam
-    ? toNumId(villaParam)
-    : toNumId(villas[0]?.id);
-
-  const report = await getMonthlyReport(year, month, effectiveVillaId);
+  const report = await getMonthlyReport(year, month, effectiveVillaId ? Number(effectiveVillaId) : undefined);
 
   return (
     <ReportShell
-      villas={villas.map(v => ({ id: toNumId(v.id) ?? v.id as unknown as number, name: v.name, emoji: v.emoji }))}
-      initialVillaId={effectiveVillaId ?? null}   // sync với data
+      villas={villas.map(v => ({ id: v.id, name: v.name, emoji: v.emoji }))}
+      initialVillaId={effectiveVillaId ?? null}
       initialYear={year}
       initialMonth={month}
       initialReport={report}

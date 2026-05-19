@@ -11,8 +11,8 @@ import CategorySetup from './CategorySetup';
 
 
 interface Props {
-  villas:         { id: number; name: string; emoji: string }[];
-  initialVillaId: number | null;
+  villas:         { id: string | number; name: string; emoji: string }[];
+  initialVillaId: string | number | null;
   initialYear:    number;
   initialMonth:   number;
   initialReport:  MonthlyReport | null;
@@ -29,16 +29,22 @@ export default function ReportShell({
   const [tab,     setTab]     = useState<'report' | 'entry' | 'setup'>('report');
   const [year,    setYear]    = useState(initialYear);
   const [month,   setMonth]   = useState(initialMonth);
-  const [villaId, setVillaId] = useState(initialVillaId);
+  const [villaId, setVillaId] = useState<string | number | null>(initialVillaId);
   const [report,  setReport]  = useState(initialReport);
   const [isPending, start]    = useTransition();
   const [formKey,   setFormKey] = useState(0);
 
+  const toVillaNum = (id: string | number | null): number | undefined => {
+    if (id == null) return undefined;
+    const n = Number(id);
+    return isNaN(n) ? undefined : n;
+  };
+
   // ── Load report ──────────────────────────────────────────
-  const loadReport = (y: number, m: number, vid: number | null): Promise<void> =>
+  const loadReport = (y: number, m: number, vid: string | number | null): Promise<void> =>
     new Promise(resolve => {
       start(async () => {
-        const r = await getMonthlyReport(y, m, vid ?? undefined);
+        const r = await getMonthlyReport(y, m, toVillaNum(vid));
         setReport(r);
         resolve();
       });
@@ -58,7 +64,7 @@ export default function ReportShell({
     const entryInputs = entries.map(e => ({
       category_id: e.categoryId,
       scope:       (e.isShared ? 'shared' : 'per_villa') as 'shared' | 'per_villa',
-      villa_id:    e.isShared ? undefined : (e.villa_id ?? villaId ?? undefined),
+      villa_id:    e.isShared ? undefined : (e.villa_id ?? toVillaNum(villaId)),
       amount:      e.amount,
       alloc:       e.allVillaAllocPcts
         ? Object.fromEntries(Object.entries(e.allVillaAllocPcts).map(([k, v]) => [Number(k), v]))
@@ -85,16 +91,17 @@ export default function ReportShell({
           {villas.length > 1 && (
             <select
               className="report-villa-select"
-              value={villaId ?? ''}
+              value={villaId != null ? String(villaId) : ''}
               onChange={e => {
-                const v = e.target.value ? Number(e.target.value) : null;
+                const selected = villas.find(v => String(v.id) === e.target.value);
+                const v = selected ? selected.id : null;
                 setVillaId(v);
                 loadReport(year, month, v);
               }}
             >
               <option value="">Tất cả villa</option>
               {villas.map(v => (
-                <option key={v.id} value={v.id}>{v.emoji} {v.name}</option>
+                <option key={v.id} value={String(v.id)}>{v.emoji} {v.name}</option>
               ))}
             </select>
           )}
