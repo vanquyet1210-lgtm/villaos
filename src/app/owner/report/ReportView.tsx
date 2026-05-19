@@ -312,7 +312,7 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
     // Build from report.revenue — includes auto (VillaOS) + manual categories
     const fromCategories = (report.revenue ?? [])
       .filter(c => c.amount > 0)
-      .map(c => ({ label: c.name, value: c.amount, color: c.color }));
+      .map(c => ({ label: c.name, value: c.amount, color: c.color ?? '#8A8F9A' }));
 
     if (fromCategories.length > 0) return fromCategories;
 
@@ -330,7 +330,7 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
       const g = c.groupName ?? 'Khác';
       const ex = groups.get(g);
       if (ex) ex.value += c.amount;
-      else groups.set(g, { value: c.amount, color: c.color });
+      else groups.set(g, { value: c.amount, color: c.color ?? '#8A8F9A' });
     });
     // Shared expenses — only the allocated portion for this villa
     const allocPct = report.sharedAllocPct ?? 100;
@@ -340,7 +340,7 @@ export default function ReportView({ report, currentVillaId, onSaveSharedEntry, 
       if (!val) return;
       const ex  = groups.get(g);
       if (ex) ex.value += val;
-      else groups.set(g, { value: val, color: c.color });
+      else groups.set(g, { value: val, color: c.color ?? '#8A8F9A' });
     });
     return Array.from(groups.entries())
       .filter(([, { value }]) => value > 0)
