@@ -300,7 +300,7 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
             {autoRev.map(c => (
               <div key={c.id} className="ef-tbl-row ef-tbl-row--auto">
                 <div className="ef-tbl-name">
-                  <BrandIcon name={c.name} icon={c.icon}/>
+                  <BrandIcon name={c.name} icon={c.icon ?? ''}/>
                   <span>{c.name}</span>
                   <span className="ef-auto-badge">auto</span>
                 </div>
@@ -320,7 +320,7 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
             {villaOS && (
               <div key={villaOS.id} className="ef-tbl-row">
                 <div className="ef-tbl-name">
-                  <BrandIcon name={villaOS.name} icon={villaOS.icon}/>
+                  <BrandIcon name={villaOS.name} icon={villaOS.icon ?? ''}/>
                   <span>{villaOS.name}</span>
                   {villaOS.isAuto && <span className="ef-auto-badge">auto</span>}
                 </div>
@@ -330,7 +330,7 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
             {manualRev.filter(c => c.name !== 'VillaOS').map(c => (
               <div key={c.id} className="ef-tbl-row">
                 <div className="ef-tbl-name">
-                  <BrandIcon name={c.name} icon={c.icon}/><span>{c.name}</span>
+                  <BrandIcon name={c.name} icon={c.icon ?? ''}/><span>{c.name}</span>
                 </div>
                 <AmtInput value={villaAmts[c.id]??0} onChange={v=>va(c.id,v)} placeholder="Nhập số tiền"/>
               </div>
