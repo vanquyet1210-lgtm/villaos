@@ -7,6 +7,7 @@ import {
   upsertCategory,
   deactivateCategory,
   updateCategorySortOrders,
+  seedDefaultCategories,
   type Category,
   type CategoryScope,
 } from '@/lib/services/report.service';
@@ -30,6 +31,7 @@ export default function CategorySetup({ onDone }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [msg,     setMsg]     = useState('');
+  const [seeding, setSeeding] = useState(false);
 
   // drag state — id là number (khớp với Category.id)
   const dragId  = useRef<number | null>(null);
@@ -84,6 +86,20 @@ export default function CategorySetup({ onDone }: Props) {
   const handleDragEnd = () => {
     setDragOver(null);
     dragId.current = null;
+  };
+
+  const handleSeed = async () => {
+    if (!confirm('Tạo toàn bộ danh mục mặc định? Chỉ thực hiện khi chưa có danh mục nào.')) return;
+    setSeeding(true);
+    const { inserted, error } = await seedDefaultCategories();
+    if (error) {
+      setMsg(error);
+    } else {
+      const updated = await getCategories();
+      setCats(updated);
+      setMsg(`✓ Đã tạo ${inserted} danh mục mặc định`);
+    }
+    setSeeding(false);
   };
 
   // ── Save / deactivate ────────────────────────────────────
@@ -241,7 +257,13 @@ export default function CategorySetup({ onDone }: Props) {
         </div>
       )}
 
-      <div style={{ display:'flex', justifyContent:'flex-end', marginTop:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:16 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <button className="cat-seed-btn" disabled={seeding} onClick={handleSeed}>
+            {seeding ? 'Đang tạo...' : '✦ Tạo danh mục mặc định'}
+          </button>
+          {msg && <span style={{ fontSize:'.78rem', color: msg.startsWith('✓') ? '#0A6B44' : '#78303F' }}>{msg}</span>}
+        </div>
         <button className="cat-done-btn" onClick={onDone}>✓ Hoàn thành</button>
       </div>
 
@@ -371,6 +393,14 @@ export default function CategorySetup({ onDone }: Props) {
           transition:background .15s;
         }
         .cat-done-btn:hover { background:rgba(201,168,76,.2); }
+        .cat-seed-btn {
+          padding:10px 20px; border-radius:99px;
+          background:rgba(24,95,165,.07); border:1px solid rgba(24,95,165,.2);
+          color:#185FA5; font-size:.83rem; font-weight:500; cursor:pointer;
+          transition:background .15s;
+        }
+        .cat-seed-btn:hover:not(:disabled) { background:rgba(24,95,165,.14); }
+        .cat-seed-btn:disabled { opacity:.6; cursor:not-allowed; }
       `}</style>
     </div>
   );

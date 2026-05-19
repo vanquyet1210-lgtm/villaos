@@ -437,3 +437,78 @@ export async function updateCategorySortOrders(
   }
   return {};
 }
+
+// ─────────────────────────────────────────────────────────────
+// seedDefaultCategories
+// Tạo danh mục mặc định cho owner nếu chưa có
+// ─────────────────────────────────────────────────────────────
+
+const DEFAULT_CATEGORIES: Omit<Category, 'id' | 'is_active'>[] = [
+  // ── 1. DOANH THU (per_villa) ─────────────────────────────
+  { name: 'VillaOS',         type: 'revenue', scope: 'per_villa', icon: '🏠', sort_order:  0 },
+  { name: 'Agoda',           type: 'revenue', scope: 'per_villa', icon: '🔴', sort_order:  1 },
+  { name: 'Booking.com',     type: 'revenue', scope: 'per_villa', icon: '💙', sort_order:  2 },
+  { name: 'Airbnb',          type: 'revenue', scope: 'per_villa', icon: '🌸', sort_order:  3 },
+  { name: 'Traveloka',       type: 'revenue', scope: 'per_villa', icon: '💚', sort_order:  4 },
+  { name: 'Facebook',        type: 'revenue', scope: 'per_villa', icon: '👥', sort_order:  5 },
+  { name: 'Trực tiếp',       type: 'revenue', scope: 'per_villa', icon: '🤝', sort_order:  6 },
+  { name: 'Doanh thu khác',  type: 'revenue', scope: 'per_villa', icon: '💰', sort_order:  7 },
+
+  // ── 2.1 CHI PHÍ VẬN HÀNH (per_villa) ────────────────────
+  { name: 'Điện',            type: 'expense', scope: 'per_villa', icon: '⚡', sort_order: 10 },
+  { name: 'Nước',            type: 'expense', scope: 'per_villa', icon: '💧', sort_order: 11 },
+  { name: 'Internet',        type: 'expense', scope: 'per_villa', icon: '📶', sort_order: 12 },
+  { name: 'Vệ sinh',         type: 'expense', scope: 'per_villa', icon: '🧹', sort_order: 13 },
+  { name: 'Vật tư tiêu hao', type: 'expense', scope: 'per_villa', icon: '🛒', sort_order: 14 },
+  { name: 'Bảo trì',         type: 'expense', scope: 'per_villa', icon: '🔧', sort_order: 15 },
+  { name: 'Chi phí khác',    type: 'expense', scope: 'per_villa', icon: '📦', sort_order: 16 },
+
+  // ── 2.2 CHI PHÍ TÀI CHÍNH (per_villa) ───────────────────
+  { name: 'Thuê mặt bằng',   type: 'expense', scope: 'per_villa', icon: '🏢', sort_order: 20 },
+  { name: 'Thuế GTGT',       type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 21 },
+  { name: 'Thuế TNDN',       type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 22 },
+  { name: 'Thuế TNCN',       type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 23 },
+  { name: 'Thuế khác',       type: 'expense', scope: 'per_villa', icon: '🧾', sort_order: 24 },
+  { name: 'Trả ngân hàng',   type: 'expense', scope: 'per_villa', icon: '🏦', sort_order: 25 },
+
+  // ── 2.3 CHI PHÍ KHÁC (per_villa) ────────────────────────
+  { name: 'Marketing',       type: 'expense', scope: 'per_villa', icon: '📣', sort_order: 30 },
+  { name: 'Văn phòng phẩm',  type: 'expense', scope: 'per_villa', icon: '✏️', sort_order: 31 },
+  { name: 'Phí dịch vụ',     type: 'expense', scope: 'per_villa', icon: '💼', sort_order: 32 },
+  { name: 'Chi phí phát sinh',type: 'expense', scope: 'per_villa', icon: '🗂️', sort_order: 33 },
+
+  // ── 3. CHI PHÍ CHUNG (shared) ────────────────────────────
+  { name: 'Lương nhân viên', type: 'expense', scope: 'shared',    icon: '💵', sort_order: 40 },
+  { name: 'Lễ tân',          type: 'expense', scope: 'shared',    icon: '🛎️', sort_order: 41 },
+  { name: 'Quản lý',         type: 'expense', scope: 'shared',    icon: '👔', sort_order: 42 },
+  { name: 'Chi phí chung khác', type: 'expense', scope: 'shared', icon: '🤝', sort_order: 43 },
+];
+
+export async function seedDefaultCategories(): Promise<{ inserted: number; error?: string }> {
+  const session = await getServerSession();
+  if (!session) return { inserted: 0, error: 'Chưa đăng nhập' };
+  const sb  = await createSupabaseServerClient();
+  const oid = session.profile.id;
+
+  // Chỉ seed nếu chưa có danh mục nào
+  const { data: existing } = await (sb as any)
+    .from('categories')
+    .select('id')
+    .eq('owner_id', oid)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return { inserted: 0, error: 'Đã có danh mục, không seed lại' };
+  }
+
+  const payload = DEFAULT_CATEGORIES.map(c => ({
+    ...c,
+    owner_id:  oid,
+    is_active: true,
+  }));
+
+  const { error } = await (sb as any).from('categories').insert(payload);
+  return error
+    ? { inserted: 0, error: error.message }
+    : { inserted: payload.length };
+}
