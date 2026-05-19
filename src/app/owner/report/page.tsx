@@ -23,7 +23,9 @@ export default async function OwnerReportPage({
 
   // Bug 1 fix: nếu URL không có ?villa=, dùng villa đầu tiên thay vì undefined
   // Tránh lệch giữa dropdown (villas[0]) và data (villaId=undefined → "Tất cả")
-  const effectiveVillaId = villaParam ?? villas[0]?.id ?? undefined;
+  const effectiveVillaId = villaParam
+    ? Number(villaParam)
+    : villas[0]?.id != null ? Number(villas[0].id) : undefined;
 
   const report = await getMonthlyReport(year, month, effectiveVillaId);
 
