@@ -31,7 +31,7 @@ export default async function OwnerReportPage({
 
   return (
     <ReportShell
-      villas={villas.map(v => ({ id: v.id, name: v.name, emoji: v.emoji }))}
+      villas={villas.map(v => ({ id: Number(v.id), name: v.name, emoji: v.emoji }))}
       initialVillaId={effectiveVillaId ?? null}   // sync với data
       initialYear={year}
       initialMonth={month}
