@@ -85,7 +85,7 @@ function AmtInput({ id, value, onChange, placeholder = 'Nhập số tiền' }: {
 
 // ── Helpers ───────────────────────────────────────────────────
 function initMap(items: ReportCategoryWithEntry[]) {
-  const m: Record<string, number> = {};
+  const m: Record<number, number> = {};
   items.forEach(c => { m[c.id] = c.amount; });
   return m;
 }
@@ -96,7 +96,7 @@ function groupBy<T>(arr: T[], key: (x: T) => string) {
     return acc;
   }, {} as Record<string, T[]>);
 }
-function sumMap(ids: string[], map: Record<string, number>) {
+function sumMap(ids: number[], map: Record<number, number>) {
   return ids.reduce((s, id) => s + (map[id] ?? 0), 0);
 }
 
