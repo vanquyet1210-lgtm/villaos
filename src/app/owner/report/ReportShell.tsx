@@ -132,7 +132,7 @@ export default function ReportShell({
       {tab === 'report' && report && !isPending && (
         <ReportView
           report={report}
-          currentVillaId={villaId}
+          currentVillaId={toVillaNum(villaId) ?? null}
           onSaveSharedEntry={async (categoryId, amount, note) => {
             await saveEntries(year, month, [{
               category_id: categoryId,
@@ -154,7 +154,7 @@ export default function ReportShell({
           key={formKey}
           report={report}
           villas={villas}
-          currentVillaId={villaId}
+          currentVillaId={toVillaNum(villaId) ?? null}
           onSave={handleSave}
           onCopyPrevMonth={() => {
             const pm = month === 1 ? 12 : month - 1;
