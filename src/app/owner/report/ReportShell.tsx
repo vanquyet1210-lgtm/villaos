@@ -154,7 +154,7 @@ export default function ReportShell({
           key={formKey}
           report={report}
           villas={villas}
-          currentVillaId={toVillaNum(villaId) ?? null}
+          currentVillaId={villaId}
           onSave={handleSave}
           onCopyPrevMonth={() => {
             const pm = month === 1 ? 12 : month - 1;
