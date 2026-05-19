@@ -21,17 +21,21 @@ export default async function OwnerReportPage({
   const year  = yearStr  ? parseInt(yearStr)  : now.getFullYear();
   const month = monthStr ? parseInt(monthStr) : now.getMonth() + 1;
 
-  // Bug 1 fix: nếu URL không có ?villa=, dùng villa đầu tiên thay vì undefined
-  // Tránh lệch giữa dropdown (villas[0]) và data (villaId=undefined → "Tất cả")
+  // Chuyển villa ID sang number nếu hợp lệ, giữ nguyên undefined nếu không
+  const toNumId = (id: unknown): number | undefined => {
+    const n = Number(id);
+    return !isNaN(n) && n > 0 ? n : undefined;
+  };
+
   const effectiveVillaId = villaParam
-    ? Number(villaParam)
-    : villas[0]?.id != null ? Number(villas[0].id) : undefined;
+    ? toNumId(villaParam)
+    : toNumId(villas[0]?.id);
 
   const report = await getMonthlyReport(year, month, effectiveVillaId);
 
   return (
     <ReportShell
-      villas={villas.map(v => ({ id: Number(v.id), name: v.name, emoji: v.emoji }))}
+      villas={villas.map(v => ({ id: toNumId(v.id) ?? v.id as unknown as number, name: v.name, emoji: v.emoji }))}
       initialVillaId={effectiveVillaId ?? null}   // sync với data
       initialYear={year}
       initialMonth={month}

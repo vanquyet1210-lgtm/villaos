@@ -251,7 +251,8 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
 
   const handleSave = async () => {
     // Guard: per-villa entries cần chọn villa cụ thể
-    if (!currentVillaId && pvExp.length > 0) {
+    const villaSelected = currentVillaId != null && !Number.isNaN(currentVillaId);
+    if (!villaSelected && pvExp.length > 0) {
       alert('Vui lòng chọn một villa cụ thể để nhập chi phí riêng.');
       return;
     }
