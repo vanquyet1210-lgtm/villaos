@@ -2,21 +2,13 @@
 // VillaOS v7 — app/owner/report/ReportShell.tsx
 
 import { useState, useTransition } from 'react';
+import type { SaveEntry } from './EntryForm';
 import type { MonthlyReport }      from '@/lib/services/report.service';
 import { getMonthlyReport, saveEntries } from '@/lib/services/report.service';
 import ReportView    from './ReportView';
 import EntryForm     from './EntryForm';
 import CategorySetup from './CategorySetup';
 
-// ── FormState — cấu trúc state nội bộ của EntryForm ──────────
-export type FormState = {
-  perVilla: Record<number, Record<number, number>>;   // [catId][villaId] = amount
-  shared:   Record<number, {
-    amount: number;
-    alloc:  Record<number, number>;   // [villaId] = pct
-    note?:  string;
-  }>;
-};
 
 interface Props {
   villas:         { id: number; name: string; emoji: string }[];
@@ -62,29 +54,19 @@ export default function ReportShell({
   };
 
   // ── Submit từ EntryForm ──────────────────────────────────
-  // EntryForm chỉ cần gọi hàm này với FormState — không cần biết gì về DB
-  const handleSave = async (state: FormState) => {
-    const entries = [
-      // Per-villa entries
-      ...Object.entries(state.perVilla).flatMap(([catId, villaAmounts]) =>
-        Object.entries(villaAmounts).map(([vid, amount]) => ({
-          category_id: Number(catId),
-          scope:       'per_villa' as const,
-          villa_id:    Number(vid),
-          amount,
-        }))
-      ),
-      // Shared entries
-      ...Object.entries(state.shared).map(([catId, { amount, alloc, note }]) => ({
-        category_id: Number(catId),
-        scope:       'shared' as const,
-        amount,
-        alloc,
-        note,
-      })),
-    ];
+  const handleSave = async (entries: SaveEntry[]) => {
+    const entryInputs = entries.map(e => ({
+      category_id: e.categoryId,
+      scope:       (e.isShared ? 'shared' : 'per_villa') as 'shared' | 'per_villa',
+      villa_id:    e.isShared ? undefined : (villaId ?? undefined),
+      amount:      e.amount,
+      alloc:       e.allVillaAllocPcts
+        ? Object.fromEntries(Object.entries(e.allVillaAllocPcts).map(([k, v]) => [Number(k), v]))
+        : undefined,
+      note:        e.note ?? undefined,
+    }));
 
-    const { error } = await saveEntries(year, month, entries);
+    const { error } = await saveEntries(year, month, entryInputs);
     if (error) {
       alert(`Lỗi khi lưu: ${error}`);
       return;

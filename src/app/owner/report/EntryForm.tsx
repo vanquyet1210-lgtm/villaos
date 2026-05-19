@@ -2,21 +2,22 @@
 // VillaOS v7 — app/owner/report/EntryForm.tsx
 
 import { useState } from 'react';
-import type { MonthlyReport, ReportCategoryWithEntry } from '@/types/report';
+import type { MonthlyReport, CategoryResult } from '@/lib/services/report.service';
+type ReportCategoryWithEntry = CategoryResult;
 
 export interface SaveEntry {
-  categoryId:         string;
+  categoryId:         number;
   amount:             number;
   note?:              string;
   isShared?:          boolean;
-  allocPct?:          number;                      // % phân bổ cho villa đang xem
-  allVillaAllocPcts?: Record<string, number>;      // % phân bổ tất cả villas: {villaId: pct}
+  allocPct?:          number;
+  allVillaAllocPcts?: Record<number, number>;
 }
 
 interface Props {
   report:           MonthlyReport;
-  villas:           { id: string; name: string; emoji: string }[];
-  currentVillaId?:  string | null;   // which villa is currently selected
+  villas:           { id: number; name: string; emoji: string }[];
+  currentVillaId?:  number | null;
   onSave:           (entries: SaveEntry[]) => Promise<void>;
   onCopyPrevMonth?: () => void;
 }
@@ -180,19 +181,18 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
 
   const [villaAllocPcts, setVAP] = useState<Record<string,number>>(initVillaAllocPcts);
 
-  const setVillaPct = (villaId: string, catId: string, raw: number) => {
+  const setVillaPct = (villaId: number, catId: number, raw: number) => {
     const pct = Math.min(100, Math.max(0, raw));
     setVAP(p => ({ ...p, [`${villaId}_${catId}`]: pct }));
   };
 
   // Validate: mỗi ROW (category) tổng % các villa = 100%
-  const rowTotal = (catId: string) =>
+  const rowTotal = (catId: number) =>
     villas.reduce((s, v) => s + (villaAllocPcts[`${v.id}_${catId}`] ?? 0), 0);
 
   const allRowsOk = allSharedCats.every(c => rowTotal(c.id) === 100);
 
-  // Cho display bar: % của villa này theo từng row (dùng cat đầu tiên làm đại diện)
-  const villaColPct = (villaId: string) => {
+  const villaColPct = (villaId: number) => {
     if (allSharedCats.length === 0) return 0;
     return villaAllocPcts[`${villaId}_${allSharedCats[0].id}`] ?? 0;
   };
@@ -200,8 +200,8 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
   const totalAllocPct = villas.reduce((s, v) => s + villaColPct(v.id), 0);
   const allocOk = allRowsOk;
 
-  const va = (id: string, v: number) => setVA(p => ({ ...p, [id]: v }));
-  const sa = (id: string, v: number) => setSA(p => ({ ...p, [id]: v }));
+  const va = (id: number, v: number) => setVA(p => ({ ...p, [id]: v }));
+  const sa = (id: number, v: number) => setSA(p => ({ ...p, [id]: v }));
 
   // Totals
   const totalAutoRev  = autoRev.reduce((s,c) => s + c.amount, 0);
