@@ -105,9 +105,23 @@ const GROUP_META: Record<string, { label: string; icon: string; accent: string; 
   'Vận hành': { label:'CHI PHÍ VẬN HÀNH',  icon:'🔧', accent:'#B45309', light:'rgba(217,119,6,.07)',  border:'#F59E0B' },
   'Tài chính': { label:'CHI PHÍ TÀI CHÍNH', icon:'💼', accent:'#6D28D9', light:'rgba(124,58,237,.07)', border:'#A78BFA' },
   'Cố định':   { label:'CHI PHÍ TÀI CHÍNH', icon:'💼', accent:'#6D28D9', light:'rgba(124,58,237,.07)', border:'#A78BFA' },
-  'Khác':      { label:'CHI PHÍ KHÁC',       icon:'📦', accent:'#92400E', light:'rgba(180,83,9,.07)',   border:'#D97706' },
+  'Khác':      { label:'CHI PHÍ KHÁC',       icon:'📦', accent:'#0A6B44', light:'rgba(10,107,68,.07)',  border:'#34D399' },
 };
-const FALLBACK_META = { label:'CHI PHÍ KHÁC', icon:'📦', accent:'#92400E', light:'rgba(180,83,9,.07)', border:'#D97706' };
+const FALLBACK_META = { label:'CHI PHÍ KHÁC', icon:'📦', accent:'#0A6B44', light:'rgba(10,107,68,.07)', border:'#34D399' };
+
+// Map tên danh mục → nhóm (dựa trên keyword)
+const VAN_HANH_KEYS  = ['điện', 'nước', 'internet', 'vệ sinh', 'vật tư', 'bảo trì', 'sửa chữa', 'vận hành'];
+const TAI_CHINH_KEYS = ['thuê mặt bằng', 'thuế', 'ngân hàng', 'tài chính', 'lãi vay', 'trả ngân'];
+
+function getExpenseGroupByName(name: string): string {
+  const lower = name.toLowerCase();
+  if (VAN_HANH_KEYS.some(k  => lower.includes(k))) return 'Vận hành';
+  if (TAI_CHINH_KEYS.some(k => lower.includes(k))) return 'Tài chính';
+  return 'Khác';
+}
+
+// 3 nhóm cố định theo thứ tự
+const FIXED_GROUPS: ['Vận hành', 'Tài chính', 'Khác'] = ['Vận hành', 'Tài chính', 'Khác'];
 
 function getGroupMeta(name: string, idx: number) {
   if (GROUP_META[name]) return GROUP_META[name];
@@ -137,10 +151,12 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
   const villaOS   = sortedRevenue.find(c => c.name === 'VillaOS'); // Separate VillaOS
   const manualRev = sortedRevenue.filter(c => !c.isAuto || c.name === 'VillaOS'); // Include VillaOS as editable
 
-  // Per-villa expenses grouped
-  const pvExp      = report.expenses.filter(c => c.scope !== 'shared' && !c.isAuto);
-  const pvGroups   = groupBy(pvExp, c => c.groupName ?? 'Khác');
-  const pvEntries  = Object.entries(pvGroups);
+  // Per-villa expenses — chia thành 3 nhóm cố định bằng keyword matching
+  const pvExp     = report.expenses.filter(c => c.scope !== 'shared' && !c.isAuto);
+  const pvGrouped = FIXED_GROUPS.map(gName => ({
+    gName,
+    items: pvExp.filter(c => getExpenseGroupByName(c.groupName ?? c.name) === gName),
+  }));
 
   // Shared
   const sharedExp  = report.sharedExpenses.filter(c => !c.isAuto);
@@ -365,9 +381,9 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
           <span>NHẬP CHI PHÍ RIÊNG (THEO VILLA)</span>
         </div>
         <div className="ef-exp-grid ef-exp-grid--3">
-          {pvEntries.slice(0, 3).map(([gName, items], gi) => {
+          {pvGrouped.map(({ gName, items }, gi) => {
             const meta = getGroupMeta(gName, gi);
-            const gSum = sumMap(items.map(c=>c.id), villaAmts);
+            const gSum = sumMap(items.map(c => c.id), villaAmts);
             return (
               <div key={gName} className="ef-exp-col">
                 <div className="ef-exp-col-hd" style={{ background:meta.light, borderBottom:`2px solid ${meta.border}` }}>
@@ -377,6 +393,9 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
                   </span>
                 </div>
                 <div className="ef-tbl-head"><span>Khoản chi</span><span>Số tiền (đ)</span></div>
+                {items.length === 0 && (
+                  <div className="ef-empty-group">Chưa có danh mục trong nhóm này</div>
+                )}
                 {items.map(c => (
                   <div key={c.id} className="ef-tbl-row">
                     <div className="ef-tbl-name">
@@ -393,7 +412,7 @@ export default function EntryForm({ report, villas, currentVillaId, onSave, onCo
               </div>
             );
           })}
-          {pvEntries.length === 0 && (
+          {pvExp.length === 0 && (
             <div className="ef-empty-hint">Chưa có danh mục. Vào <strong>⚙️ Danh mục</strong> để thêm.</div>
           )}
         </div>
@@ -1107,6 +1126,11 @@ const CSS = `
   padding: 20px 16px; text-align: center;
   font-size: .8rem; color: var(--muted);
   border: 1px dashed rgba(0,0,0,.1); border-radius: 8px; margin: 12px;
+}
+.ef-empty-group {
+  padding: 14px 12px; text-align: center;
+  font-size: .76rem; color: var(--muted);
+  font-style: italic;
 }
 
 /* ── Footer ── */
